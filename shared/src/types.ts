@@ -30,6 +30,39 @@ export interface Attack {
   attackBonus: number;
   damage: string; // dice notation, e.g. "1d8+3"
   damageType: string;
+  source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
+}
+
+export type ItemType = 'weapon' | 'armor' | 'shield' | 'gear';
+export type ArmorCategory = 'light' | 'medium' | 'heavy';
+/** How a weapon's attack/damage ability is chosen. */
+export type WeaponAbility = 'str' | 'dex' | 'finesse';
+
+export const COIN_TYPES = ['pp', 'gp', 'ep', 'sp', 'cp'] as const;
+export type Coin = (typeof COIN_TYPES)[number];
+export type Currency = Record<Coin, number>;
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  type: ItemType;
+  quantity: number;
+  weight: number; // lb per unit
+  equipped: boolean;
+  notes: string;
+
+  // weapon fields
+  weaponAbility?: WeaponAbility;
+  damage?: string; // base damage dice only, e.g. "1d8"
+  damageType?: string;
+  proficient?: boolean;
+  attackBonusMisc?: number; // magic / misc to hit
+  damageBonusMisc?: number; // magic / misc to damage
+
+  // armor / shield fields
+  armorBase?: number; // armor base AC, or shield bonus (usually 2)
+  armorCategory?: ArmorCategory;
+  stealthDisadvantage?: boolean;
 }
 
 export interface CharacterSheet {
@@ -46,10 +79,15 @@ export interface CharacterSheet {
   maxHp: number;
   currentHp: number;
   tempHp: number;
+  /** Manual AC used only when no armor is equipped and no override is set. */
   armorClass: number;
+  /** Explicit AC that wins over any computed value (e.g. Unarmored Defense). */
+  acOverride?: number | null;
   speed: number;
   initiativeMisc: number;
-  attacks: Attack[];
+  attacks: Attack[]; // manual attacks; equipped weapons add derived ones
+  inventory: InventoryItem[];
+  currency: Currency;
   notes: string;
   tokenId?: string; // linked map token
 }

@@ -24,9 +24,12 @@ và quản lý character sheet — tất cả trên một trang.
   trúng / trượt / chí mạng, tự nhân đôi xúc xắc sát thương khi chí mạng, trừ máu
   token.
 - **Initiative tracker:** tung cho toàn bộ token, đếm vòng, chuyển lượt.
-- **Character sheet 5e 2024:** 6 chỉ số, thành thạo, kỹ năng/tinh thông, save,
-  AC, HP, đòn đánh; mỗi mục có nút roll gửi thẳng vào nhật ký chung; liên kết
-  token.
+- **Character sheet 5e 2024 (kiểu D&D Beyond):** chia section Chỉ số / Chiến đấu
+  / Túi đồ. 6 chỉ số, thành thạo, kỹ năng/tinh thông, save, HP, initiative — mỗi
+  mục có nút roll gửi thẳng vào nhật ký chung. **Túi đồ**: vật phẩm (vũ khí/giáp/
+  khiên/đồ dùng) có trọng lượng, đánh dấu trang bị, tiền pp/gp/ep/sp/cp. **AC tự
+  tính** từ giáp + khiên trang bị (có ô ghi đè). **Đòn tấn công tự sinh** từ vũ
+  khí trang bị (STR/DEX/linh hoạt + thành thạo + phụ trội). Liên kết token.
 
 Xem `docs/SRS.md` cho đặc tả đầy đủ.
 

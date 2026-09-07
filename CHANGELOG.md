@@ -6,6 +6,34 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-08
+
+### Added
+
+- **D&D-Beyond-style character sheet management.** The sheet editor is now split
+  into **Chỉ số** (abilities, saves, skills), **Chiến đấu** (AC, HP, speed,
+  initiative, attacks, token link, notes) and **Túi đồ** (inventory) sections.
+- **Inventory & currency.** Each sheet holds an item list (weapon / armor /
+  shield / gear) with quantity, weight, an equipped toggle and notes, plus a
+  pp/gp/ep/sp/cp purse with a live gold-value total and a carried-weight vs
+  STR×15 capacity bar.
+- **Auto AC from equipped armor.** Effective AC is computed: explicit override →
+  equipped armor base + DEX (capped by armor category) + shield → unarmored
+  `10 + DEX`. Shown as a badge with its source; a manual override field remains
+  for cases like Unarmored Defense.
+- **Auto attacks from equipped weapons.** Equipped weapons generate attack
+  entries — to-hit = ability mod (STR / DEX / finesse-better-of) + proficiency +
+  magic bonus, damage = base dice + ability/magic mod — listed alongside manual
+  attacks, each with 3D/2D roll buttons.
+- Shared helpers `computeArmorClass`, `derivedAttacks`, `allAttacks`,
+  `carriedWeight`, `carryCapacity`, `currencyInGp`, `emptyCurrency`, with tests.
+
+### Changed
+
+- Room schema bumped to **v3**; `RoomState` from v2 is migrated in place
+  (character sheets gain `inventory`, `currency`, `acOverride`). Sheets are
+  normalised on load and on every `upsertSheet`.
+
 ## [0.2.0] - 2026-09-08
 
 ### Added
@@ -60,6 +88,7 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lamvukms-code/dnd-table/releases/tag/v0.1.0

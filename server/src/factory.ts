@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { emptyCurrency } from '@dnd-table/shared';
 import type {
   Ability,
   CharacterSheet,
@@ -6,7 +7,7 @@ import type {
   Token,
 } from '@dnd-table/shared';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 export const ROLL_LOG_CAP = 200;
 export const DICE_TRAY_CAP = 12;
 
@@ -61,10 +62,24 @@ export function createBlankSheet(ownerId: string, name: string): CharacterSheet 
     currentHp: 10,
     tempHp: 0,
     armorClass: 10,
+    acOverride: null,
     speed: 30,
     initiativeMisc: 0,
     attacks: [],
+    inventory: [],
+    currency: emptyCurrency(),
     notes: '',
+  };
+}
+
+/** Backfill fields added in later schema versions onto an existing sheet. */
+export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
+  return {
+    ...sheet,
+    acOverride: sheet.acOverride ?? null,
+    attacks: (sheet.attacks ?? []).map((a) => ({ ...a, source: a.source ?? 'manual' })),
+    inventory: sheet.inventory ?? [],
+    currency: sheet.currency ?? emptyCurrency(),
   };
 }
 

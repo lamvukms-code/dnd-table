@@ -51,6 +51,13 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
    always misses, crit doubles dice (not flat modifiers), advantage = 2d20 keep
    highest. When a rule is ambiguous, add a short note in the SRS and pick the
    2024 PHB reading.
+4a. **Character sheets** are sectioned (Chỉ số / Chiến đấu / Túi đồ). Effective AC
+   and equipped-weapon attacks are *derived* in `shared/rules.ts`
+   (`computeArmorClass`, `derivedAttacks`, `allAttacks`) — never stored. Edge
+   cases (Unarmored Defense, etc.) go through the manual `acOverride` field, not
+   new special-casing. Adding sheet fields = bump `SCHEMA_VERSION`, extend
+   `normalizeSheet` and `migrateRoom` in the server so old `room.json` upgrades
+   in place rather than being discarded.
 5. **dddice is optional and authoritative-for-values-only.** When
    `RoomState.dddice.enabled`, dddice supplies the die numbers and the server
    records them via `ExternalRoll` without re-rolling — but the server still owns

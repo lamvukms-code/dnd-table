@@ -5,6 +5,7 @@ import {
   abilityMod,
   createRoomState,
   createToken,
+  normalizeSheet,
   DICE_TRAY_CAP,
   ROLL_LOG_CAP,
   SCHEMA_VERSION,
@@ -34,12 +35,14 @@ export class Room {
   private load(): RoomState {
     try {
       if (existsSync(this.file)) {
-        const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as RoomState;
-        if (parsed.version === SCHEMA_VERSION) {
-          parsed.participants.forEach((p) => (p.connected = false));
-          return parsed;
+        const raw = JSON.parse(readFileSync(this.file, 'utf8')) as RoomState;
+        const migrated = migrateRoom(raw);
+        if (migrated) {
+          migrated.participants.forEach((p) => (p.connected = false));
+          migrated.sheets = migrated.sheets.map(normalizeSheet);
+          return migrated;
         }
-        console.warn(`Room schema ${parsed.version} != ${SCHEMA_VERSION}; starting fresh.`);
+        console.warn(`Room schema ${raw.version} unsupported; starting fresh.`);
       }
     } catch (err) {
       console.error('Failed to load room file, starting fresh:', err);
@@ -305,7 +308,7 @@ export class Room {
         if (existing && existing.ownerId !== actor.id && !isDm) {
           return 'Bạn không sở hữu character sheet này';
         }
-        const incoming = { ...action.sheet };
+        const incoming = normalizeSheet({ ...action.sheet });
         if (!existing) incoming.ownerId = incoming.ownerId || actor.id;
         this.state.sheets = existing
           ? this.state.sheets.map((s) => (s.id === incoming.id ? incoming : s))
@@ -330,6 +333,23 @@ export class Room {
     }
     return null;
   }
+}
+
+/** Bring an older room file up to the current schema, or null if unsupported. */
+function migrateRoom(raw: RoomState): RoomState | null {
+  const s = raw as RoomState & Record<string, unknown>;
+  if (typeof s.version !== 'number') return null;
+
+  // v1: pre-dddice, dev-only — not worth migrating.
+  if (s.version === 1) return null;
+
+  // v2 -> v3: character-sheet inventory / currency / AC override.
+  if (s.version === 2) {
+    for (const sheet of s.sheets ?? []) Object.assign(sheet, normalizeSheet(sheet));
+    s.version = 3;
+  }
+
+  return s.version === SCHEMA_VERSION ? s : null;
 }
 
 function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {

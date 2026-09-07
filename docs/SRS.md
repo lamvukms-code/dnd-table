@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.2.0
+- **Version:** 0.3.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -231,20 +231,50 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   edits only their own; the DM sees and edits all.
 - **FR-61 (P0):** Fields: name, class, level, proficiency bonus (auto-suggested
   from level, editable), six ability scores, save proficiencies, skill
-  proficiency and expertise, AC, current/max/temp HP, speed, initiative misc
-  bonus, an attacks list (name, attack bonus, damage, type), free-text notes.
+  proficiency and expertise, AC (`armorClass` fallback + `acOverride`),
+  current/max/temp HP, speed, initiative misc bonus, a manual attacks list,
+  inventory, currency, free-text notes.
+- **FR-61a (P0):** The editor is organised into sections — **Chỉ số** (abilities,
+  saves, skills), **Chiến đấu** (AC, HP, speed, initiative, attacks, token link,
+  notes), **Túi đồ** (inventory + currency).
 - **FR-62 (P0):** Derived values are computed live: ability modifiers, save
-  bonuses, skill bonuses (expertise = 2× proficiency), initiative bonus.
+  bonuses, skill bonuses (expertise = 2× proficiency), initiative bonus,
+  effective AC, equipped-weapon attacks, carried weight.
 - **FR-63 (P0):** One-click roll buttons for each ability check, each save, each
   skill, initiative, and each attack's to-hit and damage — all posting to the
-  shared log labelled with the character name.
+  shared log labelled with the character name, and through dddice when enabled.
 - **FR-64 (P0):** A sheet can be linked to a map token (`tokenId`) so initiative
   rolls and, later, attacks can use its stats.
+
+#### 3.7.1 Inventory, currency & derived combat
+
+- **FR-63a (P0):** Each sheet has an `inventory` of `InventoryItem`s of type
+  `weapon | armor | shield | gear`, each with name, quantity, per-unit weight, an
+  `equipped` flag and notes, plus type-specific fields.
+- **FR-63b (P0):** A `currency` purse of pp/gp/ep/sp/cp with a live total gold
+  value, and a carried-weight readout against a STR × 15 lb capacity (coins at
+  50/lb), flagged when over.
+- **FR-63c (P0):** **Effective AC** = `acOverride` if set, else equipped armor
+  `armorBase` + DEX (light: full, medium: max +2, heavy: none) + equipped shield
+  bonus, else `10 + DEX` (+ shield). The computed value and its source are shown;
+  the override covers Unarmored Defense and other special cases.
+- **FR-63d (P0):** Each **equipped weapon** contributes a derived attack:
+  to-hit = ability mod (STR, DEX, or the better of the two for *finesse*) +
+  proficiency bonus (if `proficient`) + `attackBonusMisc`; damage = base dice +
+  ability mod + `damageBonusMisc`. Derived attacks are listed with manual ones
+  and are read-only (edit the item instead).
+- **FR-63e (P1):** Attunement slots; item rarity; container grouping.
+- **FR-63f (P1):** The map attack flow (FR-40) can pick a linked sheet's attack.
+- **FR-63g (P2):** A starting-equipment / weapon presets picker.
 - **FR-65 (P0):** Edits sync to all clients; a client mid-edit is not clobbered
   by an incoming snapshot.
 - **FR-66 (P1):** Spell slots and a spell list.
-- **FR-67 (P1):** Sync sheet HP ↔ linked token HP automatically.
+- **FR-67 (P1):** Sync sheet HP ↔ linked token HP automatically; equipped-armor
+  AC → linked token AC.
 - **FR-68 (P2):** Import/export a sheet as JSON; import from a common format.
+- **FR-69 (P1):** Species / background / alignment, personality (traits, ideals,
+  bonds, flaws), appearance, backstory, features & traits, languages, hit dice,
+  death saves, short/long rest.
 
 ### 3.8 Persistence
 
@@ -293,8 +323,15 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `InitiativeEntry { id, name, initiative, tokenId?, isActive, hasGone }`
 - `CharacterSheet { id, ownerId, name, className, level, proficiencyBonus,
   abilities, saveProficiencies[], skillProficiencies[], skillExpertise[], maxHp,
-  currentHp, tempHp, armorClass, speed, initiativeMisc, attacks[], notes,
-  tokenId? }`
+  currentHp, tempHp, armorClass, acOverride?, speed, initiativeMisc, attacks[],
+  inventory[], currency, notes, tokenId? }`
+- `Attack { id, name, attackBonus, damage, damageType, source? }` — `source:
+  'weapon'` marks a derived (read-only) attack.
+- `InventoryItem { id, name, type: weapon|armor|shield|gear, quantity, weight,
+  equipped, notes, weaponAbility?, damage?, damageType?, proficient?,
+  attackBonusMisc?, damageBonusMisc?, armorBase?, armorCategory?,
+  stealthDisadvantage? }`
+- `Currency { pp, gp, ep, sp, cp }`
 - `RollLogEntry { id, ts, actorId, actorName, label, result, attack?, private? }`
 
 Wire protocol: `ClientAction` (client→server) and `ServerEvent` (server→client)
@@ -321,3 +358,6 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | 3D dice | Deferred in 0.1.0 (2D tray). **0.2.0:** integrate dddice (`dddice-js`) as an optional 3D layer that is authoritative for die values when on. |
 | 2026-09-08 | dddice auth | Per-client API keys in `localStorage`, never in `RoomState` or on our server. Shared room slug in `RoomState`. Guest keys minted in-app. |
 | 2026-09-08 | dddice vs server RNG | When dddice is enabled it is the source of the numbers; our server still owns all rule outcomes (hit/crit/HP). Server RNG is the fallback. |
+| 2026-09-08 | Sheet scope (0.3.0) | Ship sectioned layout + inventory/currency + auto AC and auto attacks from equipped gear. Spellcasting, description/background, rests and death saves deferred (FR-69). |
+| 2026-09-08 | AC computation | Covers light/medium/heavy armor + shield + unarmored. Unarmored Defense and other edge cases handled via the manual `acOverride` field, not special-cased. |
+| 2026-09-08 | Schema upgrades | Migrate in place where feasible (v2→v3 backfills sheet fields) instead of discarding `room.json`. |
