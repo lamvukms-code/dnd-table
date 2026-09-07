@@ -1,0 +1,22 @@
+{
+  "name": "dnd-table",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal online D&D 5e (2024) virtual tabletop: dice, initiative, battle map, tokens, character sheets, LAN sync.",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev -w @dnd-table/server\" \"npm:dev -w @dnd-table/client\"",
+    "start": "npm run start -w @dnd-table/server",
+    "build": "npm run build -w @dnd-table/client",
+    "typecheck": "npm run typecheck -w @dnd-table/server && npm run typecheck -w @dnd-table/client",
+    "test": "npm run test -w @dnd-table/shared"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  }
+}

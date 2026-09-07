@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+server/data/room.json
+.DS_Store
+.vite/
+coverage/
