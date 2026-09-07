@@ -7,6 +7,10 @@ const sharedSrc = fileURLToPath(new URL('../shared/src', import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // dddice-js (three.js) is a lazy chunk loaded only when 3D dice are enabled.
+    chunkSizeWarningLimit: 1400,
+  },
   resolve: {
     alias: [{ find: '@dnd-table/shared', replacement: sharedSrc + '/index.ts' }],
   },

@@ -1,10 +1,18 @@
 import { create } from 'zustand';
-import type {
-  ClientAction,
-  Participant,
-  RoomState,
-  ServerEvent,
+import {
+  doubleDiceCounts,
+  rollNotation,
+  type ClientAction,
+  type ExternalRoll,
+  type Participant,
+  type RoomState,
+  type ServerEvent,
 } from '@dnd-table/shared';
+import {
+  getLocalKey,
+  rollEquation as dddiceRollEquation,
+  setLocalKey as persistDddiceKey,
+} from './dddice.js';
 
 const PID_KEY = 'dnd-table.participantId';
 const IDENTITY_KEY = 'dnd-table.identity';
@@ -23,16 +31,32 @@ function loadIdentity(): Identity | null {
   }
 }
 
+interface AttackParams {
+  label: string;
+  attackNotation: string;
+  damageNotation: string;
+  targetTokenId: string;
+}
+
 interface StoreState {
   status: 'idle' | 'connecting' | 'open' | 'closed';
   participantId: string | null;
   identity: Identity | null;
   room: RoomState | null;
   error: string | null;
+  dddiceKey: string | null;
+  dddiceConnected: boolean;
   join: (identity: Identity) => void;
   send: (action: ClientAction) => void;
+  setDddiceKey: (key: string | null) => void;
+  setDddiceConnected: (connected: boolean) => void;
+  /** Roll dice — via the dddice 3D engine when enabled, else server RNG. */
+  rollDice: (label: string, notation: string, opts?: { private?: boolean }) => Promise<void>;
+  /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
+  attackRoll: (params: AttackParams) => Promise<void>;
   me: () => Participant | undefined;
   isDm: () => boolean;
+  dddiceActive: () => boolean;
 }
 
 let socket: WebSocket | null = null;
@@ -88,12 +112,29 @@ export const useStore = create<StoreState>((set, get) => {
     }
   }
 
+  function dddiceActive(): boolean {
+    const { room, dddiceKey } = get();
+    return Boolean(room?.dddice.enabled && room.dddice.roomSlug && dddiceKey);
+  }
+
+  async function externalRoll(notation: string): Promise<ExternalRoll | null> {
+    if (!dddiceActive()) return null;
+    try {
+      return await dddiceRollEquation(notation);
+    } catch (err) {
+      set({ error: `dddice: ${(err as Error).message} — dùng xúc xắc server` });
+      return null;
+    }
+  }
+
   return {
     status: 'idle',
     participantId: null,
     identity: loadIdentity(),
     room: null,
     error: null,
+    dddiceKey: getLocalKey(),
+    dddiceConnected: false,
 
     join: (identity) => {
       localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
@@ -112,12 +153,61 @@ export const useStore = create<StoreState>((set, get) => {
 
     send: (action) => rawSend(action),
 
+    setDddiceKey: (key) => {
+      persistDddiceKey(key);
+      set({ dddiceKey: key, dddiceConnected: false });
+    },
+
+    setDddiceConnected: (connected) => set({ dddiceConnected: connected }),
+
+    rollDice: async (label, notation, opts) => {
+      const external = await externalRoll(notation);
+      rawSend({ t: 'roll', label, notation, private: opts?.private, external: external ?? undefined });
+    },
+
+    attackRoll: async ({ label, attackNotation, damageNotation, targetTokenId }) => {
+      if (!dddiceActive()) {
+        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId });
+        return;
+      }
+      const attack = await externalRoll(attackNotation);
+      if (!attack) {
+        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId });
+        return;
+      }
+      const token = get().room?.tokens.find((tk) => tk.id === targetTokenId);
+      const ac = token?.armorClass ?? 10;
+      const crit = attack.d20Natural === 20;
+      const fumble = attack.d20Natural === 1;
+      const hit = crit || (!fumble && attack.total >= ac);
+      let damage: ExternalRoll | undefined;
+      if (hit) {
+        const dmgNotation = crit ? doubleDiceCounts(damageNotation) : damageNotation;
+        damage = (await externalRoll(dmgNotation)) ?? undefined;
+        // dddice hiccup mid-attack: fall back to a local damage roll so the
+        // server still has values to apply.
+        if (!damage) {
+          const r = rollNotation(dmgNotation);
+          damage = { total: r.total, faces: [], source: 'dddice' };
+        }
+      }
+      rawSend({
+        t: 'attack',
+        label,
+        attackNotation,
+        damageNotation,
+        targetTokenId,
+        external: { attack, damage },
+      });
+    },
+
     me: () => {
       const { room, participantId } = get();
       return room?.participants.find((p) => p.id === participantId);
     },
 
     isDm: () => get().me()?.role === 'dm',
+    dddiceActive,
   };
 });
 

@@ -117,7 +117,16 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .map-toolbar, .init-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .map-toolbar label { flex-direction: column; }
 .map-toolbar input[type="number"] { width: 64px; }
+.board-viewport { position: relative; }
 .board-scroll { overflow: auto; border: 1px solid var(--line); border-radius: 8px; max-height: 70vh; background: #0c0d12; }
+.dddice-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6;
+}
 .board { position: relative; background-size: cover; background-position: center; }
 .grid-overlay {
   position: absolute;
@@ -255,3 +264,37 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .se-footer .dirty { color: var(--muted); font-size: 12px; }
 .empty { color: var(--muted); }
 details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
+
+/* settings modal */
+.gear { margin-left: 8px; padding: 4px 8px; font-size: 15px; line-height: 1; }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px;
+  width: min(460px, 92vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+.modal-head { display: flex; justify-content: space-between; align-items: center; }
+.settings-section { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.settings-section .row { flex-direction: row; align-items: center; justify-content: space-between; }
+.settings-section .hint { color: var(--muted); font-size: 12px; margin: 0; }
+.settings-section .note {
+  background: var(--panel-2);
+  border-left: 3px solid var(--accent);
+  padding: 6px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+}
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; vertical-align: middle; }
+.badge.ok { background: var(--hit); color: #fff; }
+.badge.off { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }

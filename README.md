@@ -14,7 +14,12 @@ và quản lý character sheet — tất cả trên một trang.
   (nat 1). Nhật ký roll đồng bộ real-time; DM roll riêng được.
 - **Battle map:** lưới tùy chỉnh, ảnh nền theo URL, token kéo-thả có HP/AC/cỡ,
   token ẩn cho DM, thanh máu trên token.
-- **Xúc xắc ảo trên map:** mỗi lần roll hiện dice ngay trên battle map.
+- **Xúc xắc ảo trên map:** mỗi lần roll hiện dice ngay trên battle map (dice tray
+  2D luôn có sẵn).
+- **Xúc xắc 3D dddice (tùy chọn):** bật trong Cài đặt để mọi nút roll — bảng xúc
+  xắc, character sheet, đòn tấn công — chạy qua [dddice](https://dddice.com) và
+  hiện xúc xắc 3D trên battle map cho tất cả mọi người. Kết quả dddice là kết quả
+  chính thức; server vẫn tự so AC, tính chí mạng, trừ HP.
 - **Giải đòn tấn công tự động:** tung d20 + chỉ số, so AC token mục tiêu, báo
   trúng / trượt / chí mạng, tự nhân đôi xúc xắc sát thương khi chí mạng, trừ máu
   token.
@@ -45,6 +50,18 @@ Máy khác trong LAN mở `http://<IP-máy-chủ>:5173`.
 npm run build      # build client vào client/dist
 npm start          # server phục vụ luôn client tại http://<IP>:8787
 ```
+
+## Bật xúc xắc 3D dddice
+
+1. Mở **Cài đặt** (nút ⚙ góc phải).
+2. Mỗi người dán **API key dddice** của mình (lấy trong tài khoản dddice), hoặc
+   bấm **Tạo guest key** nếu không có tài khoản. Key chỉ lưu trên máy đó.
+3. DM bấm **Tạo room dddice mới** (hoặc dán sẵn một room slug) rồi bật **dddice**.
+4. Xong — mọi nút tung xúc xắc giờ ra dice 3D trên battle map. Tắt dddice thì
+   quay lại xúc xắc của server.
+
+API key không bao giờ được gửi lên server của app hay lưu trong phòng; chỉ room
+slug được chia sẻ.
 
 ## Kiểm thử
 

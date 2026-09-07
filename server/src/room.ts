@@ -10,12 +10,15 @@ import {
   SCHEMA_VERSION,
 } from './factory.js';
 import {
+  doubleDiceCounts,
+  externalRollResult,
   resolveAttack,
   rollNotation,
   type ClientAction,
   type InitiativeEntry,
   type Participant,
   type RollLogEntry,
+  type RollResult,
   type RoomState,
 } from '@dnd-table/shared';
 
@@ -96,11 +99,15 @@ export class Room {
         break;
 
       case 'roll': {
-        let result;
-        try {
-          result = rollNotation(action.notation);
-        } catch (err) {
-          return (err as Error).message;
+        let result: RollResult;
+        if (action.external) {
+          result = externalRollResult(action.notation, action.external);
+        } else {
+          try {
+            result = rollNotation(action.notation);
+          } catch (err) {
+            return (err as Error).message;
+          }
         }
         this.pushRoll({
           id: nanoid(8),
@@ -119,22 +126,32 @@ export class Room {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
         const ac = target.armorClass ?? 10;
-        let attackRoll;
-        try {
-          attackRoll = rollNotation(action.attackNotation);
-        } catch (err) {
-          return (err as Error).message;
-        }
-        const res = resolveAttack(attackRoll, ac);
-        let damageResult;
-        if (res.hit) {
+        let attackRoll: RollResult;
+        if (action.external) {
+          attackRoll = externalRollResult(action.attackNotation, action.external.attack);
+        } else {
           try {
-            const dmgNotation = res.crit
-              ? doubleDiceCounts(action.damageNotation)
-              : action.damageNotation;
-            damageResult = rollNotation(dmgNotation);
+            attackRoll = rollNotation(action.attackNotation);
           } catch (err) {
             return (err as Error).message;
+          }
+        }
+        // Server is authoritative for hit/crit vs its own AC copy, from whatever
+        // die values it was handed (dddice or its own RNG).
+        const res = resolveAttack(attackRoll, ac);
+        let damageResult: RollResult | undefined;
+        if (res.hit) {
+          const dmgNotation = res.crit
+            ? doubleDiceCounts(action.damageNotation)
+            : action.damageNotation;
+          if (action.external?.damage) {
+            damageResult = externalRollResult(dmgNotation, action.external.damage);
+          } else {
+            try {
+              damageResult = rollNotation(dmgNotation);
+            } catch (err) {
+              return (err as Error).message;
+            }
           }
         }
         this.pushRoll({
@@ -181,6 +198,13 @@ export class Room {
       case 'updateMap': {
         if (!isDm) return 'Chỉ DM được sửa bản đồ';
         Object.assign(this.state.map, action.patch);
+        this.touch();
+        break;
+      }
+
+      case 'updateDddice': {
+        if (!isDm) return 'Chỉ DM được cấu hình dddice';
+        Object.assign(this.state.dddice, action.patch);
         this.touch();
         break;
       }
@@ -306,14 +330,6 @@ export class Room {
     }
     return null;
   }
-}
-
-function doubleDiceCounts(notation: string): string {
-  // "1d8+3" -> "2d8+3" ; leaves flat modifiers alone (5e crit rule)
-  return notation.replace(/(\d*)d(\d+)/gi, (_m, count: string, sides: string) => {
-    const c = count === '' ? 1 : parseInt(count, 10);
-    return `${c * 2}d${sides}`;
-  });
 }
 
 function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {

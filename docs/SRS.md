@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.1.0
+- **Version:** 0.2.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -160,10 +160,31 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 ### 3.4 Virtual dice on the map
 
 - **FR-30 (P0):** After any roll, a **dice tray** entry appears on the battle map
-  showing the individual die faces and the total, labelled with the roller.
+  showing the individual die faces and the total, labelled with the roller. This
+  is the always-on fallback and works with no external service.
 - **FR-31 (P0):** The tray is capped (most recent ~6 shown, 12 kept) and shared
   across all clients.
-- **FR-32 (P2):** Physics-based 3D dice animation.
+- **FR-32 (P0):** **dddice 3D dice integration.** When `RoomState.dddice.enabled`
+  and the local client has an API key and the room has a `roomSlug`:
+  - A transparent `<canvas>` overlays the battle-map viewport running the
+    `dddice-js` engine (`ThreeDDice`), connected to the shared dddice room.
+  - Every roll path in the app (FR-11/12/14, FR-40, FR-63) is routed through
+    `dddice.roll(parseRollEquation(notation, theme))` instead of the server RNG.
+    All connected clients see the same 3D roll via the dddice websocket.
+  - The initiating client reads back `total_value` / `values` and forwards them to
+    our server as an `external` payload; the server records them in the shared
+    roll log and drives game logic (FR-13, FR-41–43) from those values without
+    re-rolling.
+  - **Auth:** each participant stores their own dddice API key in `localStorage`;
+    it is never sent to our server or placed in `RoomState`. A guest key can be
+    minted in-app (`api.user.guest()`) for players without an account. The DM
+    sets the shared `roomSlug` (or creates one via `api.room.create()`), stored
+    in `RoomState`.
+  - `dddice-js` (and three.js) is lazy-loaded only when the feature is on.
+  - Degradation: any dddice error falls back to a server roll for that action and
+    surfaces a toast; the app is fully usable with dddice off.
+- **FR-33 (P1):** Per-character default dice theme, stored on the sheet.
+- **FR-34 (P2):** Show whose turn it is by auto-selecting their dice theme colour.
 
 ### 3.5 Automatic attack resolution
 
@@ -180,7 +201,12 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 - **FR-43 (P0):** On a hit against a token with current HP, the server subtracts
   the damage total (floored at 0).
 - **FR-44 (P0):** Attack and damage results are written to the roll log with the
-  target name, target AC, and hit/crit/miss verdict; the map shows the dice.
+  target name, target AC, and hit/crit/miss verdict; the map shows the dice
+  (dddice 3D when enabled, else the 2D tray).
+- **FR-47 (P0):** When dddice is enabled the attack flow orchestrates on the
+  client — roll the d20 in 3D, determine hit vs the known AC, then roll (doubled
+  on a crit) damage in 3D — and sends both resolved rolls to the server, which
+  re-checks the verdict against its authoritative AC and applies HP.
 - **FR-45 (P1):** Saving-throw workflow (DC vs. d20 + save bonus) with
   half-damage-on-success.
 - **FR-46 (P1):** Pull attacks directly from a character sheet's attack list.
@@ -254,7 +280,11 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 See `shared/src/types.ts` for the authoritative definitions.
 
 - `RoomState { version, rev, name, participants[], map, tokens[], initiative,
-  sheets[], rollLog[], diceTray }`
+  sheets[], rollLog[], diceTray, dddice }`
+- `DddiceConfig { enabled, roomSlug?, theme? }` — **no API keys**; keys are
+  per-client in `localStorage` only.
+- `ExternalRoll { total, faces[], d20Natural?, source, rollUuid? }` — values
+  rolled outside the server (dddice) that ride along a `roll` / `attack` action.
 - `Participant { id, name, role, color, connected, lastSeen }`
 - `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid }`
 - `Token { id, label, x, y, size, color, imageUrl?, currentHp?, maxHp?,
@@ -276,8 +306,8 @@ unions in `shared/src/protocol.ts`. `PROTOCOL_VERSION` guards compatibility.
 
 Public hosting, user accounts, multiple concurrent rooms, voice/video, a
 compendium of monsters/spells/items, automated rules enforcement beyond attack
-resolution, mobile-first layout, offline mode, and any distribution of
-copyrighted content.
+resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
+(dddice covers this), and any distribution of copyrighted content.
 
 ---
 
@@ -288,4 +318,6 @@ copyrighted content.
 | 2026-09-08 | Ruleset | D&D 5e **2024**. Crit doubles dice only; nat 20 always hits+crits; nat 1 always misses. |
 | 2026-09-08 | Sync strategy | Full-state broadcast for now; revisit if rooms grow. |
 | 2026-09-08 | Auth | None. LAN-trust model, documented as a hard constraint. |
-| 2026-09-08 | 3D dice | Deferred (FR-32). 0.1.0 ships a 2D dice tray. |
+| 2026-09-08 | 3D dice | Deferred in 0.1.0 (2D tray). **0.2.0:** integrate dddice (`dddice-js`) as an optional 3D layer that is authoritative for die values when on. |
+| 2026-09-08 | dddice auth | Per-client API keys in `localStorage`, never in `RoomState` or on our server. Shared room slug in `RoomState`. Guest keys minted in-app. |
+| 2026-09-08 | dddice vs server RNG | When dddice is enabled it is the source of the numbers; our server still owns all rule outcomes (hit/crit/HP). Server RNG is the fallback. |

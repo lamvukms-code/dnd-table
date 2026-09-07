@@ -150,6 +150,46 @@ export interface AttackResolution {
   fumble: boolean;
 }
 
+/**
+ * Build a RollResult from values rolled outside the engine (e.g. dddice), so it
+ * can live in the shared roll log alongside server-rolled results.
+ */
+export function externalRollResult(
+  notation: string,
+  ext: { total: number; faces: number[]; d20Natural?: number },
+): RollResult {
+  const rolls: DieRoll[] = ext.faces.map((value) => ({ sides: 0, value, kept: true }));
+  const result: RollResult = {
+    notation,
+    terms: [
+      {
+        raw: notation,
+        kind: 'dice',
+        rolls,
+        subtotal: ext.total,
+        sign: 1,
+      },
+    ],
+    total: ext.total,
+  };
+  if (typeof ext.d20Natural === 'number') {
+    result.d20 = {
+      natural: ext.d20Natural,
+      isCrit: ext.d20Natural === 20,
+      isFumble: ext.d20Natural === 1,
+    };
+  }
+  return result;
+}
+
+/** Double the dice counts in a notation (5e crit): "1d8+3" -> "2d8+3". */
+export function doubleDiceCounts(notation: string): string {
+  return notation.replace(/(\d*)d(\d+|%)/gi, (_m, count: string, sides: string) => {
+    const c = count === '' ? 1 : parseInt(count, 10);
+    return `${c * 2}d${sides}`;
+  });
+}
+
 /** Resolve an attack roll against a target AC per 5e rules. */
 export function resolveAttack(
   attackRoll: RollResult,

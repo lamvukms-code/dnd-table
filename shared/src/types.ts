@@ -116,6 +116,15 @@ export interface RollLogEntry {
   private?: boolean; // DM-only roll
 }
 
+/** A roll resolved outside the server (e.g. by the dddice 3D engine). */
+export interface ExternalRoll {
+  total: number;
+  faces: number[]; // kept die faces, for display
+  d20Natural?: number; // natural value of the single d20, if this was a d20 roll
+  source: 'dddice';
+  rollUuid?: string;
+}
+
 export interface Participant {
   id: string;
   name: string;
@@ -137,6 +146,14 @@ export interface DiceTray {
   }[];
 }
 
+export interface DddiceConfig {
+  // Whether rolls are routed through the dddice 3D engine.
+  // API keys are NOT stored here — each client holds its own key locally.
+  enabled: boolean;
+  roomSlug?: string; // shared dddice room every client connects to
+  theme?: string; // default dice theme slug (client may override locally)
+}
+
 export interface RoomState {
   version: number; // schema version
   rev: number; // increments on every mutation
@@ -148,4 +165,5 @@ export interface RoomState {
   sheets: CharacterSheet[];
   rollLog: RollLogEntry[]; // capped, newest last
   diceTray: DiceTray;
+  dddice: DddiceConfig;
 }

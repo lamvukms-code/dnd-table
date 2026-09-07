@@ -5,6 +5,7 @@ import { BattleMap } from './components/BattleMap.js';
 import { DicePanel } from './components/DicePanel.js';
 import { Initiative } from './components/Initiative.js';
 import { Sheets } from './components/Sheets.js';
+import { SettingsModal } from './components/Settings.js';
 
 type Tab = 'map' | 'initiative' | 'sheets';
 
@@ -16,6 +17,7 @@ export function App() {
   const me = useStore((s) => s.me());
   const [tab, setTab] = useState<Tab>('map');
   const [toast, setToast] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     if (!error) return;
@@ -50,6 +52,9 @@ export function App() {
           {me.name} · {me.role === 'dm' ? 'DM' : 'Người chơi'}
           {status !== 'open' ? ' · mất kết nối…' : ''}
         </span>
+        <button className="gear" title="Cài đặt" onClick={() => setSettingsOpen(true)}>
+          ⚙
+        </button>
       </header>
 
       <main className="layout">
@@ -63,6 +68,7 @@ export function App() {
         </aside>
       </main>
 
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

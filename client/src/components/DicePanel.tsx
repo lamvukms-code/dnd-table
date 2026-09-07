@@ -6,6 +6,7 @@ const QUICK = [20, 12, 10, 8, 6, 4, 100];
 
 export function DicePanel() {
   const send = useStore((s) => s.send);
+  const rollDice = useStore((s) => s.rollDice);
   const isDm = useStore((s) => s.isDm());
   const log = useStore((s) => s.room?.rollLog ?? []);
   const [notation, setNotation] = useState('1d20');
@@ -15,7 +16,7 @@ export function DicePanel() {
   const entries = useMemo(() => [...log].reverse(), [log]);
 
   function roll(n: string, label: string) {
-    send({ t: 'roll', label, notation: n, private: priv });
+    void rollDice(label, n, { private: priv });
   }
 
   return (

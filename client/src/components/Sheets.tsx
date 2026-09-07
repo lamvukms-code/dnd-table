@@ -91,6 +91,7 @@ export function Sheets() {
 
 function SheetEditor({ sheet }: { sheet: CharacterSheet }) {
   const send = useStore((s) => s.send);
+  const rollDice = useStore((s) => s.rollDice);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [draft, setDraft] = useState<CharacterSheet>(sheet);
 
@@ -110,7 +111,7 @@ function SheetEditor({ sheet }: { sheet: CharacterSheet }) {
     commit({ ...draft, [k]: v });
   }
   function roll(label: string, mod: number) {
-    send({ t: 'roll', label: `${draft.name} · ${label}`, notation: d20Check(mod) });
+    void rollDice(`${draft.name} · ${label}`, d20Check(mod));
   }
 
   return (
@@ -340,24 +341,14 @@ function SheetEditor({ sheet }: { sheet: CharacterSheet }) {
             <button
               className="roll-btn"
               onClick={() =>
-                send({
-                  t: 'roll',
-                  label: `${draft.name} · ${atk.name} (đánh)`,
-                  notation: d20Check(atk.attackBonus),
-                })
+                rollDice(`${draft.name} · ${atk.name} (đánh)`, d20Check(atk.attackBonus))
               }
             >
               đánh
             </button>
             <button
               className="roll-btn"
-              onClick={() =>
-                send({
-                  t: 'roll',
-                  label: `${draft.name} · ${atk.name} (sát thương)`,
-                  notation: atk.damage,
-                })
-              }
+              onClick={() => rollDice(`${draft.name} · ${atk.name} (sát thương)`, atk.damage)}
             >
               dmg
             </button>

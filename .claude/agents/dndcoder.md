@@ -24,7 +24,14 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
   (debounced), broadcasts full state snapshots. Runs under `tsx` (no build step).
 - `client/` — React 18 + Vite + Zustand. `store.ts` owns the WebSocket and the
   mirrored room state; components are presentational and dispatch actions via
-  `send()`.
+  `send()`. Roll buttons call `store.rollDice()` / `store.attackRoll()`, which
+  route through dddice when enabled and fall back to a plain server `roll` /
+  `attack` action otherwise.
+- `client/src/dddice.ts` — lazy wrapper around `dddice-js` (three.js): one shared
+  `ThreeDDice` engine on the battle-map overlay canvas, plus `rollEquation()`,
+  `createGuestKey()`, `createRoom()`. dddice API keys live only in `localStorage`
+  (`getLocalKey` / `setLocalKey`) — **never** put them in `RoomState`, a server
+  message, or a log. Only `DddiceConfig { enabled, roomSlug, theme }` is shared.
 - `docs/SRS.md` — the software requirements specification. Keep it current.
 - `CHANGELOG.md` — Keep a Changelog format, updated every release.
 
@@ -44,7 +51,14 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
    always misses, crit doubles dice (not flat modifiers), advantage = 2d20 keep
    highest. When a rule is ambiguous, add a short note in the SRS and pick the
    2024 PHB reading.
-5. **Verify every change:**
+5. **dddice is optional and authoritative-for-values-only.** When
+   `RoomState.dddice.enabled`, dddice supplies the die numbers and the server
+   records them via `ExternalRoll` without re-rolling — but the server still owns
+   every rule outcome (hit/crit/fumble vs its AC copy, HP, crit dice-doubling).
+   Every dddice code path must degrade to a server roll on error. Check
+   `dddice-js` method names against the live SDK docs (docs.dddice.com) before
+   relying on them.
+6. **Verify every change:**
    - `npm run test` (shared rules)
    - `npm run typecheck` (server + client)
    - `npm run build` (client production build must succeed)

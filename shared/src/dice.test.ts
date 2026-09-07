@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { d20Check, resolveAttack, rollNotation, type Rng } from './dice.js';
+import {
+  d20Check,
+  doubleDiceCounts,
+  externalRollResult,
+  resolveAttack,
+  rollNotation,
+  type Rng,
+} from './dice.js';
 
 /** Deterministic RNG cycling through given [0,1) values. */
 function seq(values: number[]): Rng {
@@ -54,6 +61,28 @@ describe('d20Check', () => {
     expect(d20Check(-1)).toBe('1d20-1');
     expect(d20Check(3, 'advantage')).toBe('2d20kh1+3');
     expect(d20Check(0, 'disadvantage')).toBe('2d20kl1');
+  });
+});
+
+describe('doubleDiceCounts', () => {
+  it('doubles dice, leaves flat modifiers', () => {
+    expect(doubleDiceCounts('1d8+3')).toBe('2d8+3');
+    expect(doubleDiceCounts('2d6+1d4+2')).toBe('4d6+2d4+2');
+    expect(doubleDiceCounts('d10')).toBe('2d10');
+  });
+});
+
+describe('externalRollResult', () => {
+  it('wraps dddice-style values into a RollResult', () => {
+    const r = externalRollResult('1d20+5', { total: 23, faces: [18], d20Natural: 18 });
+    expect(r.total).toBe(23);
+    expect(r.d20).toEqual({ natural: 18, isCrit: false, isFumble: false });
+  });
+
+  it('flags a natural 20 from an external roll', () => {
+    const r = externalRollResult('1d20', { total: 20, faces: [20], d20Natural: 20 });
+    expect(r.d20?.isCrit).toBe(true);
+    expect(resolveAttack(r, 25).hit).toBe(true);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import type { Token, TokenSize } from '@dnd-table/shared';
 import { useStore } from '../store.js';
+import { DddiceCanvas } from './DddiceCanvas.js';
 
 const CELL = 56; // display px per grid cell
 const SIZE_CELLS: Record<TokenSize, number> = {
@@ -63,6 +64,7 @@ export function BattleMap() {
     <div className="battlemap">
       {isDm && <MapToolbar />}
 
+      <div className="board-viewport">
       <div className="board-scroll">
         <div
           ref={boardRef}
@@ -129,6 +131,8 @@ export function BattleMap() {
             </div>
           )}
         </div>
+        <DddiceCanvas />
+      </div>
       </div>
 
       {selectedToken && (
@@ -199,6 +203,7 @@ function MapToolbar() {
 
 function TokenInspector({ token, onClose }: { token: Token; onClose: () => void }) {
   const send = useStore((s) => s.send);
+  const attackRoll = useStore((s) => s.attackRoll);
   const isDm = useStore((s) => s.isDm());
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [atkName, setAtkName] = useState('Đòn đánh');
@@ -310,8 +315,7 @@ function TokenInspector({ token, onClose }: { token: Token; onClose: () => void 
         <button
           className="primary"
           onClick={() =>
-            send({
-              t: 'attack',
+            attackRoll({
               label: attackerId
                 ? `${tokens.find((t) => t.id === attackerId)?.label ?? ''} · ${atkName}`
                 : atkName,
