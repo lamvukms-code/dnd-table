@@ -187,6 +187,7 @@ export interface TokenStatblock {
   abilities: Record<Ability, number>;
   proficiencyBonus: number;
   saveProficiencies: Ability[];
+  skills: { skill: string; bonus: number }[];
   initiativeMod: number;
   actions: SheetAction[];
   traits: StatblockTrait[];

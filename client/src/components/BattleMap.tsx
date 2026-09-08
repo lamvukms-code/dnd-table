@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { d20Check, fmtMod, type Token, type TokenSize } from '@dnd-table/shared';
+import {
+  ABILITIES,
+  abilityMod,
+  d20Check,
+  fmtMod,
+  tokenSaveBonus,
+  type Token,
+  type TokenSize,
+} from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 
@@ -307,6 +315,55 @@ function TokenInspector({ token, onClose }: { token: Token; onClose: () => void 
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
           {sb.meta && <div className="sb-meta">{sb.meta}</div>}
+
+          <div className="sb-ability-roll">
+            {ABILITIES.map((ab) => {
+              const mod = abilityMod(sb.abilities[ab]);
+              const save = tokenSaveBonus(sb, ab);
+              return (
+                <div key={ab} className="sb-abr">
+                  <button
+                    className="roll-btn sm"
+                    title={`${sb.name} — ${ab.toUpperCase()} check`}
+                    onClick={() => rollDice(`${sb.name} · ${ab.toUpperCase()} check`, d20Check(mod))}
+                  >
+                    {ab.toUpperCase()} {fmtMod(mod)}
+                  </button>
+                  <button
+                    className={`roll-btn sm ${sb.saveProficiencies.includes(ab) ? 'prof' : ''}`}
+                    title={`${sb.name} — ${ab.toUpperCase()} save`}
+                    onClick={() => rollDice(`${sb.name} · ${ab.toUpperCase()} save`, d20Check(save))}
+                  >
+                    save {fmtMod(save)}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {(sb.skills ?? []).length > 0 && (
+            <div className="sb-skill-roll">
+              {(sb.skills ?? []).map((sk) => (
+                <button
+                  key={sk.skill}
+                  className="roll-btn sm"
+                  onClick={() => rollDice(`${sb.name} · ${sk.skill}`, d20Check(sk.bonus))}
+                >
+                  {sk.skill} {fmtMod(sk.bonus)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="sb-quick-roll">
+            <button
+              className="roll-btn sm"
+              onClick={() => rollDice(`${sb.name} · Initiative`, d20Check(sb.initiativeMod))}
+            >
+              Init {fmtMod(sb.initiativeMod)}
+            </button>
+          </div>
+
           <label className="sb-target">
             {sb.name} tấn công →
             <select value={sbTargetId} onChange={(e) => setSbTargetId(e.target.value)}>

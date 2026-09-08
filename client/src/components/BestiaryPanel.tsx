@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   ABILITIES,
   abilityMod,
+  d20Check,
   fmtMod,
   type SheetAction,
   type Statblock,
@@ -131,12 +132,14 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
 
 function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: () => void }) {
   const send = useStore((s) => s.send);
+  const rollDice = useStore((s) => s.rollDice);
   const map = useStore((s) => s.room!.map);
   const [rollHp, setRollHp] = useState(true);
   const [hidden, setHidden] = useState(false);
 
   const commit = (next: Statblock) => send({ t: 'bestiaryUpsert', statblock: next });
   const set = <K extends keyof Statblock>(k: K, v: Statblock[K]) => commit({ ...sb, [k]: v });
+  const roll = (label: string, mod: number) => rollDice(`${sb.name} · ${label}`, d20Check(mod));
 
   function spawn() {
     send({
@@ -149,8 +152,50 @@ function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: () => vo
     });
   }
 
+  const saveBonus = (ab: (typeof ABILITIES)[number]) =>
+    abilityMod(sb.abilities[ab]) + (sb.saveProficiencies.includes(ab) ? sb.proficiencyBonus : 0);
+
   return (
     <div className="sb-editor">
+      <div className="sb-rollbar">
+        <span className="sb-rollbar-label">🎲 Roll thử:</span>
+        {ABILITIES.map((ab) => (
+          <button
+            key={ab}
+            className="roll-btn sm"
+            onClick={() => roll(`${ab.toUpperCase()} check`, abilityMod(sb.abilities[ab]))}
+            title={`${ab.toUpperCase()} check`}
+          >
+            {ab.toUpperCase()}
+          </button>
+        ))}
+        {sb.saveProficiencies.map((ab) => (
+          <button
+            key={`s-${ab}`}
+            className="roll-btn sm prof"
+            onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(ab))}
+          >
+            {ab.toUpperCase()} save
+          </button>
+        ))}
+        {sb.skills.map((sk) => (
+          <button key={sk.skill} className="roll-btn sm" onClick={() => roll(sk.skill, sk.bonus)}>
+            {sk.skill} {fmtMod(sk.bonus)}
+          </button>
+        ))}
+        {sb.actions
+          .filter((a) => typeof a.attackBonus === 'number')
+          .map((a) => (
+            <button
+              key={`a-${a.id}`}
+              className="roll-btn sm"
+              onClick={() => roll(`${a.name} (đánh)`, a.attackBonus!)}
+            >
+              {a.name} đánh
+            </button>
+          ))}
+      </div>
+
       <div className="sb-row">
         <label className="grow">
           Tên

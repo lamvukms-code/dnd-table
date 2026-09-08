@@ -602,6 +602,22 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 }
 .sb-inspect .sb-meta { font-size: 11px; color: var(--muted); font-style: italic; }
 .sb-inspect .sb-target { flex-direction: row; align-items: center; gap: 5px; font-size: 11px; }
+.sb-ability-roll { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.sb-abr { display: flex; gap: 2px; }
+.sb-abr .roll-btn { flex: 1; padding: 2px 3px; font-size: 10px; }
+.sb-skill-roll, .sb-quick-roll { display: flex; flex-wrap: wrap; gap: 3px; }
+.sb-rollbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.sb-rollbar-label { font-size: 11px; color: var(--muted); }
+.sb-rollbar .roll-btn { font-size: 10px; padding: 2px 6px; }
 .sb-act { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .sb-act .sb-act-name { font-weight: 600; }
 .sb-act .sb-act-detail { flex: 1; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -143,6 +143,7 @@ export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
     abilities: { ...sb.abilities },
     proficiencyBonus: sb.proficiencyBonus,
     saveProficiencies: [...sb.saveProficiencies],
+    skills: sb.skills.map((s) => ({ ...s })),
     initiativeMod: statblockInitiativeMod(sb),
     actions: sb.actions.map((a) => ({ ...a })),
     traits: sb.traits.map((t) => ({ ...t })),

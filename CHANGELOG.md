@@ -6,6 +6,21 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-08
+
+### Added
+
+- **Roll a monster's stats, saves, skills and attacks from its stat block**
+  (D&D-Beyond style). The token inspector's stat-block section now has a
+  clickable check + save button per ability, a button per skill, an initiative
+  button, plus the existing action attack/damage buttons — all posting to the
+  shared log as "<monster> · …" and through dddice when enabled.
+- The Bestiary editor gets a **🎲 Roll thử** bar (ability checks, save
+  proficiencies, skills, attack to-hits) so the DM can roll while browsing or
+  building a stat block.
+- `TokenStatblock` now carries `skills`; shared tests for
+  `tokenStatblockFrom` / `tokenSaveBonus` / `statblockInitiativeMod`.
+
 ## [0.6.0] - 2026-09-08
 
 ### Added
@@ -213,7 +228,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...v0.5.1

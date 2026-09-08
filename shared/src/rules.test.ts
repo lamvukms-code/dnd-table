@@ -8,8 +8,11 @@ import {
   currencyInGp,
   derivedActions,
   emptyCurrency,
+  statblockInitiativeMod,
+  tokenSaveBonus,
+  tokenStatblockFrom,
 } from './rules.js';
-import type { CharacterSheet, InventoryItem } from './types.js';
+import type { CharacterSheet, InventoryItem, Statblock } from './types.js';
 
 function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
   return {
@@ -173,6 +176,47 @@ describe('rests', () => {
     expect(s.tempHp).toBe(0);
     expect(s.resources.every((r) => r.used === 0)).toBe(true);
     expect(s.spellSlots[0].used).toBe(0);
+  });
+});
+
+describe('stat blocks', () => {
+  const goblin: Statblock = {
+    id: 'g',
+    name: 'Goblin',
+    meta: '',
+    cr: '1/4',
+    size: 'small',
+    ac: 15,
+    maxHp: 7,
+    hpFormula: '2d6',
+    speed: 30,
+    abilities: { str: 8, dex: 14, con: 10, int: 10, wis: 8, cha: 8 },
+    proficiencyBonus: 2,
+    saveProficiencies: ['dex'],
+    skills: [{ skill: 'stealth', bonus: 6 }],
+    traits: [],
+    actions: [{ id: 'a', name: 'Scimitar', actionType: 'action', attackBonus: 4, damage: '1d6+2' }],
+    color: '#000',
+    tags: [],
+    notes: '',
+  };
+
+  it('initiative mod = DEX mod', () => {
+    expect(statblockInitiativeMod(goblin)).toBe(2);
+  });
+
+  it('tokenStatblockFrom copies combat data incl. skills', () => {
+    const t = tokenStatblockFrom(goblin);
+    expect(t.initiativeMod).toBe(2);
+    expect(t.skills).toEqual([{ skill: 'stealth', bonus: 6 }]);
+    expect(t.actions).toHaveLength(1);
+    expect(t.fromId).toBe('g');
+  });
+
+  it('tokenSaveBonus adds proficiency only where proficient', () => {
+    const t = tokenStatblockFrom(goblin);
+    expect(tokenSaveBonus(t, 'dex')).toBe(2 + 2); // DEX +2, prof +2
+    expect(tokenSaveBonus(t, 'str')).toBe(-1); // STR -1, no prof
   });
 });
 

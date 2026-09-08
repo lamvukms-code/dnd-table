@@ -361,9 +361,13 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   image and an embedded `TokenStatblock` (abilities, save profs, initiative mod,
   actions, traits). Optionally spawn hidden.
 - **FR-82 (P0):** The token inspector renders the embedded stat block for the DM
-  and the token's controller — actions become attack / damage / roll buttons
-  with a target picker (same resolution as FR-40/46). `initRollAll` uses the
-  stat block's initiative modifier for un-linked NPC tokens.
+  and the token's controller — a clickable **ability check + saving throw** per
+  ability, a button per **skill**, an initiative button, and each **action** as
+  attack / damage / roll buttons with a target picker (same resolution as
+  FR-40/46). All post to the shared log labelled "<monster> · …" and route
+  through dddice when enabled. The Bestiary editor has the same rolls in a
+  preview bar. `initRollAll` uses the stat block's initiative modifier for
+  un-linked NPC tokens.
 - **FR-83 (P0):** Import / export the bestiary as a JSON array (merged by `id` on
   import). A `docs/bestiary-srd-starter.json` (SRD 5.1, CC-BY-4.0) ships for the
   DM to import — nothing is auto-loaded.
@@ -415,8 +419,8 @@ See `shared/src/types.ts` for the authoritative definitions.
   speedNote?, abilities, proficiencyBonus, saveProficiencies[], skills[], senses?,
   languages?, traits[], actions[], color, imageUrl?, tags[], notes, source? }`
 - `TokenStatblock { name, meta?, abilities, proficiencyBonus, saveProficiencies[],
-  initiativeMod, actions[], traits[], notes?, fromId? }` — the combat-relevant
-  subset copied onto a spawned token.
+  skills[], initiativeMod, actions[], traits[], notes?, fromId? }` — the
+  combat-relevant subset copied onto a spawned token.
 - `Initiative { entries[], round, turnIndex, running }`
 - `InitiativeEntry { id, name, initiative, tokenId?, isActive, hasGone }`
 - `CharacterSheet { id, ownerId, name, className, level, proficiencyBonus,
