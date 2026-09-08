@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-08
+
+### Changed
+
+- **Shorter character sheet.** The ability strip is compact by default — a single
+  6-wide row of just the ability score and a **save-proficiency checkbox** next to
+  each stat. A **▾ roll & save** toggle reveals the modifier and the check / save
+  roll buttons. (Save proficiency was previously a hidden right-click.)
+
 ## [0.5.1] - 2026-09-08
 
 ### Added
@@ -175,7 +184,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...v0.4.0

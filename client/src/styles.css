@@ -374,19 +374,33 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .bt-ident .bt-class { width: 90px; }
 .bt-ident input[type="number"] { width: 46px; }
 .bt-prof { color: var(--muted); align-self: center; }
-.ability-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ability-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ability-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.ability-strip.expanded { grid-template-columns: repeat(3, 1fr); }
 .ab-cell {
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 4px;
+  padding: 3px 4px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   align-items: stretch;
 }
-.ab-cell .ab-key { font-size: 10px; color: var(--muted); text-align: center; }
-.ab-cell input { text-align: center; }
+.ab-top { display: flex; align-items: center; justify-content: space-between; }
+.ab-top .ab-key { font-size: 10px; color: var(--muted); }
+.ab-saveprof { margin: 0; width: 12px; height: 12px; }
+.ab-mid { display: flex; align-items: center; gap: 4px; }
+.ab-score { text-align: center; flex: 1; min-width: 0; }
+.ab-mod { font-weight: 700; color: var(--accent); font-size: 12px; }
+.ab-rolls { display: flex; gap: 3px; }
+.ab-rolls .roll-btn { flex: 1; }
 .skills-block > summary { font-size: 11px; }
 .skills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; }
 .skill { display: flex; align-items: center; gap: 3px; }

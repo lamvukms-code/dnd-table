@@ -204,7 +204,17 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const damageRoll = useStore((s) => s.damageRoll);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
+  const [showRolls, setShowRolls] = useState(false);
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
+
+  function toggleSaveProf(ab: Ability, on: boolean) {
+    commit({
+      ...draft,
+      saveProficiencies: on
+        ? [...draft.saveProficiencies, ab]
+        : draft.saveProficiencies.filter((x) => x !== ab),
+    });
+  }
 
   const ac = computeArmorClass(draft);
   const actions = allActions(draft);
@@ -247,41 +257,62 @@ function BasicTab({ draft, commit }: EditorCtx) {
             <span className="bt-prof">Thành thạo {fmtMod(draft.proficiencyBonus)}</span>
           </div>
 
-          <div className="ability-strip">
+          <div className="ability-head">
+            <span>Chỉ số</span>
+            <button className="link" onClick={() => setShowRolls((v) => !v)}>
+              {showRolls ? '▴ ẩn roll & save' : '▾ roll & save'}
+            </button>
+          </div>
+          <div className={`ability-strip ${showRolls ? 'expanded' : ''}`}>
             {ABILITIES.map((ab) => {
               const mod = abilityMod(draft.abilities[ab]);
+              const prof = draft.saveProficiencies.includes(ab);
               return (
                 <div key={ab} className="ab-cell">
-                  <span className="ab-key">{ABILITY_LABEL[ab]}</span>
-                  <input
-                    type="number"
-                    value={draft.abilities[ab]}
-                    onChange={(e) =>
-                      commit({
-                        ...draft,
-                        abilities: { ...draft.abilities, [ab]: Number(e.target.value) },
-                      })
-                    }
-                  />
-                  <button className="roll-btn sm" onClick={() => roll(`${ab.toUpperCase()} check`, mod)}>
-                    {fmtMod(mod)}
-                  </button>
-                  <button
-                    className={`roll-btn sm ${draft.saveProficiencies.includes(ab) ? 'prof' : ''}`}
-                    onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab))}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      commit({
-                        ...draft,
-                        saveProficiencies: draft.saveProficiencies.includes(ab)
-                          ? draft.saveProficiencies.filter((x) => x !== ab)
-                          : [...draft.saveProficiencies, ab],
-                      });
-                    }}
-                    title="Chuột phải để bật/tắt thành thạo save"
-                  >
-                    save {fmtMod(saveBonus(draft, ab))}
-                  </button>
+                  <div className="ab-top">
+                    <span className="ab-key">{ABILITY_LABEL[ab]}</span>
+                    <input
+                      type="checkbox"
+                      className="ab-saveprof"
+                      checked={prof}
+                      title="Thành thạo cứu nguy (saving throw)"
+                      onChange={(e) => toggleSaveProf(ab, e.target.checked)}
+                    />
+                  </div>
+                  <div className="ab-mid">
+                    <input
+                      type="number"
+                      className="ab-score"
+                      value={draft.abilities[ab]}
+                      onChange={(e) =>
+                        commit({
+                          ...draft,
+                          abilities: { ...draft.abilities, [ab]: Number(e.target.value) },
+                        })
+                      }
+                    />
+                    {showRolls && (
+                      <span className="ab-mod" title="Modifier">
+                        {fmtMod(mod)}
+                      </span>
+                    )}
+                  </div>
+                  {showRolls && (
+                    <div className="ab-rolls">
+                      <button
+                        className="roll-btn sm"
+                        onClick={() => roll(`${ab.toUpperCase()} check`, mod)}
+                      >
+                        check
+                      </button>
+                      <button
+                        className={`roll-btn sm ${prof ? 'prof' : ''}`}
+                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab))}
+                      >
+                        save {fmtMod(saveBonus(draft, ab))}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

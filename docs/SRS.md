@@ -275,10 +275,12 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   current/max/temp HP, speed, initiative misc bonus, `actions`, `resources`,
   `spellSlots`, `feats`, `features`, inventory, currency, notes, token link.
 - **FR-61a (P0):** The dock sheet has four sub-tabs:
-  - **Cơ bản** — identity, abilities with check/save rolls, skills, the combat
-    block (AC badge + override, HP/temp, speed, initiative), **class resources**
-    and **spell slots**, **Nghỉ ngắn / Nghỉ dài**, and the **action economy**
-    (Action / Bonus / Reaction groups) with a target picker.
+  - **Cơ bản** — identity, a compact ability strip (score + a save-proficiency
+    checkbox per stat; a **▾ roll & save** toggle reveals the modifier and the
+    check / save roll buttons), skills, the combat block (AC badge + override,
+    HP/temp, speed, initiative), **class resources** and **spell slots**,
+    **Nghỉ ngắn / Nghỉ dài**, and the **action economy** (Action / Bonus /
+    Reaction groups) with a target picker.
   - **Trang bị** — inventory + currency (3.7.1).
   - **Đặc điểm** — `feats` (name + description).
   - **Năng lực** — `features` (name, source, description, optional limited-use
