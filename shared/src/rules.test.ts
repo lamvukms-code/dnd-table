@@ -8,6 +8,7 @@ import {
   currencyInGp,
   derivedActions,
   emptyCurrency,
+  skillBonus,
   statblockInitiativeMod,
   tokenSaveBonus,
   tokenStatblockFrom,
@@ -176,6 +177,24 @@ describe('rests', () => {
     expect(s.tempHp).toBe(0);
     expect(s.resources.every((r) => r.used === 0)).toBe(true);
     expect(s.spellSlots[0].used).toBe(0);
+  });
+});
+
+describe('skillBonus', () => {
+  const s = () =>
+    sheet({
+      abilities: { str: 10, dex: 16, con: 10, int: 10, wis: 10, cha: 10 },
+      proficiencyBonus: 3,
+    });
+  it('no proficiency = ability mod only', () => {
+    expect(skillBonus(s(), 'stealth')).toBe(3); // DEX +3
+  });
+  it('proficiency adds the bonus once', () => {
+    expect(skillBonus(sheet({ ...s(), skillProficiencies: ['stealth'] }), 'stealth')).toBe(3 + 3);
+  });
+  it('expertise adds twice the proficiency bonus', () => {
+    const sh = sheet({ ...s(), skillProficiencies: ['stealth'], skillExpertise: ['stealth'] });
+    expect(skillBonus(sh, 'stealth')).toBe(3 + 3 * 2); // DEX +3, expertise +6
   });
 });
 

@@ -343,6 +343,31 @@ export class Room {
         break;
       }
 
+      case 'copyToken': {
+        const src = this.state.tokens.find((tk) => tk.id === action.id);
+        if (!src) return 'Token không tồn tại';
+        if (!isDm && src.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        this.state.tokens.push(
+          createToken({
+            label: src.label,
+            x: action.x,
+            y: action.y,
+            size: src.size,
+            color: src.color,
+            imageUrl: src.imageUrl,
+            armorClass: src.armorClass,
+            currentHp: src.currentHp,
+            maxHp: src.maxHp,
+            hidden: isDm ? src.hidden : false,
+            controllerId: isDm ? src.controllerId : actor.id,
+            // deep copy so the two tokens track HP / actions independently
+            statblock: src.statblock ? JSON.parse(JSON.stringify(src.statblock)) : undefined,
+          }),
+        );
+        this.touch();
+        break;
+      }
+
       case 'updateToken': {
         const token = this.state.tokens.find((tk) => tk.id === action.id);
         if (!token) return 'Token không tồn tại';
@@ -470,6 +495,18 @@ export class Room {
         }
         const incoming = normalizeSheet({ ...action.sheet });
         if (!existing) incoming.ownerId = incoming.ownerId || actor.id;
+        // A token can back exactly one sheet, and NPC (stat-blocked) tokens can't
+        // be linked to a character sheet — copy the token instead.
+        if (incoming.tokenId && incoming.tokenId !== existing?.tokenId) {
+          const tk = this.state.tokens.find((t) => t.id === incoming.tokenId);
+          if (!tk) return 'Token không tồn tại';
+          if (tk.statblock) {
+            return 'Token này đã có stat block. Nhân bản token (kéo-thả) nếu cần token giống nhau.';
+          }
+          if (this.state.sheets.some((s) => s.id !== incoming.id && s.tokenId === incoming.tokenId)) {
+            return 'Token này đã gán cho nhân vật khác. Nhân bản token nếu cần token giống nhau.';
+          }
+        }
         this.state.sheets = existing
           ? this.state.sheets.map((s) => (s.id === incoming.id ? incoming : s))
           : [...this.state.sheets, incoming];

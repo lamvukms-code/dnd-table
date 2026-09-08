@@ -59,7 +59,12 @@ interface StoreState {
   /** Roll a damage formula and subtract the result from a target token's HP. */
   damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
-  rollInitiativeForMe: (name: string, mod: number, tokenId?: string) => Promise<void>;
+  rollInitiativeForMe: (
+    name: string,
+    mod: number,
+    tokenId?: string,
+    mode?: 'normal' | 'advantage' | 'disadvantage',
+  ) => Promise<void>;
   /** DM: silently roll initiative for a group of tokens straight onto the bar. */
   rollInitiativeGroup: (tokenIds: string[]) => void;
   setRole: (participantId: string, role: 'dm' | 'player') => void;
@@ -168,8 +173,8 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'damage', label, notation, targetTokenId, external: external ?? undefined });
     },
 
-    rollInitiativeForMe: async (name, mod, tokenId) => {
-      const external = await externalRoll(d20Check(mod));
+    rollInitiativeForMe: async (name, mod, tokenId, mode = 'normal') => {
+      const external = await externalRoll(d20Check(mod, mode));
       rawSend({ t: 'rollInitiative', name, mod, tokenId, external: external ?? undefined });
     },
 

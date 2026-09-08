@@ -160,7 +160,9 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   Structural parsing (`parseTerms` / `rollStats`) never rolls.
 - **FR-11 (P0):** Quick-roll buttons for d20, d12, d10, d8, d6, d4, d100.
 - **FR-12 (P0):** d20 check helper with Normal / Advantage / Disadvantage
-  (advantage = `2d20kh1`, disadvantage = `2d20kl1`).
+  (advantage = `2d20kh1`, disadvantage = `2d20kl1`). A per-sheet and per-stat-
+  block roll-mode toggle applies it to every d20 roll from there (checks, saves,
+  skills, initiative, attack to-hits); the two dice animate on dddice.
 - **FR-13 (P0):** Detect natural 20 / natural 1 on a lone d20 roll and flag
   critical / fumble.
 - **FR-14 (P0):** Every roll produces a `RollLogEntry` broadcast to all clients:
@@ -299,13 +301,24 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   proficiency and expertise, AC (`armorClass` fallback + `acOverride`),
   current/max/temp HP, speed, initiative misc bonus, `actions`, `resources`,
   `spellSlots`, `feats`, `features`, inventory, currency, notes, token link.
-- **FR-61a (P0):** The dock sheet has four sub-tabs:
-  - **Cơ bản** — identity, a compact ability strip (score + a save-proficiency
-    checkbox per stat; a **▾ roll & save** toggle reveals the modifier and the
-    check / save roll buttons), skills, the combat block (AC badge + override,
-    HP/temp, speed, initiative), **class resources** and **spell slots**,
-    **Nghỉ ngắn / Nghỉ dài**, and the **action economy** (Action / Bonus /
-    Reaction groups) with a target picker.
+- **FR-61c (P0):** A **Kỹ năng** tab lists all 18 5e skills, each with a
+  *proficient* and an *expertise* checkbox (expertise adds 2× the proficiency
+  bonus and implies proficiency), the governing ability, a roll button, and
+  passive Perception (`skillBonus`).
+- **FR-64b (P0):** A token backs **exactly one** character sheet; the server
+  refuses linking a sheet to an already-linked token or an NPC (stat-blocked)
+  token. To reuse a token look, **duplicate** it (`copyToken` — a drag palette on
+  the map, or a ⧉ button in the inspector); a copied NPC token deep-copies its
+  stat block so HP / actions are independent.
+- **FR-61a (P0):** The dock sheet has five sub-tabs:
+  - **Cơ bản** — identity + circular token portrait + token link picker + a
+    roll-mode (adv/dis) toggle + End-turn button, a compact ability strip
+    (score + save-proficiency checkbox; a **▾ roll & save** toggle reveals the
+    modifier and the check / save buttons), the combat block (AC badge +
+    override, HP/temp, speed, initiative), **class resources** and **spell
+    slots**, **Nghỉ ngắn / Nghỉ dài**, and the **action economy** (Action /
+    Bonus / Reaction groups) with a target picker.
+  - **Kỹ năng** — all 18 skills (FR-61c).
   - **Trang bị** — inventory + currency (3.7.1).
   - **Đặc điểm** — `feats` (name + description).
   - **Năng lực** — `features` (name, source, description, optional limited-use

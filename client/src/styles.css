@@ -562,6 +562,59 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .hint { color: var(--muted); font-size: 12px; }
 details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 
+/* advantage / disadvantage toggle */
+.roll-mode { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.roll-mode button {
+  border: none;
+  border-radius: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--panel-2);
+}
+.roll-mode button.on { background: var(--accent); color: #201a08; font-weight: 700; }
+.bt-rollmode { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); }
+
+/* skills tab */
+.skills-tab { display: flex; flex-direction: column; gap: 8px; }
+.st-head { display: flex; align-items: center; gap: 12px; }
+.skill-table { border-collapse: collapse; font-size: 12px; width: 100%; max-width: 460px; }
+.skill-table th { font-size: 10px; color: var(--muted); font-weight: 500; padding: 2px 4px; }
+.skill-table td { padding: 1px 4px; }
+.skill-table tr:nth-child(even) { background: var(--panel-2); }
+.skill-table .st-abil { color: var(--muted); font-size: 10px; }
+.skill-table .st-name .st-en { color: var(--muted); font-size: 10px; }
+.skill-table input[type='checkbox'] { margin: 0; }
+
+/* token duplicate palette */
+.token-palette {
+  position: absolute;
+  top: 34px;
+  left: 8px;
+  z-index: 7;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  max-width: 46%;
+}
+.token-palette > summary { font-size: 11px; margin: 0; list-style: none; }
+.token-palette > summary::-webkit-details-marker { display: none; }
+.tp-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; max-height: 120px; overflow: auto; }
+.tp-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 11px;
+  cursor: grab;
+}
+.tp-chip:active { cursor: grabbing; }
+.tp-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.insp-npc-note { border-left: 3px solid var(--accent); padding-left: 6px; }
+
 /* dice formula feedback */
 .formula-hint { font-size: 11px; margin-top: 2px; }
 .formula-hint.ok { color: var(--accent-2); }

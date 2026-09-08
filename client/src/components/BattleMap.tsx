@@ -10,6 +10,7 @@ import {
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
+import { RollModeToggle, type RollMode } from './SheetDock.js';
 
 const CELL = 56; // display px per grid cell
 const SIZE_CELLS: Record<TokenSize, number> = {
@@ -88,6 +89,16 @@ export function BattleMap() {
     drag.current = null;
   }
 
+  function onBoardDrop(e: React.DragEvent) {
+    const id = e.dataTransfer.getData('text/token-id');
+    if (!id || !boardRef.current) return;
+    e.preventDefault();
+    const rect = boardRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.round((e.clientX - rect.left) / CELL - 0.5));
+    const y = Math.max(0, Math.round((e.clientY - rect.top) / CELL - 0.5));
+    send({ t: 'copyToken', id, x, y });
+  }
+
   function addToken() {
     send({
       t: 'addToken',
@@ -116,6 +127,38 @@ export function BattleMap() {
           </button>
         )}
       </div>
+
+      {tokens.length > 0 && (
+        <details className="token-palette">
+          <summary>⧉ Kéo để nhân bản</summary>
+          <div className="tp-list">
+            {tokens
+              .filter((t) => isDm || !t.hidden)
+              .map((t) => (
+                <div
+                  key={t.id}
+                  className="tp-chip"
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/token-id', t.id);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  title={`Kéo "${t.label}" vào bản đồ để tạo bản sao`}
+                >
+                  <span
+                    className="tp-dot"
+                    style={
+                      t.imageUrl
+                        ? { background: `center/cover url(${t.imageUrl})` }
+                        : { background: t.color }
+                    }
+                  />
+                  {t.label}
+                </div>
+              ))}
+          </div>
+        </details>
+      )}
 
       {isDm && groupSel.size > 0 && (
         <div className="group-init-bar">
@@ -161,6 +204,10 @@ export function BattleMap() {
           }}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('text/token-id')) e.preventDefault();
+          }}
+          onDrop={onBoardDrop}
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelected(null);
           }}
@@ -308,6 +355,10 @@ function TokenInspector({
   const [dmg, setDmg] = useState('1d8+3');
   const [attackerId, setAttackerId] = useState('');
   const [sbTargetId, setSbTargetId] = useState('');
+  const [sbRollMode, setSbRollMode] = useState<RollMode>('normal');
+  const sbd20 = (mod: number) => d20Check(mod, sbRollMode);
+  const mtag =
+    sbRollMode === 'advantage' ? ' (lợi thế)' : sbRollMode === 'disadvantage' ? ' (bất lợi)' : '';
 
   const sb = token.statblock;
   const canSeeStatblock = sb && (isDm || token.controllerId === meId);
@@ -321,6 +372,13 @@ function TokenInspector({
     <div className="inspector">
       <div className="insp-head">
         <input value={token.label} onChange={(e) => patch({ label: e.target.value })} />
+        <button
+          className="link"
+          title="Nhân bản token (bản sao độc lập)"
+          onClick={() => send({ t: 'copyToken', id: token.id, x: token.x + 1, y: token.y })}
+        >
+          ⧉
+        </button>
         <button className="link" onClick={onClose}>
           ✕
         </button>
@@ -331,7 +389,13 @@ function TokenInspector({
           Thêm vào nhóm tung initiative
         </label>
       )}
-      {mySheets.length > 0 && (
+      {token.statblock && (
+        <p className="hint insp-npc-note">
+          Token NPC (có stat block) — không gán được vào character sheet. Nhân bản (⧉) nếu cần
+          token giống nhau.
+        </p>
+      )}
+      {!token.statblock && mySheets.length > 0 && (
         <label className="insp-link">
           Gán token này cho nhân vật
           <select
@@ -421,6 +485,7 @@ function TokenInspector({
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
           {sb.meta && <div className="sb-meta">{sb.meta}</div>}
+          <RollModeToggle mode={sbRollMode} onChange={setSbRollMode} />
 
           <div className="sb-ability-roll">
             {ABILITIES.map((ab) => {
@@ -431,14 +496,18 @@ function TokenInspector({
                   <button
                     className="roll-btn sm"
                     title={`${sb.name} — ${ab.toUpperCase()} check`}
-                    onClick={() => rollDice(`${sb.name} · ${ab.toUpperCase()} check`, d20Check(mod))}
+                    onClick={() =>
+                      rollDice(`${sb.name} · ${ab.toUpperCase()} check${mtag}`, sbd20(mod))
+                    }
                   >
                     {ab.toUpperCase()} {fmtMod(mod)}
                   </button>
                   <button
                     className={`roll-btn sm ${sb.saveProficiencies.includes(ab) ? 'prof' : ''}`}
                     title={`${sb.name} — ${ab.toUpperCase()} save`}
-                    onClick={() => rollDice(`${sb.name} · ${ab.toUpperCase()} save`, d20Check(save))}
+                    onClick={() =>
+                      rollDice(`${sb.name} · ${ab.toUpperCase()} save${mtag}`, sbd20(save))
+                    }
                   >
                     save {fmtMod(save)}
                   </button>
@@ -453,7 +522,7 @@ function TokenInspector({
                 <button
                   key={sk.skill}
                   className="roll-btn sm"
-                  onClick={() => rollDice(`${sb.name} · ${sk.skill}`, d20Check(sk.bonus))}
+                  onClick={() => rollDice(`${sb.name} · ${sk.skill}${mtag}`, sbd20(sk.bonus))}
                 >
                   {sk.skill} {fmtMod(sk.bonus)}
                 </button>
@@ -464,7 +533,7 @@ function TokenInspector({
           <div className="sb-quick-roll">
             <button
               className="roll-btn sm"
-              onClick={() => rollDice(`${sb.name} · Initiative`, d20Check(sb.initiativeMod))}
+              onClick={() => rollDice(`${sb.name} · Initiative${mtag}`, sbd20(sb.initiativeMod))}
             >
               Init {fmtMod(sb.initiativeMod)}
             </button>
@@ -501,8 +570,8 @@ function TokenInspector({
                     className="roll-btn strong"
                     onClick={() =>
                       attackRoll({
-                        label: `${base} → ${sbTargetName}`,
-                        attackNotation: d20Check(a.attackBonus!),
+                        label: `${base} → ${sbTargetName}${mtag}`,
+                        attackNotation: sbd20(a.attackBonus!),
                         damageNotation: a.damage!,
                         targetTokenId: sbTargetId,
                       })
@@ -514,7 +583,7 @@ function TokenInspector({
                 {isAttack && !sbTargetId && (
                   <button
                     className="roll-btn"
-                    onClick={() => rollDice(`${base} (đánh)`, d20Check(a.attackBonus!))}
+                    onClick={() => rollDice(`${base} (đánh)${mtag}`, sbd20(a.attackBonus!))}
                   >
                     đánh
                   </button>

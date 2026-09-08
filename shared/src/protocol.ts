@@ -42,6 +42,7 @@ export type ClientAction =
   | { t: 'updateMap'; patch: Partial<BattleMap> }
   | { t: 'updateDddice'; patch: Partial<DddiceConfig> }
   | { t: 'addToken'; token: Partial<Token> }
+  | { t: 'copyToken'; id: string; x: number; y: number }
   | { t: 'updateToken'; id: string; patch: Partial<Token> }
   | { t: 'removeToken'; id: string }
   | { t: 'initSet'; entries: InitiativeEntry[] }

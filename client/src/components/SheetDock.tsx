@@ -40,6 +40,53 @@ const ACTION_LABEL: Record<ActionType, string> = {
   other: 'Khác',
 };
 
+export const SKILL_LABEL_VI: Record<string, string> = {
+  acrobatics: 'Nhào lộn',
+  'animal-handling': 'Thuần thú',
+  arcana: 'Huyền bí',
+  athletics: 'Điền kinh',
+  deception: 'Lừa dối',
+  history: 'Lịch sử',
+  insight: 'Thấu hiểu',
+  intimidation: 'Đe dọa',
+  investigation: 'Điều tra',
+  medicine: 'Y thuật',
+  nature: 'Tự nhiên',
+  perception: 'Quan sát',
+  performance: 'Trình diễn',
+  persuasion: 'Thuyết phục',
+  religion: 'Tôn giáo',
+  'sleight-of-hand': 'Tay nghề',
+  stealth: 'Ẩn nấp',
+  survival: 'Sinh tồn',
+};
+
+export type RollMode = 'normal' | 'advantage' | 'disadvantage';
+
+export function RollModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: RollMode;
+  onChange: (m: RollMode) => void;
+}) {
+  return (
+    <div className="roll-mode">
+      {(
+        [
+          ['disadvantage', 'Bất lợi'],
+          ['normal', 'Thường'],
+          ['advantage', 'Lợi thế'],
+        ] as [RollMode, string][]
+      ).map(([m, label]) => (
+        <button key={m} className={mode === m ? 'on' : ''} onClick={() => onChange(m)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function blankSheet(ownerId: string): CharacterSheet {
   return {
     id: nanoIdish(),
@@ -70,7 +117,7 @@ export function blankSheet(ownerId: string): CharacterSheet {
   };
 }
 
-type SubTab = 'basic' | 'equipment' | 'feats' | 'abilities';
+type SubTab = 'basic' | 'skills' | 'equipment' | 'feats' | 'abilities';
 
 const DOCK_H_KEY = 'dnd-table.dockHeight';
 
@@ -142,6 +189,7 @@ export function SheetDock() {
             {(
               [
                 ['basic', 'Cơ bản'],
+                ['skills', 'Kỹ năng'],
                 ['equipment', 'Trang bị'],
                 ['feats', 'Đặc điểm'],
                 ['abilities', 'Năng lực'],
@@ -184,6 +232,7 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
   return (
     <div className="sheet-editor">
       {sub === 'basic' && <BasicTab {...ctx} />}
+      {sub === 'skills' && <SkillsTab {...ctx} />}
       {sub === 'equipment' && <EquipmentTab {...ctx} />}
       {sub === 'feats' && <FeatsTab {...ctx} />}
       {sub === 'abilities' && <AbilitiesTab {...ctx} />}
@@ -243,7 +292,13 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const damageRoll = useStore((s) => s.damageRoll);
   const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
   const tokens = useStore((s) => s.room?.tokens ?? []);
+  const allSheets = useStore((s) => s.room?.sheets ?? []);
   const initiative = useStore((s) => s.room?.initiative);
+  const linkableTokens = tokens.filter(
+    (t) =>
+      !t.statblock &&
+      (t.id === draft.tokenId || !allSheets.some((s) => s.id !== draft.id && s.tokenId === t.id)),
+  );
   const linkedToken = tokens.find((t) => t.id === draft.tokenId) ?? null;
   const activeEntry = initiative?.entries.find((e) => e.isActive) ?? null;
   const myTurn = Boolean(
@@ -254,6 +309,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   );
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
+  const [rollMode, setRollMode] = useState<RollMode>('normal');
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
 
   function toggleSaveProf(ab: Ability, on: boolean) {
@@ -267,7 +323,10 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
   const ac = computeArmorClass(draft);
   const actions = allActions(draft);
-  const roll = (label: string, mod: number) => rollDice(`${draft.name} · ${label}`, d20Check(mod));
+  const modeTag =
+    rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
+  const roll = (label: string, mod: number) =>
+    rollDice(`${draft.name} · ${label}${modeTag}`, d20Check(mod, rollMode));
 
   function set<K extends keyof CharacterSheet>(k: K, v: CharacterSheet[K]) {
     commit({ ...draft, [k]: v });
@@ -312,7 +371,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               onChange={(e) => set('tokenId', e.target.value || undefined)}
             >
               <option value="">— chưa gán —</option>
-              {tokens.map((t) => (
+              {linkableTokens.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.label}
                 </option>
@@ -328,6 +387,11 @@ function BasicTab({ draft, commit }: EditorCtx) {
         >
           Kết thúc lượt
         </button>
+      </div>
+
+      <div className="bt-rollmode">
+        <span>Kiểu tung d20:</span>
+        <RollModeToggle mode={rollMode} onChange={setRollMode} />
       </div>
 
       <div className="bt-cols">
@@ -395,48 +459,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
             })}
           </div>
 
-          <details className="skills-block">
-            <summary>Kỹ năng</summary>
-            <div className="skills">
-              {Object.keys(SKILLS).map((sk) => {
-                const prof = draft.skillProficiencies.includes(sk);
-                const exp = draft.skillExpertise.includes(sk);
-                return (
-                  <div key={sk} className="skill">
-                    <input
-                      type="checkbox"
-                      checked={prof}
-                      title="Thành thạo"
-                      onChange={(e) =>
-                        commit({
-                          ...draft,
-                          skillProficiencies: e.target.checked
-                            ? [...draft.skillProficiencies, sk]
-                            : draft.skillProficiencies.filter((x) => x !== sk),
-                        })
-                      }
-                    />
-                    <input
-                      type="checkbox"
-                      checked={exp}
-                      title="Tinh thông"
-                      onChange={(e) =>
-                        commit({
-                          ...draft,
-                          skillExpertise: e.target.checked
-                            ? [...draft.skillExpertise, sk]
-                            : draft.skillExpertise.filter((x) => x !== sk),
-                        })
-                      }
-                    />
-                    <button className="roll-btn wide" onClick={() => roll(sk, skillBonus(draft, sk))}>
-                      {sk} {fmtMod(skillBonus(draft, sk))}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </details>
+          <p className="hint">Kỹ năng chuyển sang tab “Kỹ năng”.</p>
         </div>
 
         {/* combat + resources */}
@@ -494,7 +517,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               className="roll-btn"
               title="Tung initiative và đưa lên thanh initiative"
               onClick={() =>
-                rollInitiativeForMe(draft.name, initiativeBonus(draft), draft.tokenId)
+                rollInitiativeForMe(draft.name, initiativeBonus(draft), draft.tokenId, rollMode)
               }
             >
               ⚔ Init {fmtMod(initiativeBonus(draft))}
@@ -545,6 +568,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   sheetName={draft.name}
                   targetId={targetId}
                   targetName={targetName}
+                  rollMode={rollMode}
                   rollDice={rollDice}
                   attackRoll={attackRoll}
                   damageRoll={damageRoll}
@@ -573,6 +597,7 @@ function ActionRow({
   sheetName,
   targetId,
   targetName,
+  rollMode,
   rollDice,
   attackRoll,
   damageRoll,
@@ -582,6 +607,7 @@ function ActionRow({
   sheetName: string;
   targetId: string;
   targetName: string;
+  rollMode: RollMode;
   rollDice: (label: string, notation: string) => Promise<void>;
   attackRoll: (p: {
     label: string;
@@ -594,6 +620,7 @@ function ActionRow({
 }) {
   const base = `${sheetName} · ${action.name}`;
   const isAttack = typeof action.attackBonus === 'number' && !!action.damage;
+  const atkNotation = (bonus: number) => d20Check(bonus, rollMode);
   return (
     <div className={`action-row ${action.source === 'weapon' ? 'derived' : ''}`}>
       <span className="ar-name" title={action.description}>
@@ -613,7 +640,7 @@ function ActionRow({
           onClick={() =>
             attackRoll({
               label: `${base} → ${targetName}`,
-              attackNotation: d20Check(action.attackBonus!),
+              attackNotation: atkNotation(action.attackBonus!),
               damageNotation: action.damage!,
               targetTokenId: targetId,
             })
@@ -623,7 +650,10 @@ function ActionRow({
         </button>
       )}
       {isAttack && !targetId && (
-        <button className="roll-btn" onClick={() => rollDice(`${base} (đánh)`, d20Check(action.attackBonus!))}>
+        <button
+          className="roll-btn"
+          onClick={() => rollDice(`${base} (đánh)`, atkNotation(action.attackBonus!))}
+        >
           đánh
         </button>
       )}
@@ -890,6 +920,95 @@ function Pips({ max, used, onChange }: { max: number; used: number; onChange: (u
 }
 
 /* ------------------------------------------------------------- Feats / Abilities */
+
+function SkillsTab({ draft, commit }: EditorCtx) {
+  const rollDice = useStore((s) => s.rollDice);
+  const [rollMode, setRollMode] = useState<RollMode>('normal');
+  const modeTag =
+    rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
+
+  function toggle(list: 'skillProficiencies' | 'skillExpertise', sk: string, on: boolean) {
+    let prof = new Set(draft.skillProficiencies);
+    let exp = new Set(draft.skillExpertise);
+    if (list === 'skillProficiencies') {
+      if (on) prof.add(sk);
+      else {
+        prof.delete(sk);
+        exp.delete(sk); // no expertise without proficiency
+      }
+    } else {
+      if (on) {
+        exp.add(sk);
+        prof.add(sk); // expertise implies proficiency
+      } else exp.delete(sk);
+    }
+    commit({ ...draft, skillProficiencies: [...prof], skillExpertise: [...exp] });
+  }
+
+  const perceptionPassive = 10 + skillBonus(draft, 'perception');
+
+  return (
+    <div className="skills-tab">
+      <div className="st-head">
+        <RollModeToggle mode={rollMode} onChange={setRollMode} />
+        <span className="hint">Quan sát bị động: {perceptionPassive}</span>
+      </div>
+      <table className="skill-table">
+        <thead>
+          <tr>
+            <th />
+            <th title="Thành thạo">TT</th>
+            <th title="Tinh thông (x2 thành thạo)">TT×2</th>
+            <th>Kỹ năng</th>
+            <th>Bonus</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(SKILLS).map(([sk, ability]) => {
+            const prof = draft.skillProficiencies.includes(sk);
+            const exp = draft.skillExpertise.includes(sk);
+            const bonus = skillBonus(draft, sk);
+            return (
+              <tr key={sk}>
+                <td className="st-abil">{ABILITY_LABEL[ability]}</td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={prof}
+                    onChange={(e) => toggle('skillProficiencies', sk, e.target.checked)}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={exp}
+                    onChange={(e) => toggle('skillExpertise', sk, e.target.checked)}
+                  />
+                </td>
+                <td className="st-name">
+                  {SKILL_LABEL_VI[sk] ?? sk} <span className="st-en">{sk}</span>
+                </td>
+                <td>
+                  <button
+                    className="roll-btn sm"
+                    onClick={() =>
+                      rollDice(
+                        `${draft.name} · ${SKILL_LABEL_VI[sk] ?? sk}${modeTag}`,
+                        d20Check(bonus, rollMode),
+                      )
+                    }
+                  >
+                    {fmtMod(bonus)}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 function FeatsTab({ draft, commit }: EditorCtx) {
   return (

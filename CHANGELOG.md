@@ -6,6 +6,35 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-08
+
+### Added
+
+- **Advantage / disadvantage** toggle on the character sheet (Cơ bản and Kỹ năng
+  tabs) and the token stat-block inspector. Every d20 roll from there — checks,
+  saves, skills, initiative, attack to-hits — becomes `2d20kh1` / `2d20kl1` and
+  animates as two dice on dddice, per D&D 5e (2024).
+- **Skills tab** on the character sheet: all 18 skills with a **proficient** and
+  an **expertise** checkbox each (expertise = 2× proficiency bonus; ticking it
+  implies proficiency), the governing ability, a roll button, and passive
+  Perception.
+- **Duplicate a token** — a "⧉ Kéo để nhân bản" palette on the map (drag a token
+  onto the board to drop an independent copy) and a ⧉ button in the token
+  inspector. A copied NPC token deep-copies its stat block so HP / actions track
+  separately (two goblins, two HP pools). `copyToken` action.
+
+### Changed
+
+- **A token backs exactly one character sheet.** Linking a sheet to a token that
+  already has a sheet, or to an NPC (stat-blocked) token, is refused with a hint
+  to duplicate the token instead. The link pickers only list eligible tokens.
+
+### Notes
+
+- Critical miss was already handled: a natural 1 on an attack is an automatic
+  miss (`resolveAttack`), shown as "HỎNG" in the log; natural 20 auto-hits and
+  crits. 5e RAW has no crit-fail on ability checks / saves.
+
 ## [0.8.0] - 2026-09-08
 
 ### Added
@@ -269,7 +298,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...v0.6.1
