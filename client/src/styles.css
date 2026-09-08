@@ -721,6 +721,24 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .mc-sub { width: 110px; }
 .mc-lvl { width: 44px; }
 .mc-type { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+.snap-ghost {
+  position: absolute;
+  border: 2px dashed var(--accent, #a06cd5);
+  background: rgba(160, 108, 213, 0.12);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+.scene-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }
+.scene-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  border: 1px solid var(--line); border-radius: 12px; padding: 1px 4px 1px 8px; font-size: 11px;
+}
+.scene-chip.on { border-color: var(--accent, #a06cd5); background: rgba(160,108,213,0.12); }
+.scene-chip .scene-name { background: none; border: none; color: inherit; cursor: pointer; font: inherit; padding: 2px 0; }
+.scene-chip .scene-name em { color: var(--muted); font-style: normal; }
+.map-toolbar label.chk { flex-direction: row; align-items: center; gap: 3px; }
 .cover-warning {
   position: absolute;
   top: 40px;

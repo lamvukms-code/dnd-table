@@ -12,7 +12,7 @@ import type {
   Token,
 } from './types.js';
 
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** Actions sent client -> server. */
 export type ClientAction =
@@ -66,6 +66,12 @@ export type ClientAction =
     }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }
+  // scenes (DM)
+  | { t: 'sceneCreate'; name?: string }
+  | { t: 'sceneActivate'; id: string }
+  | { t: 'sceneRename'; id: string; name: string }
+  | { t: 'sceneDuplicate'; id: string }
+  | { t: 'sceneDelete'; id: string }
   | { t: 'updateDddice'; patch: Partial<DddiceConfig> }
   | { t: 'addToken'; token: Partial<Token> }
   | { t: 'copyToken'; id: string; x: number; y: number }

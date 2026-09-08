@@ -7,7 +7,7 @@ import type {
   Token,
 } from '@dnd-table/shared';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const ROLL_LOG_CAP = 200;
 export const DICE_TRAY_CAP = 12;
 
@@ -15,21 +15,21 @@ export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
 }
 
+export function defaultMap(name = 'Bản đồ mới'): RoomState['map'] {
+  return { name, backgroundUrl: undefined, gridSize: 70, cols: 24, rows: 16, showGrid: true, snap: true };
+}
+
 export function createRoomState(): RoomState {
+  const scene = { id: nanoid(8), name: 'Cảnh 1', map: defaultMap(), tokens: [] as RoomState['tokens'] };
   return {
     version: SCHEMA_VERSION,
     rev: 0,
     name: 'Bàn chơi của tôi',
     participants: [],
-    map: {
-      name: 'Bản đồ mới',
-      backgroundUrl: undefined,
-      gridSize: 70,
-      cols: 24,
-      rows: 16,
-      showGrid: true,
-    },
-    tokens: [],
+    scenes: [scene],
+    activeSceneId: scene.id,
+    map: scene.map,
+    tokens: scene.tokens,
     initiative: { entries: [], round: 1, turnIndex: 0, running: false },
     sheets: [],
     rollLog: [],

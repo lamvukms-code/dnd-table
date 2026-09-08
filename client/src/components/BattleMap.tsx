@@ -51,6 +51,7 @@ export function BattleMap() {
   const [selected, setSelected] = useState<string | null>(null);
   const [groupMode, setGroupMode] = useState(false);
   const [groupSel, setGroupSel] = useState<Set<string>>(new Set());
+  const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
@@ -96,16 +97,22 @@ export function BattleMap() {
     const x = (e.clientX - rect.left - drag.current.dx) / CELL;
     const y = (e.clientY - rect.top - drag.current.dy) / CELL;
     send({ t: 'updateToken', id: drag.current.id, patch: { x, y } });
+    if ((map.snap ?? true) && !e.shiftKey) setGhost({ x: Math.round(x), y: Math.round(y) });
+    else setGhost(null);
   }
 
-  function onPointerUp() {
+  function onPointerUp(e: React.PointerEvent) {
+    setGhost(null);
     if (!drag.current) return;
     const token = tokens.find((t) => t.id === drag.current!.id);
     if (token) {
+      const snap = (map.snap ?? true) && !e.shiftKey;
       send({
         t: 'updateToken',
         id: token.id,
-        patch: { x: Math.round(token.x), y: Math.round(token.y) },
+        patch: snap
+          ? { x: Math.max(0, Math.round(token.x)), y: Math.max(0, Math.round(token.y)) }
+          : { x: Math.max(0, token.x), y: Math.max(0, token.y) },
       });
     }
     drag.current = null;
@@ -226,7 +233,8 @@ export function BattleMap() {
 
       {isDm && (
         <details className="map-toolbar-wrap">
-          <summary>⚙ Bản đồ</summary>
+          <summary>⚙ Bản đồ &amp; cảnh</summary>
+          <SceneBar />
           <MapToolbar />
         </details>
       )}
@@ -239,6 +247,7 @@ export function BattleMap() {
             width: map.cols * CELL,
             height: map.rows * CELL,
             backgroundImage: map.backgroundUrl ? `url(${map.backgroundUrl})` : undefined,
+            backgroundSize: '100% 100%',
           }}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -254,6 +263,13 @@ export function BattleMap() {
             <div
               className="grid-overlay"
               style={{ backgroundSize: `${CELL}px ${CELL}px` }}
+            />
+          )}
+
+          {ghost && (
+            <div
+              className="snap-ghost"
+              style={{ left: ghost.x * CELL, top: ghost.y * CELL, width: CELL, height: CELL }}
             />
           )}
 
@@ -353,30 +369,48 @@ function MapToolbar() {
   const send = useStore((s) => s.send);
   const { map } = room;
   const [bg, setBg] = useState(map.backgroundUrl ?? '');
+  const [aspect, setAspect] = useState<number | null>(null);
+
+  // Auto grid: keep rows in step with the background's aspect ratio.
+  function loadAspect(url: string) {
+    if (!url) return setAspect(null);
+    const img = new Image();
+    img.onload = () => setAspect(img.naturalWidth / img.naturalHeight);
+    img.src = url;
+  }
+  function applyBg() {
+    send({ t: 'updateMap', patch: { backgroundUrl: bg || undefined } });
+    loadAspect(bg);
+  }
+  function setCols(cols: number) {
+    const patch: { cols: number; rows?: number } = { cols };
+    if (aspect) patch.rows = Math.max(2, Math.round(cols / aspect));
+    send({ t: 'updateMap', patch });
+  }
 
   return (
     <div className="map-toolbar">
       <label>
-        Nền (URL)
+        Nền (URL / upload)
         <input
           value={bg}
           onChange={(e) => setBg(e.target.value)}
-          onBlur={() => send({ t: 'updateMap', patch: { backgroundUrl: bg || undefined } })}
+          onBlur={applyBg}
           placeholder="https://…/map.jpg"
         />
       </label>
       <label>
-        Cột
+        Ô ngang
         <input
           type="number"
           min={4}
           max={80}
           value={map.cols}
-          onChange={(e) => send({ t: 'updateMap', patch: { cols: Number(e.target.value) } })}
+          onChange={(e) => setCols(Number(e.target.value))}
         />
       </label>
       <label>
-        Hàng
+        Ô dọc
         <input
           type="number"
           min={4}
@@ -385,7 +419,16 @@ function MapToolbar() {
           onChange={(e) => send({ t: 'updateMap', patch: { rows: Number(e.target.value) } })}
         />
       </label>
-      <label>
+      {aspect && (
+        <button
+          className="link"
+          title="Tính lại số ô dọc theo tỉ lệ ảnh nền"
+          onClick={() => setCols(map.cols)}
+        >
+          ⤢ tự chia ô
+        </button>
+      )}
+      <label className="chk">
         <input
           type="checkbox"
           checked={map.showGrid}
@@ -393,6 +436,61 @@ function MapToolbar() {
         />
         Lưới
       </label>
+      <label className="chk">
+        <input
+          type="checkbox"
+          checked={map.snap ?? true}
+          onChange={(e) => send({ t: 'updateMap', patch: { snap: e.target.checked } })}
+        />
+        Snap (giữ Shift để tắt tạm)
+      </label>
+    </div>
+  );
+}
+
+/** DM scene switcher: create / rename / duplicate / delete / activate scenes. */
+function SceneBar() {
+  const scenes = useStore((s) => s.room?.scenes ?? []);
+  const activeId = useStore((s) => s.room?.activeSceneId);
+  const send = useStore((s) => s.send);
+  return (
+    <div className="scene-bar">
+      {scenes.map((sc) => (
+        <div key={sc.id} className={`scene-chip ${sc.id === activeId ? 'on' : ''}`}>
+          <button
+            className="scene-name"
+            onClick={() => send({ t: 'sceneActivate', id: sc.id })}
+            onDoubleClick={() => {
+              const name = prompt('Tên cảnh', sc.name);
+              if (name) send({ t: 'sceneRename', id: sc.id, name });
+            }}
+            title="Bấm để mở · bấm đúp để đổi tên"
+          >
+            {sc.name} <em>({sc.tokens.length})</em>
+          </button>
+          <button
+            className="link"
+            title="Nhân bản"
+            onClick={() => send({ t: 'sceneDuplicate', id: sc.id })}
+          >
+            ⧉
+          </button>
+          {scenes.length > 1 && (
+            <button
+              className="link"
+              title="Xóa cảnh"
+              onClick={() => {
+                if (confirm(`Xóa cảnh "${sc.name}"?`)) send({ t: 'sceneDelete', id: sc.id });
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      <button className="link" onClick={() => send({ t: 'sceneCreate' })}>
+        + cảnh
+      </button>
     </div>
   );
 }

@@ -6,6 +6,34 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-08
+
+### Added
+
+- **Scenes.** `RoomState.scenes: Scene[]` + `activeSceneId` — each scene keeps
+  its own battle map and token layout. The DM's "⚙ Bản đồ & cảnh" toolbar has a
+  scene bar: activate (click), rename (double-click), duplicate (⧉), delete (✕),
+  "+ cảnh". `RoomState.map` / `RoomState.tokens` are live aliases of the active
+  scene, so all existing map/token code is unchanged; `room.json` stores the
+  scenes and rebuilds the aliases on load. Migration v5 → v6 wraps the old
+  single map + token list in "Cảnh 1".
+- **Character-sheet and stat-block data never resets on a scene change.** Sheets
+  and the bestiary are room-global; a token's HP / effects are stored in its
+  scene and are exactly as you left them when you switch back (verified — damage
+  a token, bounce scenes, reload: unchanged).
+- **Auto grid.** Setting a background loads its aspect ratio; entering the number
+  of columns recomputes rows to keep cells square (⤢ "tự chia ô"). The map
+  background now fills the board so the grid always divides it evenly.
+- **Snap to grid (Owlbear-style).** Tokens snap to cells on drop with a dashed
+  snap-preview cell shown while dragging; hold **Shift** to place freely, or turn
+  snapping off per-map.
+
+### Changed
+
+- Protocol v5: `sceneCreate` / `sceneActivate` / `sceneRename` /
+  `sceneDuplicate` / `sceneDelete`. Room schema v6. `BattleMap.snap?`,
+  `Scene` type.
+
 ## [0.15.0] - 2026-09-08
 
 Commit C of the spellcasting work: multiclass + automatic spell-slot progression.
@@ -477,7 +505,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...v0.13.0

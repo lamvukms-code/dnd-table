@@ -425,6 +425,20 @@ export interface BattleMap {
   cols: number;
   rows: number;
   showGrid: boolean;
+  /** Snap tokens to the grid on drop (hold Shift to place freely). */
+  snap?: boolean;
+}
+
+/**
+ * A saved scene: its own battle map + token layout. Switching the active scene
+ * only re-points `RoomState.map` / `RoomState.tokens`; character sheets and the
+ * bestiary are room-global and never touched by a scene change.
+ */
+export interface Scene {
+  id: string;
+  name: string;
+  map: BattleMap;
+  tokens: Token[];
 }
 
 export interface InitiativeEntry {
@@ -516,7 +530,12 @@ export interface RoomState {
   rev: number; // increments on every mutation
   name: string;
   participants: Participant[];
+  /** Saved scenes. The active one's `map` / `tokens` are mirrored below. */
+  scenes: Scene[];
+  activeSceneId: string;
+  /** The active scene's battle map — same object as `scenes[active].map`. */
   map: BattleMap;
+  /** The active scene's tokens — same array as `scenes[active].tokens`. */
   tokens: Token[];
   initiative: Initiative;
   sheets: CharacterSheet[];

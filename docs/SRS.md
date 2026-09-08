@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.15.0
+- **Version:** 0.16.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -503,15 +503,23 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 
 See `shared/src/types.ts` for the authoritative definitions.
 
-- `RoomState { version, rev, name, participants[], map, tokens[], initiative,
-  sheets[], rollLog[], diceTray, dddice, bestiary: Statblock[] }` — `bestiary`
-  is broadcast but persisted separately (FR-84), not in `room.json`.
+- `RoomState { version, rev, name, participants[], scenes: Scene[],
+  activeSceneId, map, tokens[], initiative, sheets[], rollLog[], diceTray,
+  dddice, bestiary: Statblock[] }` — `bestiary` is broadcast but persisted
+  separately (FR-84), not in `room.json`. `map` / `tokens` are **live aliases**
+  of the active scene (also not persisted — rebuilt from `scenes` on load).
+- `Scene { id, name, map: BattleMap, tokens: Token[] }` — a saved map + token
+  layout. Switching the active scene only re-points `map` / `tokens`; sheets and
+  the bestiary are room-global and untouched. Migration v5 → v6 wraps the old
+  single map in "Cảnh 1".
 - `DddiceConfig { enabled, roomSlug?, theme? }` — **no API keys**; keys are
   per-client in `localStorage` only.
 - `ExternalRoll { total, faces[], d20Natural?, source, rollUuid? }` — values
   rolled outside the server (dddice) that ride along a `roll` / `attack` action.
 - `Participant { id, name, role, color, connected, lastSeen }`
-- `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid }`
+- `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid, snap? }`
+  — `snap` snaps tokens to the grid on drop (Shift bypasses). Auto grid keeps
+  `rows` in step with the background aspect ratio.
 - `Token { id, label, x, y, size, color, imageUrl?, currentHp?, maxHp?,
   armorClass?, hidden, controllerId?, statblock?: TokenStatblock,
   defenses?: Defenses, cover?: CoverLevel, effects?: ActiveEffect[],

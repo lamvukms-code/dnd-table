@@ -5,6 +5,7 @@ import {
   abilityMod,
   createRoomState,
   createToken,
+  defaultMap,
   normalizeSheet,
   DICE_TRAY_CAP,
   ROLL_LOG_CAP,
@@ -59,10 +60,13 @@ export class Room {
         if (migrated) {
           migrated.participants.forEach((p) => (p.connected = false));
           migrated.sheets = migrated.sheets.map(normalizeSheet);
-          migrated.tokens.forEach((t) => {
-            t.effects ??= [];
-            t.concentration ??= null;
-          });
+          syncSceneAliases(migrated);
+          for (const scene of migrated.scenes) {
+            scene.tokens.forEach((t) => {
+              t.effects ??= [];
+              t.concentration ??= null;
+            });
+          }
           return migrated;
         }
         console.warn(`Room schema ${raw.version} unsupported; starting fresh.`);
@@ -89,9 +93,12 @@ export class Room {
   save(): void {
     try {
       mkdirSync(dirname(this.file), { recursive: true });
-      // room.json never carries the bestiary — that lives in its own file.
-      const { bestiary, ...room } = this.state;
+      // room.json never carries the bestiary (its own file); `map` / `tokens`
+      // are just live aliases of the active scene, so they're not persisted either.
+      const { bestiary, map, tokens, ...room } = this.state;
       void bestiary;
+      void map;
+      void tokens;
       writeFileSync(this.file, JSON.stringify(room, null, 2));
     } catch (err) {
       console.error('Failed to persist room:', err);
@@ -158,6 +165,22 @@ export class Room {
     const total = rolled.reduce((s, r) => s + r.raw, 0);
     const notation = bits.join(' + ');
     return { rolled, notation, combined: externalRollResult(notation, { total, faces: [] }) };
+  }
+
+  /** The currently active scene (its map / tokens are aliased on state). */
+  private activeScene(): RoomState['scenes'][number] {
+    return (
+      this.state.scenes.find((s) => s.id === this.state.activeSceneId) ?? this.state.scenes[0]
+    );
+  }
+
+  /** Find a token in any scene (a sheet may link a token on a scene that isn't active). */
+  private tokenAnywhere(id: string): Token | undefined {
+    for (const scene of this.state.scenes) {
+      const t = scene.tokens.find((tk) => tk.id === id);
+      if (t) return t;
+    }
+    return undefined;
   }
 
   /** A token's damage defences merged with anything its linked sheet grants (adamantine). */
@@ -551,6 +574,67 @@ export class Room {
       case 'updateMap': {
         if (!isDm) return 'Chỉ DM được sửa bản đồ';
         Object.assign(this.state.map, action.patch);
+        this.activeScene().map = this.state.map;
+        this.touch();
+        break;
+      }
+
+      case 'sceneCreate': {
+        if (!isDm) return 'Chỉ DM được tạo cảnh';
+        const scene = {
+          id: nanoid(8),
+          name: action.name?.trim() || `Cảnh ${this.state.scenes.length + 1}`,
+          map: defaultMap(action.name?.trim() || 'Bản đồ mới'),
+          tokens: [],
+        };
+        this.state.scenes.push(scene);
+        this.state.activeSceneId = scene.id;
+        syncSceneAliases(this.state);
+        this.touch();
+        break;
+      }
+
+      case 'sceneActivate': {
+        if (!isDm) return 'Chỉ DM được đổi cảnh';
+        if (!this.state.scenes.some((s) => s.id === action.id)) return 'Không tìm thấy cảnh';
+        this.state.activeSceneId = action.id;
+        syncSceneAliases(this.state);
+        this.touch();
+        break;
+      }
+
+      case 'sceneRename': {
+        if (!isDm) return 'Chỉ DM được đổi tên cảnh';
+        const scene = this.state.scenes.find((s) => s.id === action.id);
+        if (!scene) return 'Không tìm thấy cảnh';
+        scene.name = action.name.trim() || scene.name;
+        this.touch();
+        break;
+      }
+
+      case 'sceneDuplicate': {
+        if (!isDm) return 'Chỉ DM được nhân bản cảnh';
+        const src = this.state.scenes.find((s) => s.id === action.id);
+        if (!src) return 'Không tìm thấy cảnh';
+        const copy = {
+          id: nanoid(8),
+          name: `${src.name} (bản sao)`,
+          map: { ...src.map },
+          tokens: src.tokens.map((t) => ({ ...JSON.parse(JSON.stringify(t)), id: nanoid(8) })),
+        };
+        this.state.scenes.push(copy);
+        this.touch();
+        break;
+      }
+
+      case 'sceneDelete': {
+        if (!isDm) return 'Chỉ DM được xóa cảnh';
+        if (this.state.scenes.length <= 1) return 'Phải còn ít nhất 1 cảnh';
+        this.state.scenes = this.state.scenes.filter((s) => s.id !== action.id);
+        if (!this.state.scenes.some((s) => s.id === this.state.activeSceneId)) {
+          this.state.activeSceneId = this.state.scenes[0].id;
+        }
+        syncSceneAliases(this.state);
         this.touch();
         break;
       }
@@ -619,7 +703,9 @@ export class Room {
         if (target && !isDm && target.controllerId !== actor.id) {
           return 'Bạn chỉ xóa được token của mình';
         }
-        this.state.tokens = this.state.tokens.filter((tk) => tk.id !== action.id);
+        // Mutate in place so the active-scene alias stays valid.
+        const idx = this.state.tokens.findIndex((tk) => tk.id === action.id);
+        if (idx >= 0) this.state.tokens.splice(idx, 1);
         this.state.initiative.entries = this.state.initiative.entries.filter(
           (e) => e.tokenId !== action.id,
         );
@@ -855,7 +941,7 @@ export class Room {
         // A token can back exactly one sheet, and NPC (stat-blocked) tokens can't
         // be linked to a character sheet — copy the token instead.
         if (incoming.tokenId && incoming.tokenId !== existing?.tokenId) {
-          const tk = this.state.tokens.find((t) => t.id === incoming.tokenId);
+          const tk = this.tokenAnywhere(incoming.tokenId);
           if (!tk) return 'Token không tồn tại';
           if (tk.statblock) {
             return 'Token này đã có stat block. Nhân bản token (kéo-thả) nếu cần token giống nhau.';
@@ -960,10 +1046,39 @@ function migrateRoom(raw: RoomState): RoomState | null {
   if (s.version >= 2 && s.version <= 4) {
     s.sheets = (s.sheets ?? []).map((sheet) => normalizeSheet(sheet));
     s.bestiary = [];
-    s.version = SCHEMA_VERSION;
+    s.version = 5;
+  }
+
+  // v5 -> v6: multi-scene. Wrap the single map + token list in "Cảnh 1".
+  if (s.version === 5) {
+    const legacyMap = (s.map as RoomState['map']) ?? defaultMap();
+    legacyMap.snap ??= true;
+    const scene = {
+      id: nanoid(8),
+      name: legacyMap.name || 'Cảnh 1',
+      map: legacyMap,
+      tokens: (s.tokens as RoomState['tokens']) ?? [],
+    };
+    s.scenes = [scene];
+    s.activeSceneId = scene.id;
+    s.version = 6;
   }
 
   return s.version === SCHEMA_VERSION ? s : null;
+}
+
+/** Point `state.map` / `state.tokens` at the active scene's live objects. */
+function syncSceneAliases(state: RoomState): void {
+  if (!state.scenes || state.scenes.length === 0) {
+    const scene = { id: nanoid(8), name: 'Cảnh 1', map: defaultMap(), tokens: [] };
+    state.scenes = [scene];
+    state.activeSceneId = scene.id;
+  }
+  const active =
+    state.scenes.find((s) => s.id === state.activeSceneId) ?? state.scenes[0];
+  state.activeSceneId = active.id;
+  state.map = active.map;
+  state.tokens = active.tokens;
 }
 
 function initNotation(mod: number): string {
