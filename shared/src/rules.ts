@@ -2,6 +2,7 @@ import type {
   Ability,
   CasterType,
   CharacterSheet,
+  ClassEntry,
   ConditionType,
   CoverLevel,
   Currency,
@@ -10,6 +11,7 @@ import type {
   InventoryItem,
   RollMode,
   SheetAction,
+  SpellSlots,
   Statblock,
   Token,
   TokenStatblock,
@@ -200,31 +202,53 @@ const CLASS_SPELL_ABILITY: Record<string, Ability> = {
   artificer: 'int',
 };
 
-function classKey(sheet: CharacterSheet): string {
-  return (sheet.className ?? '').trim().toLowerCase();
-}
-function subclassKey(sheet: CharacterSheet): string {
-  return (sheet.subclass ?? '').trim().toLowerCase();
+/** The classes on a sheet: the multiclass list if present, else the single class. */
+export function sheetClasses(sheet: CharacterSheet): ClassEntry[] {
+  if (sheet.classes && sheet.classes.length > 0) return sheet.classes;
+  return [{ name: sheet.className, subclass: sheet.subclass, level: sheet.level }];
 }
 
-/** The caster type this sheet uses (override wins, else derived from class/subclass). */
-export function casterTypeOf(sheet: CharacterSheet): CasterType {
-  if (sheet.casterTypeOverride) return sheet.casterTypeOverride;
-  const sub = subclassKey(sheet);
+/** Total character level (sum of class levels, else `level`). */
+export function totalLevelOf(sheet: CharacterSheet): number {
+  if (sheet.classes && sheet.classes.length > 0) {
+    return sheet.classes.reduce((s, c) => s + Math.max(0, c.level), 0);
+  }
+  return sheet.level;
+}
+
+/** Caster type of one class (by name + subclass). */
+export function casterTypeForClass(name: string, subclass?: string): CasterType {
+  const sub = (subclass ?? '').trim().toLowerCase();
   if (THIRD_CASTER_SUBCLASSES.includes(sub)) return 'third';
-  const cls = classKey(sheet);
+  const cls = (name ?? '').trim().toLowerCase();
   if (cls.includes('warlock')) return 'pact';
   if (FULL_CASTERS.some((c) => cls.includes(c))) return 'full';
   if (HALF_CASTERS.some((c) => cls.includes(c))) return 'half';
   return 'none';
 }
 
+/** The caster type this sheet uses (override wins, else derived from its classes). */
+export function casterTypeOf(sheet: CharacterSheet): CasterType {
+  const classes = sheetClasses(sheet);
+  if (classes.length === 1 && sheet.casterTypeOverride) return sheet.casterTypeOverride;
+  const types = classes.map((c) => casterTypeForClass(c.name, c.subclass));
+  if (types.some((t) => t === 'full' || t === 'half' || t === 'third')) {
+    return classes.length === 1 ? types[0] : 'full';
+  }
+  if (types.includes('pact')) return 'pact';
+  return 'none';
+}
+
 /** The spellcasting ability for this sheet, or null if it isn't a caster. */
 export function spellcastingAbilityOf(sheet: CharacterSheet): Ability | null {
   if (sheet.spellcastingAbility) return sheet.spellcastingAbility;
-  if (THIRD_CASTER_SUBCLASSES.includes(subclassKey(sheet))) return 'int';
-  const cls = classKey(sheet);
-  for (const [k, v] of Object.entries(CLASS_SPELL_ABILITY)) if (cls.includes(k)) return v;
+  for (const c of sheetClasses(sheet)) {
+    if (casterTypeForClass(c.name, c.subclass) === 'none') continue;
+    const sub = (c.subclass ?? '').trim().toLowerCase();
+    if (THIRD_CASTER_SUBCLASSES.includes(sub)) return 'int';
+    const cls = (c.name ?? '').trim().toLowerCase();
+    for (const [k, v] of Object.entries(CLASS_SPELL_ABILITY)) if (cls.includes(k)) return v;
+  }
   return null;
 }
 
@@ -240,6 +264,172 @@ export function spellAttackBonus(sheet: CharacterSheet): number | null {
   const ab = spellcastingAbilityOf(sheet);
   if (!ab || casterTypeOf(sheet) === 'none') return null;
   return sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
+}
+
+// ---------------------------------------------------------------------------
+// Spell-slot progression (5e 2024) + multiclass
+// ---------------------------------------------------------------------------
+
+/** rows[level] = [1st-level slots, 2nd, …]. Index 0 unused. */
+const FULL_SLOTS: number[][] = [
+  [],
+  [2],
+  [3],
+  [4, 2],
+  [4, 3],
+  [4, 3, 2],
+  [4, 3, 3],
+  [4, 3, 3, 1],
+  [4, 3, 3, 2],
+  [4, 3, 3, 3, 1],
+  [4, 3, 3, 3, 2],
+  [4, 3, 3, 3, 2, 1],
+  [4, 3, 3, 3, 2, 1],
+  [4, 3, 3, 3, 2, 1, 1],
+  [4, 3, 3, 3, 2, 1, 1],
+  [4, 3, 3, 3, 2, 1, 1, 1],
+  [4, 3, 3, 3, 2, 1, 1, 1],
+  [4, 3, 3, 3, 2, 1, 1, 1, 1],
+  [4, 3, 3, 3, 3, 1, 1, 1, 1],
+  [4, 3, 3, 3, 3, 2, 1, 1, 1],
+  [4, 3, 3, 3, 3, 2, 2, 1, 1],
+];
+/** Paladin / Ranger (2024 — spells from level 1). */
+const HALF_SLOTS: number[][] = [
+  [],
+  [2],
+  [2],
+  [3],
+  [3],
+  [4, 2],
+  [4, 2],
+  [4, 3],
+  [4, 3],
+  [4, 3, 2],
+  [4, 3, 2],
+  [4, 3, 3],
+  [4, 3, 3],
+  [4, 3, 3, 1],
+  [4, 3, 3, 1],
+  [4, 3, 3, 2],
+  [4, 3, 3, 2],
+  [4, 3, 3, 3, 1],
+  [4, 3, 3, 3, 1],
+  [4, 3, 3, 3, 2],
+  [4, 3, 3, 3, 2],
+];
+/** Eldritch Knight / Arcane Trickster (spells from level 3). */
+const THIRD_SLOTS: number[][] = [
+  [],
+  [],
+  [],
+  [2],
+  [3],
+  [3],
+  [3],
+  [4, 2],
+  [4, 2],
+  [4, 2],
+  [4, 3],
+  [4, 3],
+  [4, 3],
+  [4, 3, 2],
+  [4, 3, 2],
+  [4, 3, 2],
+  [4, 3, 3],
+  [4, 3, 3],
+  [4, 3, 3],
+  [4, 3, 3, 1],
+  [4, 3, 3, 1],
+];
+/** Warlock Pact Magic: [count, slot level]. Index 0 unused. */
+const PACT_SLOTS: [number, number][] = [
+  [0, 0],
+  [1, 1],
+  [2, 1],
+  [2, 2],
+  [2, 2],
+  [2, 3],
+  [2, 3],
+  [2, 4],
+  [2, 4],
+  [2, 5],
+  [2, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [3, 5],
+  [4, 5],
+  [4, 5],
+  [4, 5],
+  [4, 5],
+];
+
+function tableFor(t: CasterType): number[][] {
+  return t === 'half' ? HALF_SLOTS : t === 'third' ? THIRD_SLOTS : FULL_SLOTS;
+}
+function rowToSlots(row: number[]): SpellSlots[] {
+  return row
+    .map((max, i) => ({ level: i + 1, max, used: 0 }))
+    .filter((s) => s.max > 0);
+}
+
+/** Max Vancian spell slots the character's classes grant (5e 2024, incl. multiclass). */
+export function computeSpellSlots(sheet: CharacterSheet): SpellSlots[] {
+  const classes = sheetClasses(sheet).filter((c) => c.level > 0);
+  const casters = classes
+    .map((c) => ({ ...c, t: casterTypeForClass(c.name, c.subclass) }))
+    .filter((c) => c.t === 'full' || c.t === 'half' || c.t === 'third');
+
+  if (casters.length === 0) {
+    const ov = sheet.casterTypeOverride;
+    if (classes.length <= 1 && (ov === 'full' || ov === 'half' || ov === 'third')) {
+      return rowToSlots(tableFor(ov)[Math.min(20, totalLevelOf(sheet))] ?? []);
+    }
+    return [];
+  }
+  if (casters.length === 1) {
+    return rowToSlots(tableFor(casters[0].t)[Math.min(20, casters[0].level)] ?? []);
+  }
+  // Multiclass: combined caster level indexes the full-caster table.
+  let cl = 0;
+  for (const c of casters) {
+    cl += c.t === 'full' ? c.level : c.t === 'half' ? Math.floor(c.level / 2) : Math.floor(c.level / 3);
+  }
+  return rowToSlots(FULL_SLOTS[Math.min(20, cl)] ?? []);
+}
+
+/** Max Warlock Pact Magic slots, or null if the character has no Warlock levels. */
+export function computePactSlots(sheet: CharacterSheet): SpellSlots | null {
+  const classes = sheetClasses(sheet);
+  let wl = classes
+    .filter((c) => casterTypeForClass(c.name, c.subclass) === 'pact')
+    .reduce((s, c) => s + Math.max(0, c.level), 0);
+  if (wl === 0 && sheet.casterTypeOverride === 'pact' && classes.length <= 1) {
+    wl = totalLevelOf(sheet);
+  }
+  if (wl <= 0) return null;
+  const [count, slotLevel] = PACT_SLOTS[Math.min(20, wl)];
+  return { level: slotLevel, max: count, used: 0 };
+}
+
+/** Recompute slot maxima from the class progression, keeping the `used` counts. */
+export function applySpellProgression(sheet: CharacterSheet): CharacterSheet {
+  if (casterTypeOf(sheet) === 'none') {
+    return sheet.pactSlots ? { ...sheet, pactSlots: null } : sheet;
+  }
+  const target = computeSpellSlots(sheet);
+  const spellSlots = target.map((t) => ({
+    ...t,
+    used: Math.min(t.max, sheet.spellSlots.find((s) => s.level === t.level)?.used ?? 0),
+  }));
+  const pact = computePactSlots(sheet);
+  const pactSlots = pact
+    ? { ...pact, used: Math.min(pact.max, sheet.pactSlots?.used ?? 0) }
+    : null;
+  return { ...sheet, spellSlots, pactSlots };
 }
 
 // ---------------------------------------------------------------------------

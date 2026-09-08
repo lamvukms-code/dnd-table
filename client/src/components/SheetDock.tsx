@@ -12,20 +12,24 @@ import {
   emptyCurrency,
   fmtMod,
   initiativeBonus,
+  casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
   CONDITIONS,
   proficiencyByLevel,
   RIDER_PRESETS,
   saveBonus,
+  sheetClasses,
   skillBonus,
   spellAttackBonus,
   spellcastingAbilityOf,
   spellSaveDc,
+  totalLevelOf,
   type Ability,
   type ActionType,
   type CasterType,
   type CharacterSheet,
+  type ClassEntry,
   type ConditionType,
   type DamagePart,
   type SheetAction,
@@ -879,9 +883,6 @@ function Resources({ draft, commit }: EditorCtx) {
     if (!draft.pactSlots) return;
     commit({ ...draft, pactSlots: { ...draft.pactSlots, ...patch } });
   }
-  const nextSlotLevel = [1, 2, 3, 4, 5, 6, 7, 8, 9].find(
-    (l) => !draft.spellSlots.some((s) => s.level === l),
-  );
   const caster = casterTypeOf(draft);
   // Vancian slots for full / half / third casters; pact slots for Warlock only.
   const showVancian = caster === 'full' || caster === 'half' || caster === 'third';
@@ -950,71 +951,29 @@ function Resources({ draft, commit }: EditorCtx) {
           .slice()
           .sort((a, b) => a.level - b.level)
           .map((s) => (
-          <div key={s.level} className="res-row">
-            <span className="res-name slot">Slot {s.level}</span>
-            <Pips max={s.max} used={s.used} onChange={(u) => setSlot(s.level, u)} />
-            <input
-              type="number"
-              className="res-max"
-              value={s.max}
-              onChange={(e) =>
-                commit({
-                  ...draft,
-                  spellSlots: draft.spellSlots.map((x) =>
-                    x.level === s.level ? { ...x, max: Math.max(0, Number(e.target.value)) } : x,
-                  ),
-                })
-              }
-            />
-            <button
-              className="link"
-              onClick={() =>
-                commit({
-                  ...draft,
-                  spellSlots: draft.spellSlots.filter((x) => x.level !== s.level),
-                })
-              }
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+            <div key={s.level} className="res-row">
+              <span className="res-name slot">Ô {s.level}</span>
+              <Pips max={s.max} used={s.used} onChange={(u) => setSlot(s.level, u)} />
+              <span className="res-max ro">/{s.max}</span>
+            </div>
+          ))}
 
       {showPact && draft.pactSlots && (
         <div className="res-row">
           <span className="res-name slot pact" title="Warlock Pact Magic — hồi khi nghỉ ngắn hoặc dài">
-            Pact lv
-            <input
-              type="number"
-              className="res-lvl"
-              min={1}
-              max={5}
-              value={draft.pactSlots.level}
-              onChange={(e) =>
-                setPact({ level: Math.max(1, Math.min(5, Number(e.target.value))) })
-              }
-            />
+            Pact ô {draft.pactSlots.level}
           </span>
           <Pips
             max={draft.pactSlots.max}
             used={draft.pactSlots.used}
-            onChange={(u) =>
-              setPact({ used: Math.max(0, Math.min(draft.pactSlots!.max, u)) })
-            }
+            onChange={(u) => setPact({ used: Math.max(0, Math.min(draft.pactSlots!.max, u)) })}
           />
-          <input
-            type="number"
-            className="res-max"
-            value={draft.pactSlots.max}
-            onChange={(e) => setPact({ max: Math.max(0, Number(e.target.value)) })}
-          />
-          <button
-            className="link"
-            onClick={() => commit({ ...draft, pactSlots: null })}
-          >
-            ✕
-          </button>
+          <span className="res-max ro">/{draft.pactSlots.max}</span>
         </div>
+      )}
+
+      {caster !== 'none' && (
+        <p className="hint">Ô phép tự tính theo class &amp; cấp (5e 2024) — chỉnh cấp/nghề ở tab Phép.</p>
       )}
 
       <div className="res-add">
@@ -1031,27 +990,6 @@ function Resources({ draft, commit }: EditorCtx) {
         >
           + Tài nguyên
         </button>
-        {showPact && !draft.pactSlots && (
-          <button
-            onClick={() =>
-              commit({ ...draft, pactSlots: { level: 1, max: 1, used: 0 } })
-            }
-          >
-            + Pact Magic
-          </button>
-        )}
-        {showVancian && nextSlotLevel && (
-          <button
-            onClick={() =>
-              commit({
-                ...draft,
-                spellSlots: [...draft.spellSlots, { level: nextSlotLevel, max: 2, used: 0 }],
-              })
-            }
-          >
-            + Spell slot
-          </button>
-        )}
       </div>
     </div>
   );
@@ -1261,33 +1199,86 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   const byLevel = new Map<number, Spell[]>();
   for (const s of spells) byLevel.set(s.level, [...(byLevel.get(s.level) ?? []), s]);
 
+  const classes = sheetClasses(draft);
+  const multi = (draft.classes?.length ?? 0) > 0;
+
+  function setClass(i: number, patch: Partial<ClassEntry>) {
+    const list = classes.map((c, j) => (j === i ? { ...c, ...patch } : c));
+    set({ classes: list, subclass: undefined });
+  }
+
   return (
     <div className="spells-tab">
+      <div className="mc-editor">
+        <span className="sg-label">Nghề {multi ? `· tổng cấp ${totalLevelOf(draft)}` : ''}</span>
+        {classes.map((c, i) => (
+          <div key={i} className="mc-row">
+            <input
+              className="mc-name"
+              value={c.name}
+              placeholder="Wizard"
+              onChange={(e) => setClass(i, { name: e.target.value })}
+            />
+            <input
+              className="mc-sub"
+              value={c.subclass ?? ''}
+              placeholder="subclass"
+              onChange={(e) => setClass(i, { subclass: e.target.value || undefined })}
+            />
+            <input
+              className="mc-lvl"
+              type="number"
+              min={1}
+              max={20}
+              value={c.level}
+              onChange={(e) => setClass(i, { level: Math.max(1, Number(e.target.value)) })}
+            />
+            <span className="mc-type">{casterTypeForClass(c.name, c.subclass)}</span>
+            {(multi || classes.length > 1) && (
+              <button
+                className="link"
+                onClick={() => {
+                  const list = classes.filter((_, j) => j !== i);
+                  set({ classes: list.length > 1 ? list : undefined });
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          className="link"
+          onClick={() =>
+            set({
+              classes: [...classes, { name: 'Nghề mới', level: 1 }],
+              subclass: undefined,
+            })
+          }
+        >
+          + nghề phụ (đa nghề)
+        </button>
+      </div>
+
       <div className="spell-head">
-        <label>
-          Subclass
-          <input
-            value={draft.subclass ?? ''}
-            placeholder="vd Eldritch Knight"
-            onChange={(e) => set({ subclass: e.target.value || undefined })}
-          />
-        </label>
-        <label>
-          Loại caster
-          <select
-            value={draft.casterTypeOverride ?? ''}
-            onChange={(e) =>
-              set({ casterTypeOverride: (e.target.value || null) as CasterType | null })
-            }
-          >
-            <option value="">tự nhận ({CASTER_LABEL[caster]})</option>
-            {(['full', 'half', 'third', 'pact', 'none'] as CasterType[]).map((c) => (
-              <option key={c} value={c}>
-                {CASTER_LABEL[c]}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!multi && (
+          <label>
+            Loại caster
+            <select
+              value={draft.casterTypeOverride ?? ''}
+              onChange={(e) =>
+                set({ casterTypeOverride: (e.target.value || null) as CasterType | null })
+              }
+            >
+              <option value="">tự nhận ({CASTER_LABEL[caster]})</option>
+              {(['full', 'half', 'third', 'pact', 'none'] as CasterType[]).map((c) => (
+                <option key={c} value={c}>
+                  {CASTER_LABEL[c]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label>
           Ability
           <select

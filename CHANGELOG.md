@@ -6,6 +6,35 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-08
+
+Commit C of the spellcasting work: multiclass + automatic spell-slot progression.
+
+### Added
+
+- **Multiclass.** `CharacterSheet.classes: ClassEntry[]` — a list of
+  `{ name, subclass?, level }`. When set it is the source of truth: total
+  `level`, `proficiencyBonus` and the display `className` ("Wizard 5 / Cleric 1")
+  are kept in sync (server-side, in `normalizeSheet`). Editor in the Spells tab
+  ("+ nghề phụ").
+- **Automatic spell-slot progression (5e 2024).** Slot maxima are computed from
+  the class levels and re-applied on every save (`applySpellProgression`,
+  keeping the `used` counts):
+  - full casters (Bard/Cleric/Druid/Sorcerer/Wizard) — standard table;
+  - half casters (Paladin/Ranger) — 2024 half-caster table (slots from level 1);
+  - third casters (Eldritch Knight / Arcane Trickster) — from level 3;
+  - Warlock — Pact Magic table (count + slot level);
+  - multiclass — full + ⌊half/2⌋ + ⌊third/3⌋ indexes the full-caster table;
+    Warlock pact slots are always computed separately.
+  The manual "+ Spell slot" / max / delete controls are gone for casters — the
+  slot rows are read-only maxima with spend-tracking pips.
+
+### Changed
+
+- Shared: `ClassEntry`, `sheetClasses`, `totalLevelOf`, `casterTypeForClass`,
+  `computeSpellSlots`, `computePactSlots`, `applySpellProgression`; `casterTypeOf`
+  / `spellcastingAbilityOf` are multiclass-aware (+ tests, 60 total).
+
 ## [0.14.0] - 2026-09-08
 
 Release B of the effects work — the spellcasting layer and the point-click cast
@@ -448,7 +477,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...v0.12.0

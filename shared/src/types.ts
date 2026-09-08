@@ -146,6 +146,9 @@ export interface CharacterSheet {
   level: number;
   proficiencyBonus: number;
   subclass?: string;
+  /** Multiclass breakdown. When set, it is the source of truth for class levels
+   *  (and `level` / `proficiencyBonus` / `className` are kept in sync from it). */
+  classes?: ClassEntry[];
   abilities: Record<Ability, number>;
   saveProficiencies: Ability[];
   skillProficiencies: string[];
@@ -313,6 +316,13 @@ export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
 
 /** How a spell is used when cast at a target. */
 export type SpellCastKind = 'attack' | 'save' | 'rider' | 'utility';
+
+/** One class of a (possibly multiclassed) character. */
+export interface ClassEntry {
+  name: string;
+  subclass?: string;
+  level: number;
+}
 
 /** A spell on a character sheet — known, and (level 1+) optionally prepared. */
 export interface Spell {

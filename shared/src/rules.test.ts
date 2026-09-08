@@ -5,9 +5,12 @@ import {
   applyDamageDefenses,
   applyLongRest,
   applyShortRest,
+  applySpellProgression,
   carriedWeight,
   casterTypeOf,
   combineRollModes,
+  computePactSlots,
+  computeSpellSlots,
   computeArmorClass,
   concentrationDc,
   conditionAttackMode,
@@ -306,6 +309,50 @@ describe('spellcasting (5e 2024)', () => {
     expect(spellSaveDc(wiz)).toBe(8 + 3 + 4);
     expect(spellAttackBonus(wiz)).toBe(3 + 4);
     expect(spellSaveDc(sheet({ className: 'Fighter' }))).toBeNull();
+  });
+});
+
+describe('spell-slot progression (5e 2024)', () => {
+  const slots = (s: ReturnType<typeof computeSpellSlots>) => s.map((x) => x.max);
+
+  it('full caster follows the standard table', () => {
+    expect(slots(computeSpellSlots(sheet({ className: 'Wizard', level: 1 })))).toEqual([2]);
+    expect(slots(computeSpellSlots(sheet({ className: 'Wizard', level: 5 })))).toEqual([4, 3, 2]);
+    expect(slots(computeSpellSlots(sheet({ className: 'Sorcerer', level: 20 })))).toEqual([
+      4, 3, 3, 3, 3, 2, 2, 1, 1,
+    ]);
+  });
+
+  it('half caster (Paladin, 2024) gets slots from level 1', () => {
+    expect(slots(computeSpellSlots(sheet({ className: 'Paladin', level: 1 })))).toEqual([2]);
+    expect(slots(computeSpellSlots(sheet({ className: 'Ranger', level: 5 })))).toEqual([4, 2]);
+  });
+
+  it('third caster (Eldritch Knight) starts at level 3', () => {
+    expect(computeSpellSlots(sheet({ className: 'Fighter', subclass: 'Eldritch Knight', level: 2 }))).toEqual([]);
+    expect(slots(computeSpellSlots(sheet({ className: 'Fighter', subclass: 'Eldritch Knight', level: 3 })))).toEqual([2]);
+  });
+
+  it('Warlock uses the pact table', () => {
+    expect(computePactSlots(sheet({ className: 'Warlock', level: 5 }))).toMatchObject({ level: 3, max: 2 });
+    expect(computePactSlots(sheet({ className: 'Warlock', level: 17 }))).toMatchObject({ level: 5, max: 4 });
+    expect(computePactSlots(sheet({ className: 'Fighter', level: 5 }))).toBeNull();
+  });
+
+  it('multiclass sums full + floor(half/2) + floor(third/3)', () => {
+    // Wizard 5 + Cleric 1 -> caster level 6 -> [4,3,3]
+    const s = sheet({ classes: [{ name: 'Wizard', level: 5 }, { name: 'Cleric', level: 1 }] });
+    expect(slots(computeSpellSlots(s))).toEqual([4, 3, 3]);
+    // Paladin 2 in a multiclass contributes 0 (floor(2/2)=1 -> actually 1) ; Paladin 3 -> floor(3/2)=1
+    const s2 = sheet({ classes: [{ name: 'Fighter', level: 3 }, { name: 'Paladin', level: 2 }] });
+    expect(slots(computeSpellSlots(s2))).toEqual([2]); // caster level 1
+  });
+
+  it('applySpellProgression recomputes maxima and keeps used', () => {
+    const s = sheet({ className: 'Wizard', level: 5, spellSlots: [{ level: 1, max: 99, used: 3 }] });
+    const out = applySpellProgression(s);
+    expect(out.spellSlots.map((x) => x.max)).toEqual([4, 3, 2]);
+    expect(out.spellSlots.find((x) => x.level === 1)!.used).toBe(3);
   });
 });
 

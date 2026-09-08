@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.14.0
+- **Version:** 0.15.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -156,7 +156,15 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   or class default. `CharacterSheet.spells: Spell[]` — known, level-1+ cast only
   while `prepared`. Point-click cast: rider → concentration rider on the target;
   save → `spellSave` (server rolls the target's save vs the DC, applies the
-  effect on a failure); attack → spell attack roll.
+  effect on a failure); attack → spell attack roll. The DC is read from the
+  caster's sheet at cast time and frozen into the effect (5e-correct — the DC
+  doesn't drift mid-encounter); "save ends" re-rolls use that stored DC.
+- **Multiclass + slot progression** (0.15.0). `CharacterSheet.classes:
+  ClassEntry[]` drives total level / proficiency / display name.
+  `applySpellProgression` recomputes slot maxima from the 2024 tables on every
+  save (full / half-from-1 / third-from-3 / Pact), keeping `used`; multiclass
+  caster level = full + ⌊half/2⌋ + ⌊third/3⌋ into the full table, Warlock pact
+  slots always separate. Manual slot editing is removed for casters.
 
 ---
 
@@ -522,6 +530,7 @@ See `shared/src/types.ts` for the authoritative definitions.
   `CharacterSheet.spells`.
 - `CasterType = full | half | third | pact | none`; `RollMode = normal |
   advantage | disadvantage`.
+- `ClassEntry { name, subclass?, level }` on `CharacterSheet.classes?`.
 - `CharacterSheet.subclass?`, `.casterTypeOverride?`, `.spellcastingAbility?`.
 - `DamagePart { dice, type, label? }` — one damage component of an attack.
 - `DamageRider { id, name, dice, type, enabled }` on `CharacterSheet.damageRiders`

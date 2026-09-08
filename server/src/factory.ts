@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { emptyCurrency } from '@dnd-table/shared';
+import { applySpellProgression, emptyCurrency, proficiencyByLevel } from '@dnd-table/shared';
 import type {
   Ability,
   CharacterSheet,
@@ -116,7 +116,18 @@ export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
     currency: sheet.currency ?? emptyCurrency(),
   };
   delete (next as CharacterSheet & { attacks?: unknown }).attacks;
-  return next;
+
+  // Multiclass: the class list drives total level / proficiency / display name.
+  if (next.classes && next.classes.length > 0) {
+    const total = next.classes.reduce((s, c) => s + Math.max(0, c.level), 0);
+    next.level = Math.max(1, total);
+    next.proficiencyBonus = proficiencyByLevel(next.level);
+    next.className = next.classes
+      .map((c) => `${c.name || '?'} ${c.level}`)
+      .join(' / ');
+  }
+  // Auto spell-slot progression (5e 2024) — keeps `used`, recomputes the maxima.
+  return applySpellProgression(next);
 }
 
 export function createToken(partial: Partial<Token>): Token {
