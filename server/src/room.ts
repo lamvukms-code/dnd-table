@@ -11,15 +11,21 @@ import {
   SCHEMA_VERSION,
 } from './factory.js';
 import {
+  concentrationDc,
   coverAcBonus,
+  derivedDefenses,
   externalRollResult,
   homebrewCritDamage,
+  mergeDefenses,
   resolveAttack,
   resolveDamageParts,
   rollNotation,
+  targetRiderParts,
   tokenStatblockFrom,
+  type ActiveEffect,
   type ClientAction,
   type DamagePart,
+  type Defenses,
   type InitiativeEntry,
   type MultiDamageOutcome,
   type Participant,
@@ -27,6 +33,7 @@ import {
   type RollResult,
   type RoomState,
   type Statblock,
+  type Token,
 } from '@dnd-table/shared';
 
 export class Room {
@@ -49,6 +56,10 @@ export class Room {
         if (migrated) {
           migrated.participants.forEach((p) => (p.connected = false));
           migrated.sheets = migrated.sheets.map(normalizeSheet);
+          migrated.tokens.forEach((t) => {
+            t.effects ??= [];
+            t.concentration ??= null;
+          });
           return migrated;
         }
         console.warn(`Room schema ${raw.version} unsupported; starting fresh.`);
@@ -146,6 +157,84 @@ export class Room {
     return { rolled, notation, combined: externalRollResult(notation, { total, faces: [] }) };
   }
 
+  /** A token's damage defences merged with anything its linked sheet grants (adamantine). */
+  private effectiveDefenses(token: Token): Defenses | undefined {
+    const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
+    return mergeDefenses(token.defenses, sheet ? derivedDefenses(sheet) : undefined);
+  }
+
+  /** CON saving-throw bonus for a token (linked sheet, else stat block, else 0). */
+  private tokenConSaveBonus(token: Token): number {
+    const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
+    if (sheet) {
+      return (
+        abilityMod(sheet.abilities.con) +
+        (sheet.saveProficiencies.includes('con') ? sheet.proficiencyBonus : 0)
+      );
+    }
+    const sb = token.statblock;
+    if (sb) {
+      return (
+        abilityMod(sb.abilities.con) +
+        (sb.saveProficiencies.includes('con') ? sb.proficiencyBonus : 0)
+      );
+    }
+    return 0;
+  }
+
+  /** The token id that a rider/effect source resolves to (for concentration). */
+  private sourceTokenId(effect: Pick<ActiveEffect, 'sourceTokenId' | 'sourceSheetId'>): string | undefined {
+    if (effect.sourceTokenId) return effect.sourceTokenId;
+    if (effect.sourceSheetId) {
+      return this.state.sheets.find((s) => s.id === effect.sourceSheetId)?.tokenId;
+    }
+    return undefined;
+  }
+
+  /** Drop `token`'s concentration: clear its marker and every concentration effect it placed. */
+  private dropConcentration(token: Token, reason: string, actor?: Participant): void {
+    if (!token.concentration) return;
+    const spell = token.concentration.name;
+    token.concentration = null;
+    for (const t of this.state.tokens) {
+      t.effects = (t.effects ?? []).filter(
+        (e) => !(e.concentration && this.sourceTokenId(e) === token.id),
+      );
+    }
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor?.id ?? 'system',
+      actorName: actor?.name ?? 'Hệ thống',
+      label: `${token.label}: mất tập trung — ${spell} (${reason})`,
+      result: externalRollResult('', { total: 0, faces: [] }),
+    });
+  }
+
+  /** After a token takes `damage`, roll a silent CON save to keep concentration. */
+  private maybeBreakConcentration(token: Token, damage: number): void {
+    if (!token.concentration || damage <= 0) return;
+    const dc = concentrationDc(damage);
+    const bonus = this.tokenConSaveBonus(token);
+    const d20 = 1 + Math.floor(Math.random() * 20);
+    const total = d20 + bonus;
+    const kept = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `${token.label}: CON giữ tập trung ${total} vs DC ${dc} — ${
+        kept ? 'giữ được' : `MẤT (${token.concentration.name})`
+      }`,
+      result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {
+        total,
+        faces: [d20],
+      }),
+    });
+    if (!kept) this.dropConcentration(token, `thất bại CON save DC ${dc}`);
+  }
+
   /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
   private tokenInitMod(token: RoomState['tokens'][number]): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
@@ -219,18 +308,26 @@ export class Room {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
         if (!action.damageParts?.length) return 'Không có nguồn sát thương';
+        const dmgParts = [
+          ...action.damageParts,
+          ...targetRiderParts(target, {
+            sheetId: action.attackerSheetId,
+            tokenId: action.attackerTokenId,
+          }),
+        ];
         let rd;
         try {
-          rd = this.rollDamageParts(action.damageParts, false, action.external);
+          rd = this.rollDamageParts(dmgParts, false, action.external);
         } catch (err) {
           return (err as Error).message;
         }
-        const out = resolveDamageParts(rd.rolled, target.defenses);
+        const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
         let amount = 0;
         if (typeof target.currentHp === 'number') {
           amount = Math.min(target.currentHp, out.totalFinal);
           target.currentHp -= amount;
         }
+        this.maybeBreakConcentration(target, out.totalFinal);
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
@@ -243,7 +340,7 @@ export class Room {
             targetName: target.label,
             amount,
             raw: out.totalRaw,
-            damageType: damagePartsSummary(action.damageParts),
+            damageType: damagePartsSummary(dmgParts),
             notes: damageBreakdownNotes(out),
           },
         });
@@ -300,22 +397,33 @@ export class Room {
           }
         }
         const res = resolveAttack(attackRoll, ac);
-        // Adamantine / crit-immune (this token only): a crit lands as an ordinary hit.
-        const critImmune = target.defenses?.critImmune ?? false;
+        // Adamantine / crit-immune (token's own defences OR its linked sheet's
+        // equipped gear): a crit lands as an ordinary hit.
+        const def = this.effectiveDefenses(target);
+        const critImmune = def?.critImmune ?? false;
         const effectiveCrit = res.crit && !critImmune;
+
+        // Target-bound riders (Hex / Hunter's Mark placed on this token by the attacker).
+        const dmgParts = [
+          ...(action.damageParts ?? []),
+          ...targetRiderParts(target, {
+            sheetId: action.attackerSheetId,
+            tokenId: action.attackerTokenId,
+          }),
+        ];
 
         let damageResult: RollResult | undefined;
         let outcome: MultiDamageOutcome | undefined;
         if (res.hit) {
-          if (!action.damageParts?.length) return 'Không có nguồn sát thương';
+          if (!dmgParts.length) return 'Không có nguồn sát thương';
           let rd;
           try {
-            rd = this.rollDamageParts(action.damageParts, effectiveCrit, action.external?.partTotals);
+            rd = this.rollDamageParts(dmgParts, effectiveCrit, action.external?.partTotals);
           } catch (err) {
             return (err as Error).message;
           }
           damageResult = rd.combined;
-          outcome = resolveDamageParts(rd.rolled, target.defenses);
+          outcome = resolveDamageParts(rd.rolled, def);
         }
 
         const coverNote =
@@ -346,6 +454,7 @@ export class Room {
           if (typeof target.currentHp === 'number') {
             target.currentHp = Math.max(0, target.currentHp - applied);
           }
+          this.maybeBreakConcentration(target, applied);
           const critTag = effectiveCrit
             ? ' (chí mạng homebrew)'
             : res.crit && critImmune
@@ -363,7 +472,7 @@ export class Room {
               targetName: target.label,
               amount: applied,
               raw: outcome.totalRaw,
-              damageType: damagePartsSummary(action.damageParts),
+              damageType: damagePartsSummary(dmgParts),
               notes: damageBreakdownNotes(outcome),
             },
           });
@@ -455,6 +564,77 @@ export class Room {
         this.state.initiative.entries = this.state.initiative.entries.filter(
           (e) => e.tokenId !== action.id,
         );
+        this.touch();
+        break;
+      }
+
+      case 'applyEffect': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        const eff = action.effect;
+        const ownsSheet =
+          eff.sourceSheetId &&
+          this.state.sheets.some((s) => s.id === eff.sourceSheetId && s.ownerId === actor.id);
+        const ownsToken =
+          eff.sourceTokenId &&
+          this.state.tokens.find((t) => t.id === eff.sourceTokenId)?.controllerId === actor.id;
+        if (!isDm && !ownsSheet && !ownsToken) {
+          return 'Bạn chỉ áp hiệu ứng từ nhân vật / token của mình';
+        }
+        const effect: ActiveEffect = { ...eff, id: nanoid(8) };
+        if (effect.concentration) {
+          const srcId = this.sourceTokenId(effect);
+          const src = srcId && this.state.tokens.find((t) => t.id === srcId);
+          if (src) {
+            this.dropConcentration(src, `chuyển sang ${effect.name}`, actor);
+            src.concentration = { name: effect.name, since: this.state.initiative.round };
+          }
+        }
+        target.effects = [...(target.effects ?? []), effect];
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${target.label} chịu hiệu ứng: ${effect.name}`,
+          result: externalRollResult('', { total: 0, faces: [] }),
+        });
+        this.touch();
+        break;
+      }
+
+      case 'removeEffect': {
+        const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        if (!token) return 'Token không tồn tại';
+        const effect = (token.effects ?? []).find((e) => e.id === action.effectId);
+        if (!effect) return null;
+        const ownsSource =
+          (effect.sourceSheetId &&
+            this.state.sheets.some(
+              (s) => s.id === effect.sourceSheetId && s.ownerId === actor.id,
+            )) ||
+          (effect.sourceTokenId &&
+            this.state.tokens.find((t) => t.id === effect.sourceTokenId)?.controllerId ===
+              actor.id) ||
+          token.controllerId === actor.id;
+        if (!isDm && !ownsSource) return 'Bạn không gỡ được hiệu ứng này';
+        token.effects = (token.effects ?? []).filter((e) => e.id !== action.effectId);
+        if (effect.concentration) {
+          const srcId = this.sourceTokenId(effect);
+          const src = srcId && this.state.tokens.find((t) => t.id === srcId);
+          if (src && src.concentration?.name === effect.name) src.concentration = null;
+        }
+        this.touch();
+        break;
+      }
+
+      case 'clearConcentration': {
+        const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id) {
+          return 'Bạn chỉ hủy tập trung của token mình';
+        }
+        this.dropConcentration(token, 'tự hủy', actor);
         this.touch();
         break;
       }

@@ -1,4 +1,5 @@
 import type {
+  ActiveEffect,
   BattleMap,
   CharacterSheet,
   DamagePart,
@@ -10,7 +11,7 @@ import type {
   Token,
 } from './types.js';
 
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** Actions sent client -> server. */
 export type ClientAction =
@@ -26,6 +27,9 @@ export type ClientAction =
       targetTokenId: string;
       // per-part rolled totals (dddice); index-aligned with damageParts
       external?: number[];
+      // attacker identity, so target-bound riders (Hex/Hunter's Mark) can apply
+      attackerSheetId?: string;
+      attackerTokenId?: string;
     }
   | {
       t: 'attack';
@@ -33,6 +37,8 @@ export type ClientAction =
       attackNotation: string;
       damageParts: DamagePart[];
       targetTokenId: string;
+      attackerSheetId?: string;
+      attackerTokenId?: string;
       // When present, the client already rolled (via dddice). On a crit the
       // per-part totals are the homebrew-crit notation's roll.
       external?: {
@@ -41,6 +47,10 @@ export type ClientAction =
         partTotals?: number[]; // index-aligned with damageParts
       };
     }
+  // spell / feature effects on a token (conditions, riders, recurring saves)
+  | { t: 'applyEffect'; targetTokenId: string; effect: ActiveEffect }
+  | { t: 'removeEffect'; tokenId: string; effectId: string }
+  | { t: 'clearConcentration'; tokenId: string }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }
   | { t: 'updateDddice'; patch: Partial<DddiceConfig> }

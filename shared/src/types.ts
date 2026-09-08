@@ -126,6 +126,8 @@ export interface InventoryItem {
   damage?: string; // base damage dice only, e.g. "1d8"
   damageType?: string;
   weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
+  /** Adamantine armour: while equipped, the wearer's token can't be crit. */
+  grantsCritImmune?: boolean;
   proficient?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
@@ -230,6 +232,70 @@ export function emptyDefenses(): Defenses {
 /** Battlefield cover (homebrew: benefit auto-applied to AC). */
 export type CoverLevel = 'none' | 'half' | 'threequarters' | 'total';
 
+/** The 5e (2024) conditions. */
+export const CONDITIONS = [
+  'blinded',
+  'charmed',
+  'deafened',
+  'frightened',
+  'grappled',
+  'incapacitated',
+  'invisible',
+  'paralyzed',
+  'petrified',
+  'poisoned',
+  'prone',
+  'restrained',
+  'stunned',
+  'unconscious',
+] as const;
+export type ConditionType = (typeof CONDITIONS)[number];
+export const CONDITION_VI: Record<ConditionType, string> = {
+  blinded: 'Mù',
+  charmed: 'Mê hoặc',
+  deafened: 'Điếc',
+  frightened: 'Khiếp sợ',
+  grappled: 'Bị ghì',
+  incapacitated: 'Bất lực',
+  invisible: 'Tàng hình',
+  paralyzed: 'Tê liệt',
+  petrified: 'Hóa đá',
+  poisoned: 'Trúng độc',
+  prone: 'Ngã',
+  restrained: 'Bị trói',
+  stunned: 'Choáng',
+  unconscious: 'Bất tỉnh',
+};
+
+/**
+ * An effect currently sitting on a token: a spell's condition, a rider that adds
+ * damage when its source hits this token (Hex, Hunter's Mark), a recurring save,
+ * or just a labelled note. Concentration ties an effect to its source token's
+ * single concentration slot.
+ */
+export interface ActiveEffect {
+  id: string;
+  name: string; // "Hex", "Hold Person", "Stunned"
+  sourceTokenId?: string; // who applied it (for riders + concentration)
+  sourceSheetId?: string;
+  concentration?: boolean; // drops when the source loses concentration
+  condition?: ConditionType; // advisory badge; a few are wired into rolls (Release B)
+  rider?: { dice: string; type: string }; // + damage when source hits this token
+  save?: {
+    ability: Ability;
+    dc: number;
+    repeat: 'none' | 'start-of-turn' | 'end-of-turn'; // server rolls it silently
+  };
+  note?: string;
+  expiresRound?: number; // auto-cleared at the start of this round
+}
+
+/** What a token is currently concentrating on (one at a time). */
+export interface Concentration {
+  name: string;
+  since: number; // round it started
+}
+
 export interface StatblockTrait {
   name: string;
   description: string;
@@ -297,6 +363,8 @@ export interface Token {
   statblock?: TokenStatblock; // NPC/monster stats (from the bestiary)
   defenses?: Defenses; // damage resist/immune/vuln, flat DR, crit immunity
   cover?: CoverLevel; // battlefield cover — benefit auto-applied
+  effects?: ActiveEffect[]; // spell conditions, riders, recurring saves
+  concentration?: Concentration | null; // the spell this token is concentrating on
 }
 
 export interface BattleMap {

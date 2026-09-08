@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.11.0
+- **Version:** 0.13.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -126,6 +126,23 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   cover is **not** enforced — the DM sees a warning listing tokens in total cover
   and is trusted not to make ranged attacks against them (keeps the server
   light).
+- **Crit immunity from gear.** An equipped inventory item tagged
+  `grantsCritImmune` (adamantine armour) makes its wearer's linked token
+  crit-immune. `derivedDefenses(sheet)` is merged with the token's own
+  `defenses` (`mergeDefenses`) each time an attack resolves — the token's own
+  crit-immune flag still works for monsters.
+- **Concentration** (0.13.0). Each token concentrates on at most one effect
+  (`Token.concentration`). Applying a second concentration effect drops the
+  first and removes every effect it placed. When a concentrating token takes
+  damage the server rolls a **silent** CON save vs `max(10, ⌊damage/2⌋)` (for
+  players and monsters both); failure drops concentration. No auto-break UI —
+  the roll and result go to the log.
+- **Active effects** (0.13.0). `Token.effects: ActiveEffect[]` — the 14 5e
+  conditions (advisory badge + tooltip; auto-wiring the ~7 combat-critical ones
+  into advantage/auto-crit is Release B), damage **riders** (Hex, Hunter's Mark
+  — `targetRiderParts` adds them when the effect's source hits the token,
+  resolved per-part like any other damage part), and `save` / `note` /
+  `expiresRound` fields for the save-ends spells built in Release B.
 
 ---
 
@@ -475,10 +492,16 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid }`
 - `Token { id, label, x, y, size, color, imageUrl?, currentHp?, maxHp?,
   armorClass?, hidden, controllerId?, statblock?: TokenStatblock,
-  defenses?: Defenses, cover?: CoverLevel }`
+  defenses?: Defenses, cover?: CoverLevel, effects?: ActiveEffect[],
+  concentration?: Concentration | null }`
 - `Defenses { resistances[], immunities[], vulnerabilities[], damageReduction,
   critImmune }` — damage-type keys from `DAMAGE_TYPES` (13 5e types).
 - `CoverLevel = none | half | threequarters | total`
+- `ActiveEffect { id, name, sourceTokenId?, sourceSheetId?, concentration?,
+  condition?: ConditionType, rider?: { dice, type }, save?: { ability, dc,
+  repeat }, note?, expiresRound? }` on `Token.effects`.
+- `Concentration { name, since }` — the one effect a token concentrates on.
+- `InventoryItem.grantsCritImmune?` — adamantine; feeds `derivedDefenses`.
 - `DamagePart { dice, type, label? }` — one damage component of an attack.
 - `DamageRider { id, name, dice, type, enabled }` on `CharacterSheet.damageRiders`
   — a standing extra-damage effect applied to every attack while enabled.

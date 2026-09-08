@@ -8,9 +8,10 @@ import type {
   InventoryItem,
   SheetAction,
   Statblock,
+  Token,
   TokenStatblock,
 } from './types.js';
-import { COIN_TYPES, DAMAGE_TYPE_VI, SKILLS } from './types.js';
+import { COIN_TYPES, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
@@ -128,6 +129,56 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   }
   return parts;
 }
+
+/**
+ * Defences a character gets from what they're wearing/carrying — currently just
+ * adamantine crit immunity from an equipped item. Returns undefined when the
+ * sheet grants nothing, so it can be merged with a token's own `defenses`.
+ */
+export function derivedDefenses(sheet: CharacterSheet): Defenses | undefined {
+  const critImmune = sheet.inventory.some((it) => it.equipped && it.grantsCritImmune);
+  if (!critImmune) return undefined;
+  return { ...emptyDefenses(), critImmune: true };
+}
+
+/** Merge two optional defence blocks (b's positives win / OR in). */
+export function mergeDefenses(a: Defenses | undefined, b: Defenses | undefined): Defenses | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    resistances: [...new Set([...a.resistances, ...b.resistances])],
+    immunities: [...new Set([...a.immunities, ...b.immunities])],
+    vulnerabilities: [...new Set([...a.vulnerabilities, ...b.vulnerabilities])],
+    damageReduction: Math.max(a.damageReduction, b.damageReduction),
+    critImmune: a.critImmune || b.critImmune,
+  };
+}
+
+/** Extra damage parts a target's own effects add when `attacker` hits it (Hex, Hunter's Mark). */
+export function targetRiderParts(
+  target: Pick<Token, 'effects'>,
+  attacker: { sheetId?: string; tokenId?: string },
+): DamagePart[] {
+  return (target.effects ?? [])
+    .filter(
+      (e) =>
+        e.rider &&
+        ((attacker.sheetId && e.sourceSheetId === attacker.sheetId) ||
+          (attacker.tokenId && e.sourceTokenId === attacker.tokenId)),
+    )
+    .map((e) => ({ dice: e.rider!.dice, type: e.rider!.type, label: e.name }));
+}
+
+/** Homebrew/5e-2024 concentration save DC after taking `damage`. */
+export function concentrationDc(damage: number): number {
+  return Math.max(10, Math.floor(damage / 2));
+}
+
+/** Preset spell riders for the quick "cast on target" control. */
+export const RIDER_PRESETS: { name: string; rider: { dice: string; type: string }; concentration: boolean }[] = [
+  { name: "Hunter's Mark", rider: { dice: '1d6', type: 'force' }, concentration: true },
+  { name: 'Hex', rider: { dice: '1d6', type: 'necrotic' }, concentration: true },
+];
 
 /** Damage parts for a bare stat-block action (no sheet riders). */
 export function statblockDamageParts(action: SheetAction): DamagePart[] {

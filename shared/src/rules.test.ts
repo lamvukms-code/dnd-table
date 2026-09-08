@@ -7,13 +7,17 @@ import {
   applyShortRest,
   carriedWeight,
   computeArmorClass,
+  concentrationDc,
   coverAcBonus,
   currencyInGp,
   derivedActions,
+  derivedDefenses,
   emptyCurrency,
+  mergeDefenses,
   resolveDamageParts,
   skillBonus,
   statblockInitiativeMod,
+  targetRiderParts,
   tokenSaveBonus,
   tokenStatblockFrom,
 } from './rules.js';
@@ -235,6 +239,44 @@ describe('multi-source damage', () => {
     // 8 slashing + 2 fire(÷2) + 0 poison(×0) = 10
     expect(out.totalFinal).toBe(10);
     expect(out.totalRaw).toBe(17);
+  });
+});
+
+describe('adamantine / concentration / riders', () => {
+  it('derivedDefenses grants crit immunity only from an equipped adamantine item', () => {
+    const off = sheet({ inventory: [item({ type: 'armor', equipped: false, grantsCritImmune: true })] });
+    expect(derivedDefenses(off)).toBeUndefined();
+    const on = sheet({ inventory: [item({ type: 'armor', equipped: true, grantsCritImmune: true })] });
+    expect(derivedDefenses(on)?.critImmune).toBe(true);
+    expect(derivedDefenses(sheet())).toBeUndefined();
+  });
+
+  it('mergeDefenses ORs crit immunity and unions the type lists', () => {
+    const a = { ...emptyDefenses(), resistances: ['fire'] };
+    const b = { ...emptyDefenses(), critImmune: true, resistances: ['cold'] };
+    const m = mergeDefenses(a, b)!;
+    expect(m.critImmune).toBe(true);
+    expect(m.resistances.sort()).toEqual(['cold', 'fire']);
+    expect(mergeDefenses(undefined, b)).toBe(b);
+  });
+
+  it('concentrationDc is DC 10 or half the damage, whichever is higher', () => {
+    expect(concentrationDc(9)).toBe(10);
+    expect(concentrationDc(22)).toBe(11);
+    expect(concentrationDc(60)).toBe(30);
+  });
+
+  it('targetRiderParts only fires for the matching attacker', () => {
+    const target = {
+      effects: [
+        { id: 'h', name: 'Hex', sourceSheetId: 's1', concentration: true, rider: { dice: '1d6', type: 'necrotic' } },
+        { id: 'x', name: 'Stunned', condition: 'stunned' as const },
+      ],
+    };
+    expect(targetRiderParts(target, { sheetId: 's1' })).toEqual([
+      { dice: '1d6', type: 'necrotic', label: 'Hex' },
+    ]);
+    expect(targetRiderParts(target, { sheetId: 'other' })).toEqual([]);
   });
 });
 

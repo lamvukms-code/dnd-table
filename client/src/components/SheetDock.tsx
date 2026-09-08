@@ -13,6 +13,7 @@ import {
   fmtMod,
   initiativeBonus,
   proficiencyByLevel,
+  RIDER_PRESETS,
   saveBonus,
   skillBonus,
   type Ability,
@@ -295,6 +296,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
   const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
+  const applyEffect = useStore((s) => s.applyEffect);
+  const removeEffect = useStore((s) => s.removeEffect);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const allSheets = useStore((s) => s.room?.sheets ?? []);
   const initiative = useStore((s) => s.room?.initiative);
@@ -553,7 +556,54 @@ function BasicTab({ draft, commit }: EditorCtx) {
               ))}
             </select>
           </label>
+          {targetId && (
+            <label className="target-pick">
+              Đánh dấu
+              <select
+                value=""
+                onChange={(e) => {
+                  const p = RIDER_PRESETS.find((x) => x.name === e.target.value);
+                  if (!p) return;
+                  applyEffect(targetId, {
+                    id: '',
+                    name: p.name,
+                    sourceSheetId: draft.id,
+                    concentration: p.concentration,
+                    rider: p.rider,
+                  });
+                }}
+                title="Áp Hex / Hunter's Mark lên mục tiêu (tự lo concentration)"
+              >
+                <option value="">— chiêu —</option>
+                {RIDER_PRESETS.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} ({p.rider.dice})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
+        {(() => {
+          const mine = (tokens.find((t) => t.id === targetId)?.effects ?? []).filter(
+            (e) => e.sourceSheetId === draft.id,
+          );
+          if (mine.length === 0) return null;
+          return (
+            <div className="my-effects">
+              {mine.map((e) => (
+                <span key={e.id} className="eff-chip">
+                  {e.name}
+                  {e.rider ? ` +${e.rider.dice}` : ''}
+                  {e.concentration ? ' 🧠' : ''}
+                  <button className="link" onClick={() => removeEffect(targetId, e.id)}>
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          );
+        })()}
 
         {(['action', 'bonus', 'reaction'] as ActionType[]).map((type) => {
           const list = actions.filter((a) => a.actionType === type);
@@ -571,6 +621,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   action={a}
                   parts={actionDamageParts(draft, a)}
                   sheetName={draft.name}
+                  attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
                   targetId={targetId}
                   targetName={targetName}
                   rollMode={rollMode}
@@ -614,6 +665,7 @@ function ActionRow({
   action,
   parts,
   sheetName,
+  attacker,
   targetId,
   targetName,
   rollMode,
@@ -625,6 +677,7 @@ function ActionRow({
   action: SheetAction;
   parts: DamagePart[];
   sheetName: string;
+  attacker: { sheetId?: string; tokenId?: string };
   targetId: string;
   targetName: string;
   rollMode: RollMode;
@@ -634,8 +687,15 @@ function ActionRow({
     attackNotation: string;
     damageParts: DamagePart[];
     targetTokenId: string;
+    attackerSheetId?: string;
+    attackerTokenId?: string;
   }) => Promise<void>;
-  damageRoll: (label: string, parts: DamagePart[], targetTokenId: string) => Promise<void>;
+  damageRoll: (
+    label: string,
+    parts: DamagePart[],
+    targetTokenId: string,
+    attacker?: { sheetId?: string; tokenId?: string },
+  ) => Promise<void>;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
@@ -667,6 +727,8 @@ function ActionRow({
               attackNotation: atkNotation(action.attackBonus!),
               damageParts: parts,
               targetTokenId: targetId,
+              attackerSheetId: attacker.sheetId,
+              attackerTokenId: attacker.tokenId,
             })
           }
         >
@@ -686,7 +748,7 @@ function ActionRow({
           className="roll-btn"
           onClick={() =>
             targetId
-              ? damageRoll(`${base} → ${targetName}`, parts, targetId)
+              ? damageRoll(`${base} → ${targetName}`, parts, targetId, attacker)
               : rollDice(`${base} (sát thương)`, combinedDamage)
           }
         >

@@ -6,6 +6,42 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-08
+
+Release A of the effects work (concentration engine + riders); Release B (spell
+tab, point-click cast, condition auto-effects, save-ends spells) follows.
+
+### Added
+
+- **Adamantine crit immunity from gear.** An inventory armour item can be tagged
+  "Adamantine (miễn chí mạng khi mặc)"; while equipped, the wearer's linked
+  token can't be crit. `derivedDefenses(sheet)` merges into the token's own
+  `defenses` at resolve time (`mergeDefenses`) — the DM still ticks crit
+  immunity directly on monster tokens as before.
+- **Concentration.** A token holds one concentration at a time
+  (`Token.concentration`). Casting a second concentration effect drops the
+  first (and removes every effect it placed). Taking damage triggers a **silent
+  CON save** — DC `max(10, ⌊damage/2⌋)` (5e 2024) — rolled by the server for
+  players and monsters alike; on a failure the concentration and its effects
+  drop, with a line in the roll log.
+- **Active effects on tokens** (`Token.effects: ActiveEffect[]`): spell
+  conditions (the 14 5e conditions, advisory badges for now), damage **riders**
+  (extra damage when the source hits this token), recurring-save and note
+  fields. Editor in the token inspector; a token badge (`🧠` / `✦n`) on the map.
+- **Hex / Hunter's Mark.** Preset riders (`RIDER_PRESETS`) castable from the
+  character sheet's target picker ("Đánh dấu → chiêu"); they're concentration
+  effects bound to the target token and add their die to every hit the caster
+  lands on that token, resolved per-part against the target's defences and
+  through the homebrew crit rule.
+
+### Changed
+
+- Protocol v4: `attack` / `damage` carry `attackerSheetId` / `attackerTokenId`;
+  new `applyEffect` / `removeEffect` / `clearConcentration` actions.
+- Shared: `ActiveEffect`, `Concentration`, `CONDITIONS` / `CONDITION_VI`,
+  `derivedDefenses`, `mergeDefenses`, `targetRiderParts`, `concentrationDc`,
+  `RIDER_PRESETS` (+ tests, 49 total).
+
 ## [0.12.0] - 2026-09-08
 
 ### Added
@@ -368,7 +404,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...v0.10.0

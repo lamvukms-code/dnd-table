@@ -229,6 +229,14 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                     />
                     Bất lợi Ẩn nấp
                   </label>
+                  <label className="chk">
+                    <input
+                      type="checkbox"
+                      checked={it.grantsCritImmune ?? false}
+                      onChange={(e) => setItem(it.id, { grantsCritImmune: e.target.checked })}
+                    />
+                    Adamantine (miễn chí mạng khi mặc)
+                  </label>
                 </>
               )}
 

@@ -2,8 +2,11 @@ import { create } from 'zustand';
 import {
   coverAcBonus,
   d20Check,
+  derivedDefenses,
   homebrewCritDamage,
+  mergeDefenses,
   rollNotation,
+  type ActiveEffect,
   type ClientAction,
   type DamagePart,
   type ExternalRoll,
@@ -40,6 +43,8 @@ interface AttackParams {
   attackNotation: string;
   damageParts: DamagePart[];
   targetTokenId: string;
+  attackerSheetId?: string;
+  attackerTokenId?: string;
 }
 
 interface StoreState {
@@ -59,7 +64,16 @@ interface StoreState {
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
   /** Roll damage parts and subtract the (post-defence) total from a target's HP. */
-  damageRoll: (label: string, damageParts: DamagePart[], targetTokenId: string) => Promise<void>;
+  damageRoll: (
+    label: string,
+    damageParts: DamagePart[],
+    targetTokenId: string,
+    attacker?: { sheetId?: string; tokenId?: string },
+  ) => Promise<void>;
+  /** Put a spell/feature effect on a target token (condition, rider, save). */
+  applyEffect: (targetTokenId: string, effect: ActiveEffect) => void;
+  removeEffect: (tokenId: string, effectId: string) => void;
+  clearConcentration: (tokenId: string) => void;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
     name: string,
@@ -170,7 +184,7 @@ export const useStore = create<StoreState>((set, get) => {
 
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
 
-    damageRoll: async (label, damageParts, targetTokenId) => {
+    damageRoll: async (label, damageParts, targetTokenId, attacker) => {
       let external: number[] | undefined;
       if (dddiceActive()) {
         external = [];
@@ -179,7 +193,15 @@ export const useStore = create<StoreState>((set, get) => {
           external.push(ext ? ext.total : rollNotation(p.dice).total);
         }
       }
-      rawSend({ t: 'damage', label, damageParts, targetTokenId, external });
+      rawSend({
+        t: 'damage',
+        label,
+        damageParts,
+        targetTokenId,
+        external,
+        attackerSheetId: attacker?.sheetId,
+        attackerTokenId: attacker?.tokenId,
+      });
     },
 
     rollInitiativeForMe: async (name, mod, tokenId, mode = 'normal') => {
@@ -201,16 +223,37 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'roll', label, notation, private: opts?.private, external: external ?? undefined });
     },
 
-    attackRoll: async ({ label, attackNotation, damageParts, targetTokenId }) => {
+    attackRoll: async ({
+      label,
+      attackNotation,
+      damageParts,
+      targetTokenId,
+      attackerSheetId,
+      attackerTokenId,
+    }) => {
       const plain = () =>
-        rawSend({ t: 'attack', label, attackNotation, damageParts, targetTokenId });
+        rawSend({
+          t: 'attack',
+          label,
+          attackNotation,
+          damageParts,
+          targetTokenId,
+          attackerSheetId,
+          attackerTokenId,
+        });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(attackNotation);
       if (!attack) return plain();
 
-      const token = get().room?.tokens.find((tk) => tk.id === targetTokenId);
+      const room = get().room;
+      const token = room?.tokens.find((tk) => tk.id === targetTokenId);
+      const linked = room?.sheets.find((s) => s.tokenId === targetTokenId);
       const ac = (token?.armorClass ?? 10) + coverAcBonus(token?.cover);
-      const critImmune = token?.defenses?.critImmune ?? false;
+      const def = mergeDefenses(
+        token?.defenses,
+        linked ? derivedDefenses(linked) : undefined,
+      );
+      const critImmune = def?.critImmune ?? false;
       const nat20 = attack.d20Natural === 20;
       const fumble = attack.d20Natural === 1;
       const effectiveCrit = nat20 && !critImmune;
@@ -230,9 +273,16 @@ export const useStore = create<StoreState>((set, get) => {
         attackNotation,
         damageParts,
         targetTokenId,
+        attackerSheetId,
+        attackerTokenId,
         external: { attack, crit: effectiveCrit, partTotals },
       });
     },
+
+    applyEffect: (targetTokenId, effect) =>
+      rawSend({ t: 'applyEffect', targetTokenId, effect }),
+    removeEffect: (tokenId, effectId) => rawSend({ t: 'removeEffect', tokenId, effectId }),
+    clearConcentration: (tokenId) => rawSend({ t: 'clearConcentration', tokenId }),
 
     me: () => {
       const { room, participantId } = get();

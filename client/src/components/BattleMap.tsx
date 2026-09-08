@@ -2,10 +2,15 @@ import { useRef, useState } from 'react';
 import {
   ABILITIES,
   abilityMod,
+  CONDITION_VI,
+  CONDITIONS,
   d20Check,
   fmtMod,
+  RIDER_PRESETS,
   statblockDamageParts,
   tokenSaveBonus,
+  type ActiveEffect,
+  type ConditionType,
   type CoverLevel,
   type Token,
   type TokenSize,
@@ -269,6 +274,20 @@ export function BattleMap() {
                       {t.cover === 'total' ? '🛡!' : t.cover === 'half' ? '🛡½' : '🛡¾'}
                     </span>
                   )}
+                  {(t.effects?.length || t.concentration) && (
+                    <span
+                      className="tk-effects"
+                      title={[
+                        t.concentration ? `🧠 ${t.concentration.name}` : '',
+                        ...(t.effects ?? []).map((e) => e.name),
+                      ]
+                        .filter(Boolean)
+                        .join(', ')}
+                    >
+                      {t.concentration ? '🧠' : ''}
+                      {t.effects?.length ? `✦${t.effects.length}` : ''}
+                    </span>
+                  )}
                   {typeof t.currentHp === 'number' && typeof t.maxHp === 'number' && (
                     <div className="tk-hpbar">
                       <div
@@ -355,6 +374,104 @@ function MapToolbar() {
         Lưới
       </label>
     </div>
+  );
+}
+
+/** Active-effects editor on a token: conditions, spell riders, concentration. */
+function EffectsPanel({ token }: { token: Token }) {
+  const applyEffect = useStore((s) => s.applyEffect);
+  const removeEffect = useStore((s) => s.removeEffect);
+  const clearConcentration = useStore((s) => s.clearConcentration);
+  const [cond, setCond] = useState<ConditionType | ''>('');
+  const [name, setName] = useState('');
+  const effects = token.effects ?? [];
+
+  function add(e: Partial<ActiveEffect> & { name: string }) {
+    applyEffect(token.id, {
+      id: '',
+      sourceTokenId: undefined,
+      ...e,
+    } as ActiveEffect);
+    setName('');
+    setCond('');
+  }
+
+  return (
+    <details className="def-details" open={effects.length > 0 || !!token.concentration}>
+      <summary>
+        Hiệu ứng {effects.length > 0 ? `(${effects.length})` : ''}
+        {token.concentration ? ' · 🧠' : ''}
+      </summary>
+
+      {token.concentration && (
+        <p className="hint">
+          Đang tập trung: <strong>{token.concentration.name}</strong>{' '}
+          <button className="link" onClick={() => clearConcentration(token.id)}>
+            hủy
+          </button>
+        </p>
+      )}
+
+      <div className="eff-list">
+        {effects.map((e) => (
+          <span key={e.id} className="eff-chip">
+            {e.name}
+            {e.condition ? ` · ${CONDITION_VI[e.condition]}` : ''}
+            {e.rider ? ` +${e.rider.dice} ${e.rider.type}` : ''}
+            {e.concentration ? ' 🧠' : ''}
+            {e.save ? ` · save ${e.save.ability.toUpperCase()} DC${e.save.dc}` : ''}
+            <button className="link" onClick={() => removeEffect(token.id, e.id)}>
+              ✕
+            </button>
+          </span>
+        ))}
+      </div>
+
+      <div className="eff-add">
+        <select
+          value=""
+          onChange={(e) => {
+            const p = RIDER_PRESETS.find((x) => x.name === e.target.value);
+            if (p) add({ name: p.name, rider: p.rider, concentration: p.concentration });
+          }}
+        >
+          <option value="">+ chiêu có sẵn…</option>
+          {RIDER_PRESETS.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name} ({p.rider.dice})
+            </option>
+          ))}
+        </select>
+        <select value={cond} onChange={(e) => setCond(e.target.value as ConditionType | '')}>
+          <option value="">+ trạng thái…</option>
+          {CONDITIONS.map((c) => (
+            <option key={c} value={c}>
+              {CONDITION_VI[c]}
+            </option>
+          ))}
+        </select>
+        {cond && (
+          <button
+            className="link"
+            onClick={() => add({ name: CONDITION_VI[cond], condition: cond })}
+          >
+            thêm {CONDITION_VI[cond]}
+          </button>
+        )}
+        <span className="eff-custom">
+          <input
+            placeholder="hiệu ứng tự đặt"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          {name.trim() && (
+            <button className="link" onClick={() => add({ name: name.trim() })}>
+              thêm
+            </button>
+          )}
+        </span>
+      </div>
+    </details>
   );
 }
 
@@ -538,6 +655,8 @@ function TokenInspector({
         />
       </details>
 
+      <EffectsPanel token={token} />
+
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
           {sb.meta && <div className="sb-meta">{sb.meta}</div>}
@@ -633,6 +752,7 @@ function TokenInspector({
                         attackNotation: sbd20(a.attackBonus!),
                         damageParts: parts,
                         targetTokenId: sbTargetId,
+                        attackerTokenId: token.id,
                       })
                     }
                   >
@@ -652,7 +772,9 @@ function TokenInspector({
                     className="roll-btn"
                     onClick={() =>
                       sbTargetId
-                        ? damageRoll(`${base} → ${sbTargetName}`, parts, sbTargetId)
+                        ? damageRoll(`${base} → ${sbTargetName}`, parts, sbTargetId, {
+                            tokenId: token.id,
+                          })
                         : rollDice(`${base} (dmg)`, combined)
                     }
                   >
@@ -717,6 +839,7 @@ function TokenInspector({
               attackNotation: `1d20+${Number(atkBonus) || 0}`,
               damageParts: [{ dice: dmg, type: dmgType ?? '' }],
               targetTokenId: token.id,
+              attackerTokenId: attackerId || undefined,
             })
           }
         >
