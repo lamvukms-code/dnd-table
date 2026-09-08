@@ -6,6 +6,7 @@ import {
   applyLongRest,
   applyShortRest,
   applySpellProgression,
+  barbarianLevel,
   carriedWeight,
   casterTypeOf,
   combineRollModes,
@@ -21,8 +22,11 @@ import {
   derivedDefenses,
   emptyCurrency,
   mergeDefenses,
+  rageDamageBonus,
+  rageMax,
   resolveDamageParts,
   skillBonus,
+  sneakAttackDice,
   spellAttackBonus,
   spellSaveDc,
   statblockInitiativeMod,
@@ -30,6 +34,7 @@ import {
   tokenSaveBonus,
   tokenStatblockFrom,
 } from './rules.js';
+import { derivedClassFeatures } from './classFeatures.js';
 import { emptyDefenses } from './types.js';
 import type { CharacterSheet, InventoryItem, Statblock } from './types.js';
 
@@ -353,6 +358,62 @@ describe('spell-slot progression (5e 2024)', () => {
     const out = applySpellProgression(s);
     expect(out.spellSlots.map((x) => x.max)).toEqual([4, 3, 2]);
     expect(out.spellSlots.find((x) => x.level === 1)!.used).toBe(3);
+  });
+});
+
+describe('class features (Rogue / Barbarian)', () => {
+  it('derivedClassFeatures returns only earned features', () => {
+    const r3 = derivedClassFeatures(sheet({ className: 'Rogue', level: 3 }));
+    expect(r3.some((f) => f.id === 'rogue-sneak-attack')).toBe(true);
+    expect(r3.some((f) => f.id === 'rogue-cunning-action')).toBe(true);
+    expect(r3.some((f) => f.id === 'rogue-uncanny-dodge')).toBe(false); // level 5
+    expect(derivedClassFeatures(sheet({ className: 'Fighter', level: 10 }))).toHaveLength(0);
+  });
+
+  it('sneak attack dice = ceil(rogue level / 2)', () => {
+    expect(sneakAttackDice(sheet({ className: 'Rogue', level: 1 }))).toBe(1);
+    expect(sneakAttackDice(sheet({ className: 'Rogue', level: 5 }))).toBe(3);
+    expect(sneakAttackDice(sheet({ className: 'Rogue', level: 20 }))).toBe(10);
+    expect(sneakAttackDice(sheet({ className: 'Wizard', level: 20 }))).toBe(0);
+  });
+
+  it('rage bonus +2 / +3 at 9 / +4 at 16; uses 2..6', () => {
+    expect(rageDamageBonus(sheet({ className: 'Barbarian', level: 8 }))).toBe(2);
+    expect(rageDamageBonus(sheet({ className: 'Barbarian', level: 9 }))).toBe(3);
+    expect(rageDamageBonus(sheet({ className: 'Barbarian', level: 16 }))).toBe(4);
+    expect(rageMax(sheet({ className: 'Barbarian', level: 1 }))).toBe(2);
+    expect(rageMax(sheet({ className: 'Barbarian', level: 6 }))).toBe(4);
+    expect(rageMax(sheet({ className: 'Barbarian', level: 17 }))).toBe(6);
+    expect(barbarianLevel(sheet({ classes: [{ name: 'Barbarian', level: 4 }, { name: 'Fighter', level: 2 }] }))).toBe(4);
+  });
+
+  it('actionDamageParts adds Rage flat dmg while raging on a weapon attack', () => {
+    const s = sheet({ className: 'Barbarian', level: 9, raging: true });
+    const atk = { id: 'w', name: 'Greataxe', actionType: 'action' as const, attackBonus: 7, damage: '1d12+4', damageType: 'slashing', source: 'weapon' as const };
+    const parts = actionDamageParts(s, atk);
+    expect(parts).toContainEqual({ dice: '3', type: 'slashing', label: 'Rage' });
+    // not raging -> no rage part
+    expect(actionDamageParts({ ...s, raging: false }, atk).some((p) => p.label === 'Rage')).toBe(false);
+  });
+
+  it('actionDamageParts adds Sneak Attack dice when armed', () => {
+    const s = sheet({ className: 'Rogue', level: 5, sneakAttackArmed: true });
+    const atk = { id: 'w', name: 'Dagger', actionType: 'action' as const, attackBonus: 6, damage: '1d4+3', damageType: 'piercing', source: 'weapon' as const };
+    expect(actionDamageParts(s, atk)).toContainEqual({ dice: '3d6', type: 'piercing', label: 'Sneak Attack' });
+  });
+
+  it('derivedDefenses grants b/p/s resistance while raging', () => {
+    const raging = derivedDefenses(sheet({ className: 'Barbarian', level: 5, raging: true }))!;
+    expect(raging.resistances.sort()).toEqual(['bludgeoning', 'piercing', 'slashing']);
+    expect(derivedDefenses(sheet({ className: 'Barbarian', level: 5, raging: false }))).toBeUndefined();
+  });
+
+  it('rests: short rest recovers one rage, long rest resets rage + raging', () => {
+    const s = sheet({ className: 'Barbarian', level: 5, rageUsed: 3, raging: true });
+    expect(applyShortRest(s).rageUsed).toBe(2);
+    const long = applyLongRest(s);
+    expect(long.rageUsed).toBe(0);
+    expect(long.raging).toBe(false);
   });
 });
 

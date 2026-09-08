@@ -6,6 +6,32 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-09-08
+
+### Added
+
+- **Class features — Rogue & Barbarian** (base class; subclasses later). A
+  `CLASS_FEATURES` table (levels 1–20, mechanics paraphrased from SRD 5.2,
+  CC-BY-4.0) drives a **"Class features" section** on the character sheet that
+  fills itself in from the character's class + level — no manual entry.
+- **Semi-automatic mechanics:**
+  - **Rogue — Sneak Attack.** A toggle arms `+⌈level/2⌉d6` for the next attack;
+    `actionDamageParts` adds it to that weapon attack's damage, then the sheet
+    disarms it. Cunning Action is surfaced as a reminder.
+  - **Barbarian — Rage.** Toggle on the sheet, with a Rage-charge pip tracker
+    (max 2–6 by level; a short rest recovers one, a long rest all). While
+    raging: rage damage (+2 / +3 at 9 / +4 at 16) is added to weapon attacks
+    automatically, and `derivedDefenses` grants resistance to bludgeoning /
+    piercing / slashing (so the barbarian's token takes half from those).
+    Rage never auto-ends — the player toggles it off.
+
+### Changed
+
+- `CharacterSheet` gains `raging?`, `rageUsed?`, `sneakAttackArmed?`. Shared:
+  `classFeatures.ts` (`CLASS_FEATURES`, `derivedClassFeatures`), `classLevelOf`,
+  `rogueLevel`, `barbarianLevel`, `sneakAttackDice`, `rageDamageBonus`,
+  `rageMax` (+ tests, 74 total). No protocol/schema change.
+
 ## [0.18.0] - 2026-09-08
 
 ### Added
@@ -541,7 +567,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...v0.16.0

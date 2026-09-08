@@ -7,8 +7,10 @@ import {
   allActions,
   applyLongRest,
   applyShortRest,
+  barbarianLevel,
   computeArmorClass,
   d20Check,
+  derivedClassFeatures,
   emptyCurrency,
   fmtMod,
   initiativeBonus,
@@ -17,10 +19,14 @@ import {
   CONDITION_VI,
   CONDITIONS,
   proficiencyByLevel,
+  rageDamageBonus,
+  rageMax,
   RIDER_PRESETS,
+  rogueLevel,
   saveBonus,
   sheetClasses,
   skillBonus,
+  sneakAttackDice,
   spellAttackBonus,
   spellcastingAbilityOf,
   spellSaveDc,
@@ -557,6 +563,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
         </div>
       </div>
 
+      <ClassFeatures draft={draft} commit={commit} />
+
       {/* actions economy */}
       <div className="bt-actions">
         <div className="bta-head">
@@ -644,6 +652,9 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   rollDice={rollDice}
                   attackRoll={attackRoll}
                   damageRoll={damageRoll}
+                  onFired={() =>
+                    draft.sneakAttackArmed && commit({ ...draft, sneakAttackArmed: false })
+                  }
                   onDelete={
                     a.source === 'weapon'
                       ? undefined
@@ -688,6 +699,7 @@ function ActionRow({
   rollDice,
   attackRoll,
   damageRoll,
+  onFired,
   onDelete,
 }: {
   action: SheetAction;
@@ -714,6 +726,7 @@ function ActionRow({
     targetTokenId: string,
     attacker?: { sheetId?: string; tokenId?: string },
   ) => Promise<void>;
+  onFired?: () => void;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
@@ -739,8 +752,8 @@ function ActionRow({
       {isAttack && targetId && (
         <button
           className="roll-btn strong"
-          onClick={() =>
-            attackRoll({
+          onClick={() => {
+            void attackRoll({
               label: `${base} → ${targetName}`,
               attackBonus: action.attackBonus!,
               rollMode,
@@ -748,8 +761,9 @@ function ActionRow({
               targetTokenId: targetId,
               attackerSheetId: attacker.sheetId,
               attackerTokenId: attacker.tokenId,
-            })
-          }
+            });
+            onFired?.();
+          }}
         >
           ⚔ {targetName}
         </button>
@@ -765,11 +779,11 @@ function ActionRow({
       {parts.length > 0 && (
         <button
           className="roll-btn"
-          onClick={() =>
-            targetId
-              ? damageRoll(`${base} → ${targetName}`, parts, targetId, attacker)
-              : rollDice(`${base} (sát thương)`, combinedDamage)
-          }
+          onClick={() => {
+            if (targetId) void damageRoll(`${base} → ${targetName}`, parts, targetId, attacker);
+            else void rollDice(`${base} (sát thương)`, combinedDamage);
+            onFired?.();
+          }}
         >
           {targetId ? 'sát thương' : 'dmg'}
         </button>
@@ -992,6 +1006,89 @@ function Resources({ draft, commit }: EditorCtx) {
         </button>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------ Class features */
+
+function ClassFeatures({ draft, commit }: EditorCtx) {
+  const feats = derivedClassFeatures(draft);
+  if (feats.length === 0) return null;
+  const rl = rogueLevel(draft);
+  const bl = barbarianLevel(draft);
+  const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
+
+  const sneakDice = sneakAttackDice(draft);
+  const rMax = rageMax(draft);
+  const rUsed = Math.min(draft.rageUsed ?? 0, rMax);
+  const rBonus = rageDamageBonus(draft);
+
+  function toggleRage() {
+    if (draft.raging) return set({ raging: false });
+    set(rUsed < rMax ? { raging: true, rageUsed: rUsed + 1 } : { raging: true });
+  }
+
+  return (
+    <details className="class-features" open>
+      <summary>
+        Class features
+        {rl > 0 && <em> · Rogue {rl}</em>}
+        {bl > 0 && <em> · Barbarian {bl}</em>}
+      </summary>
+
+      {bl > 0 && (
+        <div className="cf-auto">
+          <button className={`cf-btn ${draft.raging ? 'on' : ''}`} onClick={toggleRage}>
+            🔥{' '}
+            {draft.raging
+              ? `Đang Rage — +${rBonus} dmg cận chiến · kháng đâm/chém/đập · lợi thế STR`
+              : 'Vào Rage'}
+          </button>
+          <span className="cf-pips">
+            Rage charge:
+            {Array.from({ length: rMax }).map((_, i) => (
+              <button
+                key={i}
+                className={`cf-pip ${i < rUsed ? 'used' : ''}`}
+                title="Dùng / hồi charge"
+                onClick={() => set({ rageUsed: i < rUsed ? i : i + 1 })}
+              >
+                ●
+              </button>
+            ))}
+            <em>
+              {rMax - rUsed}/{rMax}
+            </em>
+          </span>
+        </div>
+      )}
+
+      {rl > 0 && (
+        <div className="cf-auto">
+          <button
+            className={`cf-btn ${draft.sneakAttackArmed ? 'on' : ''}`}
+            onClick={() => set({ sneakAttackArmed: !draft.sneakAttackArmed })}
+          >
+            ⚔ Sneak Attack {draft.sneakAttackArmed ? `— SẴN SÀNG (+${sneakDice}d6)` : `(+${sneakDice}d6)`}
+          </button>
+          <span className="hint">
+            Gạt trước khi tung đòn finesse/tầm xa; tự cộng vào damage rồi tự tắt. Cunning Action:
+            Bonus Action Dash / Disengage / Hide.
+          </span>
+        </div>
+      )}
+
+      <div className="cf-list">
+        {feats.map((f) => (
+          <div key={f.id} className="cf-row">
+            <span className="cf-lvl">L{f.level}</span>
+            <span className="cf-body">
+              <strong>{f.name}.</strong> {f.description}
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

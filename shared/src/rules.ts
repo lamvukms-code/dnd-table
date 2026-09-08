@@ -124,6 +124,9 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
 
   const isAttack = typeof action.attackBonus === 'number';
+  const isWeapon = isAttack && (action.source === 'weapon' || action.source === 'manual' || !action.source);
+  const primaryType = action.damageType || parts[0]?.type || '';
+
   // A "weapon" rider (e.g. a magic ring) rides every weapon attack — both the
   // equipped-weapon actions and manual attack entries a player types by hand.
   // "all" riders ride any attack. (Spell attacks aren't distinguished yet — turn
@@ -131,6 +134,17 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   for (const r of sheet.damageRiders ?? []) {
     if (!r.enabled || !isAttack) continue;
     parts.push({ dice: r.dice, type: r.type, label: r.name });
+  }
+
+  // Barbarian: rage damage on a weapon attack while raging.
+  if (sheet.raging && isWeapon) {
+    const bonus = rageDamageBonus(sheet);
+    if (bonus > 0) parts.push({ dice: String(bonus), type: primaryType, label: 'Rage' });
+  }
+  // Rogue: Sneak Attack armed for this attack (the sheet disarms it after the roll).
+  if (sheet.sneakAttackArmed && isWeapon) {
+    const dice = sneakAttackDice(sheet);
+    if (dice > 0) parts.push({ dice: `${dice}d6`, type: primaryType, label: 'Sneak Attack' });
   }
   return parts;
 }
@@ -142,8 +156,14 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
  */
 export function derivedDefenses(sheet: CharacterSheet): Defenses | undefined {
   const critImmune = sheet.inventory.some((it) => it.equipped && it.grantsCritImmune);
-  if (!critImmune) return undefined;
-  return { ...emptyDefenses(), critImmune: true };
+  // Barbarian: resistance to bludgeoning / piercing / slashing while raging.
+  const raging = !!sheet.raging && barbarianLevel(sheet) > 0;
+  if (!critImmune && !raging) return undefined;
+  return {
+    ...emptyDefenses(),
+    critImmune,
+    resistances: raging ? ['bludgeoning', 'piercing', 'slashing'] : [],
+  };
 }
 
 /** Merge two optional defence blocks (b's positives win / OR in). */
@@ -214,6 +234,34 @@ export function totalLevelOf(sheet: CharacterSheet): number {
     return sheet.classes.reduce((s, c) => s + Math.max(0, c.level), 0);
   }
   return sheet.level;
+}
+
+/** Total levels in classes whose name contains `key` (case-insensitive). */
+export function classLevelOf(sheet: CharacterSheet, key: string): number {
+  const k = key.toLowerCase();
+  return sheetClasses(sheet)
+    .filter((c) => (c.name ?? '').trim().toLowerCase().includes(k))
+    .reduce((s, c) => s + Math.max(0, c.level), 0);
+}
+export const rogueLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'rogue');
+export const barbarianLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'barbarian');
+
+/** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
+export function sneakAttackDice(sheet: CharacterSheet): number {
+  const lvl = rogueLevel(sheet);
+  return lvl > 0 ? Math.ceil(lvl / 2) : 0;
+}
+/** Barbarian rage damage bonus: +2, then +3 at level 9, +4 at 16. */
+export function rageDamageBonus(sheet: CharacterSheet): number {
+  const lvl = barbarianLevel(sheet);
+  if (lvl <= 0) return 0;
+  return lvl >= 16 ? 4 : lvl >= 9 ? 3 : 2;
+}
+/** Barbarian rage uses per long rest (2024): 2 / 3 / 4 / 5 / 6. */
+export function rageMax(sheet: CharacterSheet): number {
+  const lvl = barbarianLevel(sheet);
+  if (lvl <= 0) return 0;
+  return lvl >= 17 ? 6 : lvl >= 12 ? 5 : lvl >= 6 ? 4 : lvl >= 3 ? 3 : 2;
 }
 
 /** Caster type of one class (by name + subclass). */
@@ -632,6 +680,8 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
     ...sheet,
     resources: sheet.resources.map((r) => (r.recharge === 'short' ? { ...r, used: 0 } : r)),
     pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
+    // 2024 Barbarian: regain one expended Rage on a short rest.
+    rageUsed: typeof sheet.rageUsed === 'number' ? Math.max(0, sheet.rageUsed - 1) : sheet.rageUsed,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
@@ -681,6 +731,8 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     resources: sheet.resources.map((r) => (r.recharge === 'other' ? r : { ...r, used: 0 })),
     spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })),
     pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
+    rageUsed: 0,
+    raging: false,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),

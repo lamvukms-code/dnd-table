@@ -177,6 +177,13 @@ export interface CharacterSheet {
   casterTypeOverride?: CasterType | null;
   /** Override the spellcasting ability derived from class (null = derive). */
   spellcastingAbility?: Ability | null;
+  // --- semi-automatic class-feature state ---
+  /** Barbarian: currently raging (never auto-ends — toggled by the player). */
+  raging?: boolean;
+  /** Barbarian: rage uses spent (max is derived from Barbarian level). */
+  rageUsed?: number;
+  /** Rogue: Sneak Attack "armed" for the next attack (one-shot). */
+  sneakAttackArmed?: boolean;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];
