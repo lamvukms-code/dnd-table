@@ -166,6 +166,49 @@ export async function createGuestKey(): Promise<string> {
 export async function createRoom(apiKey: string): Promise<string> {
   const { ThreeDDiceAPI } = await loadModule();
   const api = new ThreeDDiceAPI(apiKey, 'dnd-table');
-  const res = await api.room.create();
-  return (res as { data: { slug: string } }).data.slug;
+  try {
+    const res = await api.room.create();
+    return (res as { data: { slug: string } }).data.slug;
+  } catch (err) {
+    // Free / guest accounts get 402 here.
+    const msg = String((err as Error).message || err);
+    if (/402|payment|subscription/i.test(msg)) {
+      throw new Error(
+        'Tài khoản dddice free không tạo được room qua API. Hãy tạo room trên dddice.com rồi dán slug, hoặc chọn room có sẵn bên dưới.',
+      );
+    }
+    throw err;
+  }
+}
+
+const API_BASE = 'https://dddice.com/api/1.0';
+
+async function apiGet<T>(path: string, apiKey: string): Promise<T> {
+  const r = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!r.ok) throw new Error(`dddice API ${r.status}`);
+  return (await r.json()) as T;
+}
+
+export interface DddiceTheme {
+  id: string;
+  name: string;
+}
+
+/** Themes this API key is actually allowed to roll with. */
+export async function listThemes(apiKey: string): Promise<DddiceTheme[]> {
+  const json = await apiGet<{ data: { id: string; name?: string }[] }>('/dice-box', apiKey);
+  return (json.data ?? []).map((t) => ({ id: t.id, name: t.name || t.id }));
+}
+
+export interface DddiceRoom {
+  slug: string;
+  name: string;
+}
+
+/** Rooms this API key can already roll in. */
+export async function listRooms(apiKey: string): Promise<DddiceRoom[]> {
+  const json = await apiGet<{ data: { slug: string; name?: string }[] }>('/room', apiKey);
+  return (json.data ?? []).map((r) => ({ slug: r.slug, name: r.name || r.slug }));
 }

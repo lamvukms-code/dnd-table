@@ -1,6 +1,6 @@
 {
   "name": "dnd-table",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "Personal online D&D 5e (2024) virtual tabletop: dice, initiative, battle map, tokens, character sheets, LAN sync.",
   "workspaces": [

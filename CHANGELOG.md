@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-08
+
+### Added
+
+- Settings reads back what a dddice API key can actually use: a **theme
+  dropdown** (from the key's `dice-box`) and a **"Room có sẵn"** dropdown (from
+  the key's rooms), so a free/guest key works without guessing slugs.
+- `createRoom` now reports the `402` from free accounts with a clear message
+  (create the room on dddice.com and paste the slug, or pick an existing one)
+  instead of a raw error.
+
+### Notes
+
+- Verified end-to-end with a real guest key: 3D dice render on the battle map
+  and results feed the shared log. Free/guest keys **cannot** create rooms via
+  the API and **cannot** use the `dddice-standard` theme — hence the pickers.
+
 ## [0.5.0] - 2026-09-08
 
 ### Changed
@@ -158,7 +175,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.2.0...v0.3.0

@@ -72,10 +72,15 @@ npm start          # server phục vụ luôn client tại http://<IP>:8787
 
 1. Mở **Cài đặt** (nút ⚙ góc phải).
 2. Mỗi người dán **API key dddice** của mình (lấy trong tài khoản dddice), hoặc
-   bấm **Tạo guest key** nếu không có tài khoản. Key chỉ lưu trên máy đó.
-3. DM bấm **Tạo room dddice mới** (hoặc dán sẵn một room slug) rồi bật **dddice**.
-4. Xong — mọi nút tung xúc xắc giờ ra dice 3D trên battle map. Tắt dddice thì
-   quay lại xúc xắc của server.
+   bấm **Tạo guest key**. Key chỉ lưu trên máy đó.
+3. Chọn **Theme** từ danh sách (app tự lấy theme mà key của bạn được phép dùng).
+4. DM chọn một **Room có sẵn** trong danh sách, hoặc bấm **Tạo room dddice mới**
+   (chỉ tài khoản trả phí), hoặc dán một room slug tạo sẵn trên dddice.com.
+5. Bật **dddice**. Mọi nút tung xúc xắc giờ ra dice 3D trên battle map. Tắt
+   dddice thì quay lại xúc xắc của server.
+
+Lưu ý tài khoản **free/guest**: không tạo được room qua API và không dùng được
+theme mặc định `dddice-standard` — dùng đúng 2 danh sách trong Cài đặt.
 
 API key không bao giờ được gửi lên server của app hay lưu trong phòng; chỉ room
 slug được chia sẻ.

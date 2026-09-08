@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import {
   createGuestKey,
   createRoom,
   getLocalThemeOverride,
+  listRooms,
+  listThemes,
   setLocalThemeOverride,
+  type DddiceRoom,
+  type DddiceTheme,
 } from '../dddice.js';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -24,6 +28,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [themeInput, setThemeInput] = useState(getLocalThemeOverride() ?? dddice.theme ?? '');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [themes, setThemes] = useState<DddiceTheme[] | null>(null);
+  const [rooms, setRooms] = useState<DddiceRoom[] | null>(null);
+
+  // When a key is present, load which themes/rooms it can actually use.
+  useEffect(() => {
+    const key = dddiceKey?.trim();
+    if (!key) {
+      setThemes(null);
+      setRooms(null);
+      return;
+    }
+    let cancelled = false;
+    listThemes(key)
+      .then((t) => !cancelled && setThemes(t))
+      .catch(() => !cancelled && setThemes([]));
+    listRooms(key)
+      .then((r) => !cancelled && setRooms(r))
+      .catch(() => !cancelled && setRooms([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [dddiceKey]);
 
   function patchDddice(patch: Record<string, unknown>) {
     send({ t: 'updateDddice', patch });
@@ -145,11 +171,31 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <input
               value={slugInput}
               disabled={!isDm}
-              placeholder="ví dụ: happy-blue-dragon"
+              placeholder="ví dụ: A7KBxHz"
               onChange={(e) => setSlugInput(e.target.value)}
               onBlur={() => isDm && patchDddice({ roomSlug: slugInput.trim() || undefined })}
             />
           </label>
+          {isDm && rooms && rooms.length > 0 && (
+            <label>
+              Room có sẵn của key này
+              <select
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  setSlugInput(e.target.value);
+                  patchDddice({ roomSlug: e.target.value });
+                }}
+              >
+                <option value="">— chọn —</option>
+                {rooms.map((r) => (
+                  <option key={r.slug} value={r.slug}>
+                    {r.name} ({r.slug})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {isDm && (
             <button disabled={busy === 'room'} onClick={makeRoom}>
               {busy === 'room' ? 'Đang tạo…' : 'Tạo room dddice mới'}
@@ -158,20 +204,40 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
           <label>
             Theme xúc xắc
-            <input
-              value={themeInput}
-              placeholder="dddice-standard"
-              onChange={(e) => setThemeInput(e.target.value)}
-              onBlur={() => {
-                const v = themeInput.trim();
-                setLocalThemeOverride(v || null);
-                if (isDm && v) patchDddice({ theme: v });
-              }}
-            />
+            {themes && themes.length > 0 ? (
+              <select
+                value={themeInput}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setThemeInput(v);
+                  setLocalThemeOverride(v || null);
+                  if (isDm && v) patchDddice({ theme: v });
+                }}
+              >
+                <option value="">— mặc định —</option>
+                {themes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={themeInput}
+                placeholder="theme slug"
+                onChange={(e) => setThemeInput(e.target.value)}
+                onBlur={() => {
+                  const v = themeInput.trim();
+                  setLocalThemeOverride(v || null);
+                  if (isDm && v) patchDddice({ theme: v });
+                }}
+              />
+            )}
           </label>
           <p className="hint">
-            Nhập theme mặc định của phòng (DM) hoặc ghi đè riêng cho bạn. Lấy slug theme
-            trong tài khoản dddice của bạn.
+            {themes && themes.length === 0
+              ? 'Không lấy được danh sách theme — nhập slug thủ công. Tài khoản free không dùng được theme “dddice-standard”.'
+              : 'Chọn theme mà API key của bạn được phép dùng.'}
           </p>
 
           {note && <p className="note">{note}</p>}
