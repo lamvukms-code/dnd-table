@@ -6,6 +6,37 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-08
+
+### Added
+
+- **Role-based permissions.** The first person to join a room (its creator)
+  becomes the **DM**; everyone after joins as a **player**. The client can no
+  longer self-assign a role — the server decides, and always keeps at least one
+  DM. Players see and edit only the character sheets they created; the DM sees
+  all. A new **Người trong phòng** panel in Settings lets the DM promote/demote
+  participants (`setRole` action).
+- **Attack a target straight from the character sheet.** The Chiến đấu section
+  has a **Mục tiêu** picker. With a target chosen, each attack shows **⚔ đánh
+  <target>** (full flow: to-hit vs AC → damage on hit → HP) and **sát thương**
+  (roll the damage formula and subtract it from the target's HP). New `damage`
+  action; damage-to-target is shown in the roll log as “→ <target>: −N HP”.
+- **Live dice-formula understanding.** `normalizeNotation` (trims, drops spaces,
+  fixes `d20`→`1d20`, `–`→`-`), `parseTerms` (structured parse, Vietnamese
+  errors), `rollStats` (exact min/max, average — advantage/disadvantage
+  computed exactly), and `describeNotation`. A `FormulaHint` under damage fields
+  shows e.g. `2d6+8 · 10–20 (tb 15)` or flags an invalid formula as you type.
+  So a player who writes “2d6 + 8” for a greatsword gets exactly `2d6+8` rolled
+  on dddice and subtracted from the target. Convention: **xdy** = x dice of y
+  faces. 15 more shared tests.
+
+### Changed
+
+- `rollNotation` now normalises input and shares one parser with `rollStats`.
+- Protocol v3: `join.role` is an ignored hint; new `setRole` and `damage`
+  actions; `RollLogEntry.damage?` added (additive, no room-schema bump).
+- Join screen drops the role dropdown.
+
 ## [0.3.0] - 2026-09-08
 
 ### Added
@@ -88,7 +119,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lamvukms-code/dnd-table/releases/tag/v0.1.0

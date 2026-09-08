@@ -1,11 +1,21 @@
 // Dice notation parser + roller for D&D 5e (2024).
-// Supports: "1d20", "2d6+3", "4d6kh3", "2d20kl1", "1d8+1d6+2", "d%".
-// Whitespace-insensitive, case-insensitive.
+// Convention: "xdy" = x dice with y faces. Supports "1d20", "2d6+8", "4d6kh3",
+// "2d20kl1", "1d8+1d6+2", "d%". Whitespace-insensitive, case-insensitive.
 
 export interface DieRoll {
   sides: number;
   value: number;
   kept: boolean;
+}
+
+export interface ParsedTerm {
+  raw: string;
+  sign: 1 | -1;
+  kind: 'dice' | 'flat';
+  count?: number; // x in xdy
+  sides?: number; // y in xdy
+  keep?: { mode: 'kh' | 'kl'; n: number };
+  flat?: number;
 }
 
 export interface TermResult {
@@ -38,10 +48,25 @@ function rollDie(sides: number, rng: Rng): number {
 const TERM_RE = /^([+-]?)(\d*)d(\d+|%)(kh|kl)?(\d+)?$/i;
 const FLAT_RE = /^([+-]?)(\d+)$/;
 
+/**
+ * Clean up whatever a player typed into a canonical form the parser accepts:
+ * trims, drops all whitespace, lowercases, and fills in an implied leading "1"
+ * ("d20" -> "1d20", "1d8+d4" -> "1d8+1d4").
+ */
+export function normalizeNotation(input: string): string {
+  const clean = String(input ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/[×✕✖]/g, '') // stray multiplication glyphs
+    .replace(/–|—/g, '-'); // en/em dash -> minus
+  return clean.replace(/(^|[+-])d(\d)/g, (_m, lead: string, d: string) => `${lead}1d${d}`);
+}
+
 /** Split "2d6+3-1d4" into ["2d6", "+3", "-1d4"] keeping leading signs. */
 function tokenize(notation: string): string[] {
-  const clean = notation.replace(/\s+/g, '');
-  if (!clean) throw new Error('Empty dice notation');
+  const clean = normalizeNotation(notation);
+  if (!clean) throw new Error('Công thức xúc xắc trống');
   const parts: string[] = [];
   let current = '';
   for (let i = 0; i < clean.length; i++) {
@@ -57,58 +82,133 @@ function tokenize(notation: string): string[] {
   return parts;
 }
 
-export function rollNotation(notation: string, rng: Rng = defaultRng): RollResult {
-  const tokens = tokenize(notation);
-  const terms: TermResult[] = [];
-
-  for (const token of tokens) {
-    const diceMatch = token.match(TERM_RE);
-    if (diceMatch) {
-      const sign: 1 | -1 = diceMatch[1] === '-' ? -1 : 1;
-      const count = diceMatch[2] === '' ? 1 : parseInt(diceMatch[2], 10);
-      const sides = diceMatch[3] === '%' ? 100 : parseInt(diceMatch[3], 10);
-      if (count < 1 || count > 100) throw new Error(`Invalid dice count in "${token}"`);
-      if (sides < 2 || sides > 1000) throw new Error(`Invalid die size in "${token}"`);
-
-      const keepMode = diceMatch[4]?.toLowerCase() as 'kh' | 'kl' | undefined;
-      const keepN = diceMatch[5] ? parseInt(diceMatch[5], 10) : undefined;
-
-      const values = Array.from({ length: count }, () => rollDie(sides, rng));
-      const rolls: DieRoll[] = values.map((v) => ({ sides, value: v, kept: true }));
-
-      if (keepMode) {
-        const n = Math.min(keepN ?? count, count);
-        const order = rolls
-          .map((r, idx) => ({ idx, value: r.value }))
-          .sort((a, b) => (keepMode === 'kh' ? b.value - a.value : a.value - b.value));
-        order.forEach((o, rank) => {
-          rolls[o.idx].kept = rank < n;
-        });
-      }
-
-      const subtotal = rolls.reduce((sum, r) => (r.kept ? sum + r.value : sum), 0);
-      terms.push({
+/**
+ * Parse a dice formula into structured terms WITHOUT rolling. Throws with a
+ * human-readable (Vietnamese) message on anything it cannot understand.
+ */
+export function parseTerms(notation: string): ParsedTerm[] {
+  return tokenize(notation).map((token) => {
+    const dice = token.match(TERM_RE);
+    if (dice) {
+      const sign: 1 | -1 = dice[1] === '-' ? -1 : 1;
+      const count = dice[2] === '' ? 1 : parseInt(dice[2], 10);
+      const sides = dice[3] === '%' ? 100 : parseInt(dice[3], 10);
+      if (count < 1 || count > 100) throw new Error(`Số lượng xúc xắc không hợp lệ ở "${token}"`);
+      if (sides < 2 || sides > 1000) throw new Error(`Số mặt xúc xắc không hợp lệ ở "${token}"`);
+      const keepMode = dice[4]?.toLowerCase() as 'kh' | 'kl' | undefined;
+      const keepN = dice[5] ? parseInt(dice[5], 10) : undefined;
+      return {
         raw: token,
+        sign,
         kind: 'dice',
         count,
         sides,
         keep: keepMode ? { mode: keepMode, n: Math.min(keepN ?? count, count) } : undefined,
-        rolls,
-        subtotal,
-        sign,
+      };
+    }
+    const flat = token.match(FLAT_RE);
+    if (flat) {
+      return { raw: token, sign: flat[1] === '-' ? -1 : 1, kind: 'flat', flat: parseInt(flat[2], 10) };
+    }
+    throw new Error(`Không hiểu phần "${token}" (dùng dạng xdy, ví dụ 2d6+8)`);
+  });
+}
+
+export interface NotationInfo {
+  valid: boolean;
+  canonical: string;
+  min?: number;
+  max?: number;
+  average?: number;
+  error?: string;
+}
+
+function expectedExtreme(n: number, m: number, mode: 'kh' | 'kl'): number {
+  let e = 0;
+  for (let k = 1; k <= m; k++) {
+    if (mode === 'kh') {
+      e += k * (Math.pow(k / m, n) - Math.pow((k - 1) / m, n));
+    } else {
+      e += k * (Math.pow((m - k + 1) / m, n) - Math.pow((m - k) / m, n));
+    }
+  }
+  return e;
+}
+
+/** Min / max / average of a formula without rolling. Throws like parseTerms. */
+export function rollStats(notation: string): { min: number; max: number; average: number } {
+  let min = 0;
+  let max = 0;
+  let average = 0;
+  for (const t of parseTerms(notation)) {
+    if (t.kind === 'flat') {
+      const v = t.sign * t.flat!;
+      min += v;
+      max += v;
+      average += v;
+      continue;
+    }
+    const n = t.count!;
+    const m = t.sides!;
+    const kept = t.keep ? t.keep.n : n;
+    min += t.sign * kept * 1;
+    max += t.sign * kept * m;
+    if (t.keep && t.keep.n === 1) {
+      average += t.sign * expectedExtreme(n, m, t.keep.mode);
+    } else {
+      average += t.sign * kept * ((m + 1) / 2);
+    }
+  }
+  return { min, max, average: Math.round(average * 100) / 100 };
+}
+
+/** Validate + summarise a formula for showing feedback while a player types. */
+export function describeNotation(input: string): NotationInfo {
+  const canonical = normalizeNotation(input);
+  if (!canonical) return { valid: false, canonical, error: 'trống' };
+  try {
+    return { valid: true, canonical, ...rollStats(canonical) };
+  } catch (err) {
+    return { valid: false, canonical, error: (err as Error).message };
+  }
+}
+
+export function rollNotation(notation: string, rng: Rng = defaultRng): RollResult {
+  const parsed = parseTerms(notation);
+  const terms: TermResult[] = [];
+
+  for (const term of parsed) {
+    if (term.kind === 'flat') {
+      terms.push({ raw: term.raw, kind: 'flat', subtotal: term.flat!, sign: term.sign });
+      continue;
+    }
+
+    const count = term.count!;
+    const sides = term.sides!;
+    const values = Array.from({ length: count }, () => rollDie(sides, rng));
+    const rolls: DieRoll[] = values.map((v) => ({ sides, value: v, kept: true }));
+
+    if (term.keep) {
+      const n = term.keep.n;
+      const order = rolls
+        .map((r, idx) => ({ idx, value: r.value }))
+        .sort((a, b) => (term.keep!.mode === 'kh' ? b.value - a.value : a.value - b.value));
+      order.forEach((o, rank) => {
+        rolls[o.idx].kept = rank < n;
       });
-      continue;
     }
 
-    const flatMatch = token.match(FLAT_RE);
-    if (flatMatch) {
-      const sign: 1 | -1 = flatMatch[1] === '-' ? -1 : 1;
-      const subtotal = parseInt(flatMatch[2], 10);
-      terms.push({ raw: token, kind: 'flat', subtotal, sign });
-      continue;
-    }
-
-    throw new Error(`Cannot parse dice term "${token}"`);
+    const subtotal = rolls.reduce((sum, r) => (r.kept ? sum + r.value : sum), 0);
+    terms.push({
+      raw: term.raw,
+      kind: 'dice',
+      count,
+      sides,
+      keep: term.keep,
+      rolls,
+      subtotal,
+      sign: term.sign,
+    });
   }
 
   const total = terms.reduce((sum, t) => sum + t.sign * t.subtotal, 0);

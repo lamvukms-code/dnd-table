@@ -11,6 +11,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const isDm = useStore((s) => s.isDm());
   const send = useStore((s) => s.send);
   const dddice = useStore((s) => s.room!.dddice);
+  const participants = useStore((s) => s.room!.participants);
+  const meId = useStore((s) => s.participantId);
+  const setRole = useStore((s) => s.setRole);
   const dddiceKey = useStore((s) => s.dddiceKey);
   const setDddiceKey = useStore((s) => s.setDddiceKey);
   const connected = useStore((s) => s.dddiceConnected);
@@ -69,6 +72,36 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        <section className="settings-section">
+          <h3>Người trong phòng</h3>
+          <p className="hint">
+            Người vào đầu tiên là DM. DM có thể phân quyền lại. Người chơi chỉ xem và
+            chỉnh character sheet của mình.
+          </p>
+          <ul className="participant-list">
+            {participants.map((p) => (
+              <li key={p.id} className={p.connected ? '' : 'offline'}>
+                <span className="p-dot" style={{ background: p.color }} />
+                <span className="p-name">
+                  {p.name}
+                  {p.id === meId ? ' (bạn)' : ''}
+                </span>
+                <span className={`badge ${p.role === 'dm' ? 'ok' : 'off'}`}>
+                  {p.role === 'dm' ? 'DM' : 'Người chơi'}
+                </span>
+                {isDm && p.id !== meId && (
+                  <button
+                    className="link"
+                    onClick={() => setRole(p.id, p.role === 'dm' ? 'player' : 'dm')}
+                  >
+                    {p.role === 'dm' ? '→ người chơi' : '→ DM'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
 
         <section className="settings-section">
           <h3>

@@ -74,20 +74,28 @@ wss.on('connection', (ws) => {
     if (action.t === 'join') {
       let participant = action.participantId ? getParticipant(action.participantId) : undefined;
       if (!participant) {
+        // The server decides the role: the first person into a room without a DM
+        // becomes the DM; everyone else joins as a player. The client's `role`
+        // hint is ignored so a player cannot self-promote.
+        const hasDm = room.state.participants.some((p) => p.role === 'dm');
         participant = {
           id: nanoid(10),
           name: action.name || 'Người chơi',
-          role: action.role,
+          role: hasDm ? 'player' : 'dm',
           color: pickColor(room.state.participants.length),
           connected: true,
           lastSeen: Date.now(),
         };
         room.state.participants.push(participant);
       } else {
+        // Reconnect: keep the role the server previously assigned.
         participant.name = action.name || participant.name;
-        participant.role = action.role;
         participant.connected = true;
         participant.lastSeen = Date.now();
+      }
+      // A room must always have at least one DM (covers older rooms / all DMs pruned).
+      if (!room.state.participants.some((p) => p.role === 'dm')) {
+        participant.role = 'dm';
       }
       room.state.rev++;
       sockets.set(ws, participant.id);

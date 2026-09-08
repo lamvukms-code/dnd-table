@@ -8,13 +8,22 @@ import type {
   Token,
 } from './types.js';
 
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** Actions sent client -> server. */
 export type ClientAction =
-  | { t: 'join'; name: string; role: 'dm' | 'player'; participantId?: string }
+  // `role` is a hint only; the server assigns roles (room creator becomes DM).
+  | { t: 'join'; name: string; role?: 'dm' | 'player'; participantId?: string }
   | { t: 'setName'; name: string }
+  | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
   | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
+  | {
+      t: 'damage';
+      label: string;
+      notation: string;
+      targetTokenId: string;
+      external?: ExternalRoll;
+    }
   | {
       t: 'attack';
       label: string;

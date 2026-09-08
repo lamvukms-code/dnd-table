@@ -25,6 +25,7 @@ import {
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
+import { FormulaHint } from './FormulaHint.js';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'Sức mạnh',
@@ -141,6 +142,8 @@ type Section = 'stats' | 'combat' | 'inventory';
 function SheetEditor({ sheet }: { sheet: CharacterSheet }) {
   const send = useStore((s) => s.send);
   const rollDice = useStore((s) => s.rollDice);
+  const attackRoll = useStore((s) => s.attackRoll);
+  const damageRoll = useStore((s) => s.damageRoll);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [draft, setDraft] = useState<CharacterSheet>(sheet);
   const [section, setSection] = useState<Section>('stats');
@@ -162,7 +165,7 @@ function SheetEditor({ sheet }: { sheet: CharacterSheet }) {
   function roll(label: string, mod: number) {
     void rollDice(`${draft.name} · ${label}`, d20Check(mod));
   }
-  const ctx = { draft, commit, set, roll, rollDice, tokens };
+  const ctx = { draft, commit, set, roll, rollDice, attackRoll, damageRoll, tokens };
 
   return (
     <div className="sheet-editor">
@@ -198,6 +201,13 @@ interface SectionProps {
   set: <K extends keyof CharacterSheet>(k: K, v: CharacterSheet[K]) => void;
   roll: (label: string, mod: number) => void;
   rollDice: (label: string, notation: string) => Promise<void>;
+  attackRoll: (p: {
+    label: string;
+    attackNotation: string;
+    damageNotation: string;
+    targetTokenId: string;
+  }) => Promise<void>;
+  damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
   tokens: { id: string; label: string }[];
 }
 
@@ -324,9 +334,20 @@ function StatsSection({ draft, commit, set, roll }: SectionProps) {
   );
 }
 
-function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionProps) {
+function CombatSection({
+  draft,
+  commit,
+  set,
+  roll,
+  rollDice,
+  attackRoll,
+  damageRoll,
+  tokens,
+}: SectionProps) {
   const ac = computeArmorClass(draft);
   const attacks = allAttacks(draft);
+  const [targetId, setTargetId] = useState(draft.tokenId ?? '');
+  const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
 
   return (
     <>
@@ -380,10 +401,25 @@ function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionPr
         </select>
       </label>
 
-      <h4>Đòn tấn công</h4>
+      <div className="attack-head">
+        <h4>Đòn tấn công</h4>
+        <label className="target-pick">
+          Mục tiêu
+          <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="">— không —</option>
+            {tokens.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className="attacks-list">
         {attacks.map((atk) => {
           const derived = atk.source === 'weapon';
+          const base = `${draft.name} · ${atk.name}`;
           return (
             <div key={atk.id} className={`attack-row-view ${derived ? 'derived' : ''}`}>
               <span className="atk-name">
@@ -394,17 +430,39 @@ function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionPr
                 {fmtMod(atk.attackBonus)} đánh · {atk.damage}
                 {atk.damageType ? ` ${atk.damageType}` : ''}
               </span>
+              {targetId ? (
+                <button
+                  className="roll-btn strong"
+                  title={`Tung đánh + sát thương vào ${targetName}, tự trừ máu`}
+                  onClick={() =>
+                    attackRoll({
+                      label: `${base} → ${targetName}`,
+                      attackNotation: d20Check(atk.attackBonus),
+                      damageNotation: atk.damage,
+                      targetTokenId: targetId,
+                    })
+                  }
+                >
+                  ⚔ đánh {targetName}
+                </button>
+              ) : (
+                <button
+                  className="roll-btn"
+                  onClick={() => rollDice(`${base} (đánh)`, d20Check(atk.attackBonus))}
+                >
+                  đánh
+                </button>
+              )}
               <button
                 className="roll-btn"
-                onClick={() => rollDice(`${draft.name} · ${atk.name} (đánh)`, d20Check(atk.attackBonus))}
+                title={targetId ? `Tung ${atk.damage}, trừ vào máu ${targetName}` : 'Tung sát thương'}
+                onClick={() =>
+                  targetId
+                    ? damageRoll(`${base} → ${targetName}`, atk.damage, targetId)
+                    : rollDice(`${base} (sát thương)`, atk.damage)
+                }
               >
-                đánh
-              </button>
-              <button
-                className="roll-btn"
-                onClick={() => rollDice(`${draft.name} · ${atk.name} (sát thương)`, atk.damage)}
-              >
-                dmg
+                {targetId ? 'sát thương' : 'dmg'}
               </button>
               {!derived && (
                 <button
@@ -419,8 +477,14 @@ function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionPr
             </div>
           );
         })}
-        {attacks.length === 0 && <p className="empty">Chưa có đòn nào. Trang bị vũ khí ở tab Túi đồ, hoặc thêm thủ công.</p>}
+        {attacks.length === 0 && (
+          <p className="empty">Chưa có đòn nào. Trang bị vũ khí ở tab Túi đồ, hoặc thêm thủ công.</p>
+        )}
       </div>
+      <p className="hint">
+        Chọn “Mục tiêu” rồi bấm đòn: hệ thống tự tung công thức (vd 2d6+8) trên dddice, so
+        AC, và trừ máu token mục tiêu.
+      </p>
 
       <details className="manual-attacks">
         <summary>Sửa đòn thủ công</summary>
@@ -451,7 +515,7 @@ function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionPr
             />
             <input
               value={atk.damage}
-              placeholder="1d8+3"
+              placeholder="2d6+8"
               onChange={(e) =>
                 commit({
                   ...draft,
@@ -459,6 +523,7 @@ function CombatSection({ draft, commit, set, roll, rollDice, tokens }: SectionPr
                 })
               }
             />
+            <FormulaHint notation={atk.damage} />
           </div>
         ))}
         <button
@@ -606,12 +671,13 @@ function InventorySection({ draft, commit }: SectionProps) {
                     </select>
                   </label>
                   <label>
-                    Sát thương
+                    Sát thương (chỉ xúc xắc nền)
                     <input
                       value={it.damage ?? ''}
                       placeholder="1d8"
                       onChange={(e) => setItem(it.id, { damage: e.target.value })}
                     />
+                    <FormulaHint notation={it.damage ?? ''} />
                   </label>
                   <label>
                     Loại dmg

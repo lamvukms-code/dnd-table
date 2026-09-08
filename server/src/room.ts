@@ -101,6 +101,50 @@ export class Room {
         // handled in index.ts (participant lifecycle)
         break;
 
+      case 'setRole': {
+        if (!isDm) return 'Chỉ DM được đổi vai trò';
+        const target = this.state.participants.find((p) => p.id === action.participantId);
+        if (!target) return 'Không tìm thấy người này trong phòng';
+        if (target.role === 'dm' && action.role === 'player') {
+          const dmCount = this.state.participants.filter((p) => p.role === 'dm').length;
+          if (dmCount <= 1) return 'Phòng phải còn ít nhất 1 DM';
+        }
+        target.role = action.role;
+        this.touch();
+        break;
+      }
+
+      case 'damage': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        let result: RollResult;
+        if (action.external) {
+          result = externalRollResult(action.notation, action.external);
+        } else {
+          try {
+            result = rollNotation(action.notation);
+          } catch (err) {
+            return (err as Error).message;
+          }
+        }
+        let amount = 0;
+        if (typeof target.currentHp === 'number') {
+          amount = Math.min(target.currentHp, Math.max(0, Math.round(result.total)));
+          target.currentHp -= amount;
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: action.label || 'Sát thương',
+          result,
+          damage: { targetTokenId: target.id, targetName: target.label, amount },
+        });
+        this.touch();
+        break;
+      }
+
       case 'roll': {
         let result: RollResult;
         if (action.external) {

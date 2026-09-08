@@ -151,6 +151,12 @@ export interface RollLogEntry {
     crit: boolean;
     fumble: boolean;
   };
+  // optional damage applied to a target token
+  damage?: {
+    targetTokenId?: string;
+    targetName: string;
+    amount: number; // HP actually removed
+  };
   private?: boolean; // DM-only roll
 }
 

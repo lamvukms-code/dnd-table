@@ -19,13 +19,14 @@ const IDENTITY_KEY = 'dnd-table.identity';
 
 interface Identity {
   name: string;
-  role: 'dm' | 'player';
 }
 
 function loadIdentity(): Identity | null {
   try {
     const raw = localStorage.getItem(IDENTITY_KEY);
-    return raw ? (JSON.parse(raw) as Identity) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { name?: string };
+    return parsed.name ? { name: parsed.name } : null;
   } catch {
     return null;
   }
@@ -54,6 +55,9 @@ interface StoreState {
   rollDice: (label: string, notation: string, opts?: { private?: boolean }) => Promise<void>;
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
+  /** Roll a damage formula and subtract the result from a target token's HP. */
+  damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
+  setRole: (participantId: string, role: 'dm' | 'player') => void;
   me: () => Participant | undefined;
   isDm: () => boolean;
   dddiceActive: () => boolean;
@@ -76,7 +80,7 @@ export const useStore = create<StoreState>((set, get) => {
       const identity = get().identity;
       if (identity) {
         const stored = localStorage.getItem(PID_KEY) ?? undefined;
-        rawSend({ t: 'join', name: identity.name, role: identity.role, participantId: stored });
+        rawSend({ t: 'join', name: identity.name, participantId: stored });
       }
     };
 
@@ -143,7 +147,6 @@ export const useStore = create<StoreState>((set, get) => {
         rawSend({
           t: 'join',
           name: identity.name,
-          role: identity.role,
           participantId: localStorage.getItem(PID_KEY) ?? undefined,
         });
       } else {
@@ -152,6 +155,13 @@ export const useStore = create<StoreState>((set, get) => {
     },
 
     send: (action) => rawSend(action),
+
+    setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
+
+    damageRoll: async (label, notation, targetTokenId) => {
+      const external = await externalRoll(notation);
+      rawSend({ t: 'damage', label, notation, targetTokenId, external: external ?? undefined });
+    },
 
     setDddiceKey: (key) => {
       persistDddiceKey(key);

@@ -30,6 +30,12 @@ và quản lý character sheet — tất cả trên một trang.
   khiên/đồ dùng) có trọng lượng, đánh dấu trang bị, tiền pp/gp/ep/sp/cp. **AC tự
   tính** từ giáp + khiên trang bị (có ô ghi đè). **Đòn tấn công tự sinh** từ vũ
   khí trang bị (STR/DEX/linh hoạt + thành thạo + phụ trội). Liên kết token.
+  - Người chơi chỉ xem/sửa nhân vật của mình; DM xem/sửa tất cả.
+  - Chọn **Mục tiêu** rồi bấm đòn: hệ thống tự hiểu công thức **xdy** (vd
+    “2d6 + 8”), tung trên dddice, so AC, trừ máu token mục tiêu. Ô công thức có
+    gợi ý trực tiếp (min–max, trung bình) và báo nếu viết sai.
+- **Phân quyền:** người vào phòng đầu tiên là DM; người sau là người chơi. DM đổi
+  vai trò trong Cài đặt → “Người trong phòng”.
 
 Xem `docs/SRS.md` cho đặc tả đầy đủ.
 
@@ -45,7 +51,7 @@ npm run dev
 - Client: `http://localhost:5173`
 - Server + WebSocket: `http://localhost:8787`
 
-Máy khác trong LAN mở `http://<IP-máy-chủ>:5173`.
+Máy khác trong LAN mở `http://<IP-máy-chủ>:5173`. Người mở đầu tiên thành DM.
 
 ### Chạy bản production (một cổng duy nhất)
 

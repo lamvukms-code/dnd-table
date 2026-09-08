@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   d20Check,
+  describeNotation,
   doubleDiceCounts,
   externalRollResult,
+  normalizeNotation,
   resolveAttack,
   rollNotation,
+  rollStats,
   type Rng,
 } from './dice.js';
 
@@ -61,6 +64,37 @@ describe('d20Check', () => {
     expect(d20Check(-1)).toBe('1d20-1');
     expect(d20Check(3, 'advantage')).toBe('2d20kh1+3');
     expect(d20Check(0, 'disadvantage')).toBe('2d20kl1');
+  });
+});
+
+describe('normalizeNotation', () => {
+  it('strips spaces and fixes implied 1', () => {
+    expect(normalizeNotation('2d6 + 8')).toBe('2d6+8');
+    expect(normalizeNotation('  D20 ')).toBe('1d20');
+    expect(normalizeNotation('1d8 + d4')).toBe('1d8+1d4');
+    expect(normalizeNotation('2d6 – 1')).toBe('2d6-1');
+  });
+  it('rolls a "2d6 + 8" style formula the player typed', () => {
+    const r = rollNotation('2d6 + 8', () => 0);
+    expect(r.total).toBe(1 + 1 + 8);
+  });
+});
+
+describe('rollStats / describeNotation', () => {
+  it('computes min/max/average for 2d6+8', () => {
+    expect(rollStats('2d6+8')).toEqual({ min: 10, max: 20, average: 15 });
+  });
+  it('averages advantage above 10.5', () => {
+    const s = rollStats('2d20kh1');
+    expect(s.min).toBe(1);
+    expect(s.max).toBe(20);
+    expect(s.average).toBeGreaterThan(13);
+  });
+  it('describeNotation flags invalid input', () => {
+    const bad = describeNotation('greatsword');
+    expect(bad.valid).toBe(false);
+    const good = describeNotation('2d6+8');
+    expect(good).toMatchObject({ valid: true, canonical: '2d6+8', min: 10, max: 20 });
   });
 });
 

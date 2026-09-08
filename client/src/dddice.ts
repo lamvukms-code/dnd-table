@@ -3,7 +3,7 @@
 // resolved values. API keys live only in this browser (localStorage).
 // dddice-js pulls in three.js (~1 MB) — load it lazily so the base app stays light.
 import type { ThreeDDice as ThreeDDiceType } from 'dddice-js';
-import type { ExternalRoll } from '@dnd-table/shared';
+import { normalizeNotation, type ExternalRoll } from '@dnd-table/shared';
 
 type DddiceModule = typeof import('dddice-js');
 let modulePromise: Promise<DddiceModule> | null = null;
@@ -136,7 +136,7 @@ export async function rollEquation(notation: string): Promise<ExternalRoll> {
   if (!current) throw new Error('dddice chưa kết nối');
   const { parseRollEquation } = await loadModule();
   const theme = getLocalThemeOverride() || current.theme || 'dddice-standard';
-  const { dice, operator } = parseRollEquation(notation, theme);
+  const { dice, operator } = parseRollEquation(normalizeNotation(notation), theme);
   const res = await current.engine.roll(dice, { operator });
   const roll = (res as { data: unknown }).data as {
     uuid: string;

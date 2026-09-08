@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.3.0
+- **Version:** 0.4.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -83,10 +83,11 @@ The application provides, on one page:
 
 | Role | Can |
 |---|---|
-| **DM** | Everything: edit the map, add/remove/hide tokens, move any token, run initiative, roll privately, clear the log, edit any sheet. |
-| **Player** | Roll dice, move tokens they control, create and edit their own sheets, run attacks, view non-hidden tokens. |
+| **DM** | Everything: edit the map, add/remove/hide tokens, move any token, run initiative, roll privately, clear the log, view and edit every sheet, change participant roles. |
+| **Player** | Roll dice, deal damage to a target, move tokens they control, create/view/edit **only their own** sheets, run attacks, view non-hidden tokens. |
 
-Roles are self-selected on join. This is acceptable because the LAN is trusted.
+The server assigns the role (room creator → DM; see FR-1a). Ownership and
+DM-only checks are enforced server-side in `room.ts`, never only in the UI.
 
 ### 2.3 Constraints
 
@@ -111,19 +112,36 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 
 ### 3.1 Session & participants
 
-- **FR-1 (P0):** A user joins by entering a display name and choosing DM or
-  player. Identity is remembered in `localStorage`; a returning user rejoins the
-  same participant via a stored id.
-- **FR-2 (P0):** The participant list shows who is connected. Disconnected
-  participants are marked and pruned after a TTL.
-- **FR-3 (P0):** The client auto-reconnects on WebSocket drop and re-syncs.
-- **FR-4 (P1):** A participant can change name and role after joining.
+- **FR-1 (P0):** A user joins by entering a display name only. Identity is
+  remembered in `localStorage`; a returning user rejoins the same participant via
+  a stored id.
+- **FR-1a (P0):** **The server assigns roles.** The first participant to join a
+  room with no DM becomes the **DM** (the room creator); everyone else joins as a
+  **player**. The client's role hint is ignored, so a player cannot self-promote.
+  A room always keeps at least one DM (covers migrated rooms / all DMs pruned).
+- **FR-1b (P0):** The DM can promote/demote any participant from the Settings
+  "Người trong phòng" panel (`setRole`); demoting the last DM is refused.
+- **FR-2 (P0):** The participant list shows who is connected and their role.
+  Disconnected participants are marked and pruned after a TTL (role persists
+  while they exist).
+- **FR-3 (P0):** The client auto-reconnects on WebSocket drop and re-syncs; a
+  reconnecting participant keeps the role the server gave them.
+- **FR-4 (P1):** A participant can change their display name after joining.
 
 ### 3.2 Dice roller
 
-- **FR-10 (P0):** Parse and evaluate dice notation: `NdM`, `+`/`-` chains,
-  multiple dice terms, flat modifiers, `d%`, and `khX` / `klX` (keep
-  highest/lowest). Reject malformed input with a clear message.
+- **FR-10 (P0):** Parse and evaluate dice notation — **convention `xdy`** = x
+  dice of y faces: `xdy`, `+`/`-` chains, multiple dice terms, flat modifiers,
+  `d%`, `khX` / `klX` (keep highest/lowest). Reject malformed input with a clear
+  Vietnamese message.
+- **FR-10a (P0):** Player input is normalised before parsing — whitespace
+  removed (`"2d6 + 8"` → `"2d6+8"`), lowercased, an implied leading 1 filled in
+  (`"d20"` → `"1d20"`), en/em dashes treated as minus. The same normalisation is
+  applied on the dddice path.
+- **FR-10b (P0):** `describeNotation` gives live feedback while a player types a
+  formula — canonical form, exact min/max, and average (advantage/disadvantage
+  averages computed exactly) — surfaced by a `FormulaHint` next to damage fields.
+  Structural parsing (`parseTerms` / `rollStats`) never rolls.
 - **FR-11 (P0):** Quick-roll buttons for d20, d12, d10, d8, d6, d4, d100.
 - **FR-12 (P0):** d20 check helper with Normal / Advantage / Disadvantage
   (advantage = `2d20kh1`, disadvantage = `2d20kl1`).
@@ -209,7 +227,13 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   re-checks the verdict against its authoritative AC and applies HP.
 - **FR-45 (P1):** Saving-throw workflow (DC vs. d20 + save bonus) with
   half-damage-on-success.
-- **FR-46 (P1):** Pull attacks directly from a character sheet's attack list.
+- **FR-46 (P0):** **Attack from the character sheet.** The Chiến đấu section has a
+  target picker. With a target selected, each attack offers a full-resolution
+  button (to-hit vs AC → damage on hit → HP, via `attackRoll`) and a
+  damage-only button that rolls the attack's damage formula and subtracts the
+  result from the target token's HP (`damage` action). Anyone may deal damage to
+  a token; the server clamps the subtraction to the token's remaining HP and logs
+  it as `RollLogEntry.damage`.
 
 ### 3.6 Initiative tracker
 
@@ -332,7 +356,10 @@ See `shared/src/types.ts` for the authoritative definitions.
   attackBonusMisc?, damageBonusMisc?, armorBase?, armorCategory?,
   stealthDisadvantage? }`
 - `Currency { pp, gp, ep, sp, cp }`
-- `RollLogEntry { id, ts, actorId, actorName, label, result, attack?, private? }`
+- `RollLogEntry { id, ts, actorId, actorName, label, result, attack?, damage?,
+  private? }` — `damage: { targetTokenId?, targetName, amount }` records HP removed.
+- Notation helpers in `shared/src/dice.ts`: `normalizeNotation`, `parseTerms`,
+  `rollStats`, `describeNotation` (+ `NotationInfo`, `ParsedTerm`).
 
 Wire protocol: `ClientAction` (client→server) and `ServerEvent` (server→client)
 unions in `shared/src/protocol.ts`. `PROTOCOL_VERSION` guards compatibility.
@@ -361,3 +388,7 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | Sheet scope (0.3.0) | Ship sectioned layout + inventory/currency + auto AC and auto attacks from equipped gear. Spellcasting, description/background, rests and death saves deferred (FR-69). |
 | 2026-09-08 | AC computation | Covers light/medium/heavy armor + shield + unarmored. Unarmored Defense and other edge cases handled via the manual `acOverride` field, not special-cased. |
 | 2026-09-08 | Schema upgrades | Migrate in place where feasible (v2→v3 backfills sheet fields) instead of discarding `room.json`. |
+| 2026-09-08 | Roles | Server-assigned, not self-selected: room creator (first joiner into a DM-less room) is DM, rest are players; DM can re-assign; a room always keeps ≥1 DM. Trusted-LAN model still holds — this is convenience + accident-prevention, not a security boundary. |
+| 2026-09-08 | Sheet ownership | Players view/edit only sheets they created (server-enforced in `upsertSheet` / `removeSheet`); DM sees and edits all. |
+| 2026-09-08 | Formula convention | `xdy` = x dice, y faces. Player input is normalised (spaces, case, implied 1, dashes) so "2d6 + 8" works. `describeNotation` gives typed feedback without rolling. |
+| 2026-09-08 | Damage from sheet | New `damage` action rolls a formula (dddice or server) and subtracts from a target token's HP, clamped, logged. Any participant may use it; hit/AC logic stays in the `attack` action. |

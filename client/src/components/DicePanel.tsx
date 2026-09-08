@@ -66,7 +66,10 @@ export function DicePanel() {
       </div>
       <ul className="roll-log">
         {entries.map((e) => (
-          <li key={e.id} className={e.attack ? (e.attack.hit ? 'hit' : 'miss') : ''}>
+          <li
+            key={e.id}
+            className={e.attack ? (e.attack.hit ? 'hit' : 'miss') : e.damage ? 'hit' : ''}
+          >
             <div className="rl-top">
               <span className="rl-actor">{e.actorName}</span>
               <span className="rl-label">{e.label}</span>
@@ -92,6 +95,11 @@ export function DicePanel() {
                 <strong>
                   {e.attack.crit ? 'CHÍ MẠNG' : e.attack.hit ? 'TRÚNG' : 'TRƯỢT'}
                 </strong>
+              </div>
+            )}
+            {e.damage && (
+              <div className="rl-attack">
+                → {e.damage.targetName}: <strong>−{e.damage.amount} HP</strong>
               </div>
             )}
           </li>

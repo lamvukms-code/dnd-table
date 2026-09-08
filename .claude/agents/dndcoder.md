@@ -43,10 +43,17 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
 2. **State flows one way.** The server is authoritative. The client never mutates
    room state locally except as an optimistic echo; it always re-renders from the
    next snapshot. Permission checks (DM-only actions, token ownership, sheet
-   ownership) live in `room.ts`, never only in the UI.
+   ownership) live in `room.ts`, never only in the UI. **Roles are server-set**
+   in `index.ts` (first joiner into a DM-less room → DM; a room always keeps ≥1
+   DM); the client's `join.role` is an ignored hint. Players may view/edit only
+   the sheets they created.
 3. **Rules logic goes in `shared/`** with a Vitest test beside it. Dice, AC
    comparison, crit/fumble, advantage/disadvantage, proficiency math — all of it
-   is pure functions in `shared/` so it is verifiable without a browser.
+   is pure functions in `shared/` so it is verifiable without a browser. Dice
+   notation is **`xdy`** (x dice, y faces); `normalizeNotation` cleans player
+   input (spaces, case, implied 1, dashes) and runs on every path including
+   dddice; `parseTerms` / `rollStats` / `describeNotation` inspect a formula
+   without rolling — use them for UI feedback, never a second ad-hoc parser.
 4. **Keep the D&D correct.** Target 5e 2024: nat 20 always hits and crits, nat 1
    always misses, crit doubles dice (not flat modifiers), advantage = 2d20 keep
    highest. When a rule is ambiguous, add a short note in the SRS and pick the
