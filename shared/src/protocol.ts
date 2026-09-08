@@ -1,6 +1,7 @@
 import type {
   BattleMap,
   CharacterSheet,
+  DamagePart,
   DddiceConfig,
   ExternalRoll,
   InitiativeEntry,
@@ -21,25 +22,23 @@ export type ClientAction =
   | {
       t: 'damage';
       label: string;
-      notation: string;
+      damageParts: DamagePart[];
       targetTokenId: string;
-      damageType?: string;
-      external?: ExternalRoll;
+      // per-part rolled totals (dddice); index-aligned with damageParts
+      external?: number[];
     }
   | {
       t: 'attack';
       label: string;
       attackNotation: string;
-      damageNotation: string;
-      damageType?: string;
+      damageParts: DamagePart[];
       targetTokenId: string;
-      // When present, the client already rolled (via dddice) and the server
-      // only resolves hit/crit vs AC and applies damage — it does not re-roll.
-      // `damage` should already be the homebrew-crit notation's roll on a crit.
+      // When present, the client already rolled (via dddice). On a crit the
+      // per-part totals are the homebrew-crit notation's roll.
       external?: {
         attack: ExternalRoll;
-        damage?: ExternalRoll;
         crit?: boolean;
+        partTotals?: number[]; // index-aligned with damageParts
       };
     }
   | { t: 'clearLog' }

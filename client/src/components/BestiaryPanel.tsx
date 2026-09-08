@@ -12,7 +12,7 @@ import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { blankStatblock, mergeBestiary, normalizeStatblock } from '../statblock.js';
 import { FormulaHint } from './FormulaHint.js';
-import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
+import { DamageTypeSelect, DefensesEditor, ExtraDamageEditor } from './DefensesEditor.js';
 
 const SIZES: TokenSize[] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 
@@ -387,7 +387,8 @@ export function ActionsEditor({
     <div className="sb-actions">
       <div className="sb-actions-head">{label}</div>
       {actions.map((a) => (
-        <div key={a.id} className="sb-action-row">
+        <div key={a.id} className="sb-action-wrap">
+        <div className="sb-action-row">
           <input value={a.name} placeholder="Tên" onChange={(e) => upd(a.id, { name: e.target.value })} />
           <select
             value={a.actionType}
@@ -427,6 +428,11 @@ export function ActionsEditor({
           <button className="link" onClick={() => onChange(actions.filter((x) => x.id !== a.id))}>
             ✕
           </button>
+        </div>
+        <ExtraDamageEditor
+          parts={a.extraDamage}
+          onChange={(parts) => upd(a.id, { extraDamage: parts })}
+        />
         </div>
       ))}
       <button

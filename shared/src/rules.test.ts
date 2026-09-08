@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actionDamageParts,
   allActions,
   applyDamageDefenses,
   applyLongRest,
@@ -10,6 +11,7 @@ import {
   currencyInGp,
   derivedActions,
   emptyCurrency,
+  resolveDamageParts,
   skillBonus,
   statblockInitiativeMod,
   tokenSaveBonus,
@@ -38,6 +40,7 @@ function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
     speed: 30,
     initiativeMisc: 0,
     actions: [],
+    damageRiders: [],
     resources: [],
     spellSlots: [],
     feats: [],
@@ -180,6 +183,54 @@ describe('rests', () => {
     expect(s.tempHp).toBe(0);
     expect(s.resources.every((r) => r.used === 0)).toBe(true);
     expect(s.spellSlots[0].used).toBe(0);
+  });
+});
+
+describe('multi-source damage', () => {
+  it('actionDamageParts = primary + action extras + enabled riders', () => {
+    const s = sheet({
+      damageRiders: [
+        { id: 'ring', name: 'Ring', dice: '1d4', type: 'fire', enabled: true },
+        { id: 'off', name: 'Off', dice: '1d6', type: 'cold', enabled: false },
+      ],
+    });
+    const weaponAction = {
+      id: 'w', name: 'Sword', actionType: 'action' as const,
+      attackBonus: 5, damage: '2d6+3', damageType: 'slashing', source: 'weapon' as const,
+      extraDamage: [{ dice: '1d10', type: 'necrotic' }],
+    };
+    const parts = actionDamageParts(s, weaponAction);
+    expect(parts.map((p) => `${p.dice} ${p.type}`)).toEqual([
+      '2d6+3 slashing',
+      '1d10 necrotic',
+      '1d4 fire', // ring (enabled)
+    ]);
+  });
+
+  it('riders do not attach to non-attack actions', () => {
+    const s = sheet({
+      damageRiders: [{ id: 'ring', name: 'Ring', dice: '1d4', type: 'fire', enabled: true }],
+    });
+    const utility = {
+      id: 'u', name: 'Healing Word', actionType: 'bonus' as const,
+      notation: '1d4+3', source: 'manual' as const,
+    };
+    expect(actionDamageParts(s, utility)).toHaveLength(0);
+  });
+
+  it('resolveDamageParts applies per-part types and totals', () => {
+    const def = { ...emptyDefenses(), resistances: ['fire'], immunities: ['poison'] };
+    const out = resolveDamageParts(
+      [
+        { part: { dice: '2d6', type: 'slashing' }, raw: 8 },
+        { part: { dice: '1d4', type: 'fire' }, raw: 4 },
+        { part: { dice: '1d6', type: 'poison' }, raw: 5 },
+      ],
+      def,
+    );
+    // 8 slashing + 2 fire(÷2) + 0 poison(×0) = 10
+    expect(out.totalFinal).toBe(10);
+    expect(out.totalRaw).toBe(17);
   });
 });
 

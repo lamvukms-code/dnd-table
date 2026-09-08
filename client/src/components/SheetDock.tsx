@@ -3,6 +3,7 @@ import {
   ABILITIES,
   SKILLS,
   abilityMod,
+  actionDamageParts,
   allActions,
   applyLongRest,
   applyShortRest,
@@ -17,12 +18,13 @@ import {
   type Ability,
   type ActionType,
   type CharacterSheet,
+  type DamagePart,
   type SheetAction,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { FormulaHint } from './FormulaHint.js';
-import { DamageTypeSelect } from './DefensesEditor.js';
+import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
 
 const ABILITY_LABEL: Record<Ability, string> = {
@@ -108,6 +110,7 @@ export function blankSheet(ownerId: string): CharacterSheet {
     speed: 30,
     initiativeMisc: 0,
     actions: [],
+    damageRiders: [],
     resources: [],
     spellSlots: [],
     feats: [],
@@ -566,6 +569,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 <ActionRow
                   key={a.id}
                   action={a}
+                  parts={actionDamageParts(draft, a)}
                   sheetName={draft.name}
                   targetId={targetId}
                   targetName={targetName}
@@ -588,6 +592,19 @@ function BasicTab({ draft, commit }: EditorCtx) {
         )}
 
         <ActionEditor draft={draft} commit={commit} />
+
+        <details className="rider-details">
+          <summary>
+            Nguồn sát thương thêm — rider ({draft.damageRiders.filter((r) => r.enabled).length})
+          </summary>
+          <p className="hint">
+            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa cho đòn vũ khí).
+          </p>
+          <DamageRidersEditor
+            riders={draft.damageRiders}
+            onChange={(r) => set('damageRiders', r)}
+          />
+        </details>
       </div>
     </div>
   );
@@ -595,6 +612,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
 function ActionRow({
   action,
+  parts,
   sheetName,
   targetId,
   targetName,
@@ -605,6 +623,7 @@ function ActionRow({
   onDelete,
 }: {
   action: SheetAction;
+  parts: DamagePart[];
   sheetName: string;
   targetId: string;
   targetName: string;
@@ -613,21 +632,19 @@ function ActionRow({
   attackRoll: (p: {
     label: string;
     attackNotation: string;
-    damageNotation: string;
+    damageParts: DamagePart[];
     targetTokenId: string;
-    damageType?: string;
   }) => Promise<void>;
-  damageRoll: (
-    label: string,
-    notation: string,
-    targetTokenId: string,
-    damageType?: string,
-  ) => Promise<void>;
+  damageRoll: (label: string, parts: DamagePart[], targetTokenId: string) => Promise<void>;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
-  const isAttack = typeof action.attackBonus === 'number' && !!action.damage;
+  const isAttack = typeof action.attackBonus === 'number' && parts.length > 0;
   const atkNotation = (bonus: number) => d20Check(bonus, rollMode);
+  const combinedDamage = parts.map((p) => p.dice).join(' + ');
+  const damageLabel = parts
+    .map((p) => `${p.dice}${p.type ? ' ' + p.type : ''}`)
+    .join(' + ');
   return (
     <div className={`action-row ${action.source === 'weapon' ? 'derived' : ''}`}>
       <span className="ar-name" title={action.description}>
@@ -636,7 +653,7 @@ function ActionRow({
       </span>
       <span className="ar-detail">
         {isAttack
-          ? `${fmtMod(action.attackBonus!)} · ${action.damage}${action.damageType ? ' ' + action.damageType : ''}`
+          ? `${fmtMod(action.attackBonus!)} · ${damageLabel}`
           : action.save
             ? `DC ${action.save.dc} ${action.save.ability.toUpperCase()}`
             : action.notation || action.description || ''}
@@ -648,8 +665,7 @@ function ActionRow({
             attackRoll({
               label: `${base} → ${targetName}`,
               attackNotation: atkNotation(action.attackBonus!),
-              damageNotation: action.damage!,
-              damageType: action.damageType,
+              damageParts: parts,
               targetTokenId: targetId,
             })
           }
@@ -665,13 +681,13 @@ function ActionRow({
           đánh
         </button>
       )}
-      {action.damage && (
+      {parts.length > 0 && (
         <button
           className="roll-btn"
           onClick={() =>
             targetId
-              ? damageRoll(`${base} → ${targetName}`, action.damage!, targetId, action.damageType)
-              : rollDice(`${base} (sát thương)`, action.damage!)
+              ? damageRoll(`${base} → ${targetName}`, parts, targetId)
+              : rollDice(`${base} (sát thương)`, combinedDamage)
           }
         >
           {targetId ? 'sát thương' : 'dmg'}
@@ -699,7 +715,8 @@ function ActionEditor({ draft, commit }: EditorCtx) {
     <details className="action-editor">
       <summary>Sửa / thêm hành động</summary>
       {draft.actions.map((a) => (
-        <div key={a.id} className="ae-row">
+        <div key={a.id} className="ae-row-wrap">
+        <div className="ae-row">
           <input value={a.name} placeholder="Tên" onChange={(e) => upd(a.id, { name: e.target.value })} />
           <select
             value={a.actionType}
@@ -738,6 +755,11 @@ function ActionEditor({ draft, commit }: EditorCtx) {
           <button className="link" onClick={() => commit({ ...draft, actions: draft.actions.filter((x) => x.id !== a.id) })}>
             ✕
           </button>
+        </div>
+        <ExtraDamageEditor
+          parts={a.extraDamage}
+          onChange={(parts) => upd(a.id, { extraDamage: parts })}
+        />
         </div>
       ))}
       <button

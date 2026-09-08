@@ -633,6 +633,19 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 
 /* damage type + defences */
 .dmg-type-select { max-width: 92px; }
+.extra-dmg { display: flex; flex-direction: column; gap: 3px; padding-left: 8px; }
+.xd-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.xd-dice { width: 72px; }
+.xd-label { width: 110px; }
+.riders { display: flex; flex-direction: column; gap: 4px; }
+.rider-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.rider-row .rider-name { width: 130px; }
+.rider-details > summary, .action-editor .ae-row-wrap + button { font-size: 11px; }
+.ae-row-wrap, .sb-action-wrap {
+  border-left: 2px solid var(--line);
+  padding-left: 6px;
+  margin-bottom: 6px;
+}
 .defenses-editor { display: flex; flex-direction: column; gap: 5px; font-size: 11px; }
 .defenses-editor .def-line { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .defenses-editor .def-line .chk { flex-direction: row; align-items: center; gap: 4px; }

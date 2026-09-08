@@ -4,6 +4,7 @@ import {
   abilityMod,
   d20Check,
   fmtMod,
+  statblockDamageParts,
   tokenSaveBonus,
   type CoverLevel,
   type Token,
@@ -608,17 +609,20 @@ function TokenInspector({
             </select>
           </label>
           {sb.actions.map((a) => {
-            const isAttack = typeof a.attackBonus === 'number' && !!a.damage;
+            const parts = statblockDamageParts(a);
+            const isAttack = typeof a.attackBonus === 'number' && parts.length > 0;
             const base = `${sb.name} · ${a.name}`;
+            const combined = parts.map((p) => p.dice).join(' + ');
+            const dmgLabel = parts
+              .map((p) => `${p.dice}${p.type ? ' ' + p.type : ''}`)
+              .join(' + ');
             return (
               <div key={a.id} className="sb-act">
                 <span className="sb-act-name" title={a.description}>
                   {a.name}
                 </span>
                 <span className="sb-act-detail">
-                  {isAttack
-                    ? `${fmtMod(a.attackBonus!)} · ${a.damage}`
-                    : a.notation || a.description || ''}
+                  {isAttack ? `${fmtMod(a.attackBonus!)} · ${dmgLabel}` : a.notation || a.description || ''}
                 </span>
                 {isAttack && sbTargetId && (
                   <button
@@ -627,8 +631,7 @@ function TokenInspector({
                       attackRoll({
                         label: `${base} → ${sbTargetName}${mtag}`,
                         attackNotation: sbd20(a.attackBonus!),
-                        damageNotation: a.damage!,
-                        damageType: a.damageType,
+                        damageParts: parts,
                         targetTokenId: sbTargetId,
                       })
                     }
@@ -644,13 +647,13 @@ function TokenInspector({
                     đánh
                   </button>
                 )}
-                {a.damage && (
+                {parts.length > 0 && (
                   <button
                     className="roll-btn"
                     onClick={() =>
                       sbTargetId
-                        ? damageRoll(`${base} → ${sbTargetName}`, a.damage!, sbTargetId, a.damageType)
-                        : rollDice(`${base} (dmg)`, a.damage!)
+                        ? damageRoll(`${base} → ${sbTargetName}`, parts, sbTargetId)
+                        : rollDice(`${base} (dmg)`, combined)
                     }
                   >
                     dmg
@@ -712,8 +715,7 @@ function TokenInspector({
                 ? `${tokens.find((t) => t.id === attackerId)?.label ?? ''} · ${atkName}`
                 : atkName,
               attackNotation: `1d20+${Number(atkBonus) || 0}`,
-              damageNotation: dmg,
-              damageType: dmgType,
+              damageParts: [{ dice: dmg, type: dmgType ?? '' }],
               targetTokenId: token.id,
             })
           }

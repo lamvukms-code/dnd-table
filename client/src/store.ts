@@ -5,6 +5,7 @@ import {
   homebrewCritDamage,
   rollNotation,
   type ClientAction,
+  type DamagePart,
   type ExternalRoll,
   type Participant,
   type RoomState,
@@ -37,9 +38,8 @@ function loadIdentity(): Identity | null {
 interface AttackParams {
   label: string;
   attackNotation: string;
-  damageNotation: string;
+  damageParts: DamagePart[];
   targetTokenId: string;
-  damageType?: string;
 }
 
 interface StoreState {
@@ -58,13 +58,8 @@ interface StoreState {
   rollDice: (label: string, notation: string, opts?: { private?: boolean }) => Promise<void>;
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
-  /** Roll a damage formula and subtract the result from a target token's HP. */
-  damageRoll: (
-    label: string,
-    notation: string,
-    targetTokenId: string,
-    damageType?: string,
-  ) => Promise<void>;
+  /** Roll damage parts and subtract the (post-defence) total from a target's HP. */
+  damageRoll: (label: string, damageParts: DamagePart[], targetTokenId: string) => Promise<void>;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
     name: string,
@@ -175,16 +170,16 @@ export const useStore = create<StoreState>((set, get) => {
 
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
 
-    damageRoll: async (label, notation, targetTokenId, damageType) => {
-      const external = await externalRoll(notation);
-      rawSend({
-        t: 'damage',
-        label,
-        notation,
-        targetTokenId,
-        damageType,
-        external: external ?? undefined,
-      });
+    damageRoll: async (label, damageParts, targetTokenId) => {
+      let external: number[] | undefined;
+      if (dddiceActive()) {
+        external = [];
+        for (const p of damageParts) {
+          const ext = await externalRoll(p.dice);
+          external.push(ext ? ext.total : rollNotation(p.dice).total);
+        }
+      }
+      rawSend({ t: 'damage', label, damageParts, targetTokenId, external });
     },
 
     rollInitiativeForMe: async (name, mod, tokenId, mode = 'normal') => {
@@ -206,9 +201,9 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'roll', label, notation, private: opts?.private, external: external ?? undefined });
     },
 
-    attackRoll: async ({ label, attackNotation, damageNotation, targetTokenId, damageType }) => {
+    attackRoll: async ({ label, attackNotation, damageParts, targetTokenId }) => {
       const plain = () =>
-        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId, damageType });
+        rawSend({ t: 'attack', label, attackNotation, damageParts, targetTokenId });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(attackNotation);
       if (!attack) return plain();
@@ -220,24 +215,22 @@ export const useStore = create<StoreState>((set, get) => {
       const fumble = attack.d20Natural === 1;
       const effectiveCrit = nat20 && !critImmune;
       const hit = nat20 || (!fumble && attack.total >= ac);
-      let damage: ExternalRoll | undefined;
+      let partTotals: number[] | undefined;
       if (hit) {
-        // homebrew: on a (non-immune) crit, roll the maxed + extra-die formula
-        const dmgNotation = effectiveCrit ? homebrewCritDamage(damageNotation) : damageNotation;
-        damage = (await externalRoll(dmgNotation)) ?? undefined;
-        if (!damage) {
-          const r = rollNotation(dmgNotation);
-          damage = { total: r.total, faces: [], source: 'dddice' };
+        partTotals = [];
+        for (const p of damageParts) {
+          const n = effectiveCrit ? homebrewCritDamage(p.dice) : p.dice;
+          const ext = await externalRoll(n);
+          partTotals.push(ext ? ext.total : rollNotation(n).total);
         }
       }
       rawSend({
         t: 'attack',
         label,
         attackNotation,
-        damageNotation,
-        damageType,
+        damageParts,
         targetTokenId,
-        external: { attack, damage, crit: effectiveCrit },
+        external: { attack, crit: effectiveCrit, partTotals },
       });
     },
 

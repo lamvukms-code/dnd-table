@@ -11,15 +11,17 @@ import {
   SCHEMA_VERSION,
 } from './factory.js';
 import {
-  applyDamageDefenses,
   coverAcBonus,
   externalRollResult,
   homebrewCritDamage,
   resolveAttack,
+  resolveDamageParts,
   rollNotation,
   tokenStatblockFrom,
   type ClientAction,
+  type DamagePart,
   type InitiativeEntry,
+  type MultiDamageOutcome,
   type Participant,
   type RollLogEntry,
   type RollResult,
@@ -121,6 +123,29 @@ export class Room {
     }
   }
 
+  /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
+   *  where supplied, and synthesise a combined RollResult for the log. */
+  private rollDamageParts(
+    parts: DamagePart[],
+    crit: boolean,
+    externals: number[] | undefined,
+  ): { rolled: { part: DamagePart; raw: number }[]; combined: RollResult; notation: string } {
+    const rolled: { part: DamagePart; raw: number }[] = [];
+    const bits: string[] = [];
+    parts.forEach((p, i) => {
+      const n = crit ? homebrewCritDamage(p.dice) : p.dice;
+      bits.push(n);
+      const raw =
+        externals && typeof externals[i] === 'number'
+          ? externals[i]
+          : rollNotation(n).total;
+      rolled.push({ part: p, raw });
+    });
+    const total = rolled.reduce((s, r) => s + r.raw, 0);
+    const notation = bits.join(' + ');
+    return { rolled, notation, combined: externalRollResult(notation, { total, faces: [] }) };
+  }
+
   /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
   private tokenInitMod(token: RoomState['tokens'][number]): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
@@ -193,20 +218,17 @@ export class Room {
       case 'damage': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
-        let result: RollResult;
-        if (action.external) {
-          result = externalRollResult(action.notation, action.external);
-        } else {
-          try {
-            result = rollNotation(action.notation);
-          } catch (err) {
-            return (err as Error).message;
-          }
+        if (!action.damageParts?.length) return 'Không có nguồn sát thương';
+        let rd;
+        try {
+          rd = this.rollDamageParts(action.damageParts, false, action.external);
+        } catch (err) {
+          return (err as Error).message;
         }
-        const dmgOut = applyDamageDefenses(result.total, action.damageType, target.defenses);
+        const out = resolveDamageParts(rd.rolled, target.defenses);
         let amount = 0;
         if (typeof target.currentHp === 'number') {
-          amount = Math.min(target.currentHp, dmgOut.final);
+          amount = Math.min(target.currentHp, out.totalFinal);
           target.currentHp -= amount;
         }
         this.pushRoll({
@@ -215,14 +237,14 @@ export class Room {
           actorId: actor.id,
           actorName: actor.name,
           label: action.label || 'Sát thương',
-          result,
+          result: rd.combined,
           damage: {
             targetTokenId: target.id,
             targetName: target.label,
             amount,
-            raw: dmgOut.raw,
-            damageType: action.damageType,
-            notes: dmgOut.notes.length ? dmgOut.notes : undefined,
+            raw: out.totalRaw,
+            damageType: damagePartsSummary(action.damageParts),
+            notes: damageBreakdownNotes(out),
           },
         });
         this.touch();
@@ -278,30 +300,22 @@ export class Room {
           }
         }
         const res = resolveAttack(attackRoll, ac);
-        // Adamantine / crit-immune: a crit lands as an ordinary hit.
+        // Adamantine / crit-immune (this token only): a crit lands as an ordinary hit.
         const critImmune = target.defenses?.critImmune ?? false;
         const effectiveCrit = res.crit && !critImmune;
 
         let damageResult: RollResult | undefined;
-        let outcome: ReturnType<typeof applyDamageDefenses> | undefined;
+        let outcome: MultiDamageOutcome | undefined;
         if (res.hit) {
-          const dmgNotation = effectiveCrit
-            ? homebrewCritDamage(action.damageNotation)
-            : action.damageNotation;
-          if (action.external?.damage) {
-            damageResult = externalRollResult(dmgNotation, action.external.damage);
-          } else {
-            try {
-              damageResult = rollNotation(dmgNotation);
-            } catch (err) {
-              return (err as Error).message;
-            }
+          if (!action.damageParts?.length) return 'Không có nguồn sát thương';
+          let rd;
+          try {
+            rd = this.rollDamageParts(action.damageParts, effectiveCrit, action.external?.partTotals);
+          } catch (err) {
+            return (err as Error).message;
           }
-          outcome = applyDamageDefenses(
-            damageResult.total,
-            action.damageType,
-            target.defenses,
-          );
+          damageResult = rd.combined;
+          outcome = resolveDamageParts(rd.rolled, target.defenses);
         }
 
         const coverNote =
@@ -328,7 +342,7 @@ export class Room {
           },
         });
         if (damageResult && outcome) {
-          const applied = typeof target.currentHp === 'number' ? outcome.final : 0;
+          const applied = typeof target.currentHp === 'number' ? outcome.totalFinal : 0;
           if (typeof target.currentHp === 'number') {
             target.currentHp = Math.max(0, target.currentHp - applied);
           }
@@ -348,9 +362,9 @@ export class Room {
               targetTokenId: target.id,
               targetName: target.label,
               amount: applied,
-              raw: outcome.raw,
-              damageType: action.damageType,
-              notes: outcome.notes.length ? outcome.notes : undefined,
+              raw: outcome.totalRaw,
+              damageType: damagePartsSummary(action.damageParts),
+              notes: damageBreakdownNotes(outcome),
             },
           });
         }
@@ -663,6 +677,22 @@ function migrateRoom(raw: RoomState): RoomState | null {
 
 function initNotation(mod: number): string {
   return `1d20${mod >= 0 ? '+' : ''}${mod}`;
+}
+
+function damagePartsSummary(parts: DamagePart[]): string | undefined {
+  const types = [...new Set(parts.map((p) => p.type).filter(Boolean))];
+  if (types.length === 0) return undefined;
+  return types.join(' + ');
+}
+
+/** Per-part breakdown lines for the roll log (only when it adds information). */
+function damageBreakdownNotes(out: MultiDamageOutcome): string[] | undefined {
+  const anyChange = out.parts.some((p) => p.raw !== p.final || p.notes.length);
+  if (out.parts.length <= 1 && !anyChange) return undefined;
+  return out.parts.map((p) => {
+    if (p.raw === p.final && !p.notes.length) return `${p.label}: ${p.raw}`;
+    return `${p.label}: ${p.raw} → ${p.final}${p.notes.length ? ` (${p.notes.join(', ')})` : ''}`;
+  });
 }
 
 function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {

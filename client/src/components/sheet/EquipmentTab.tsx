@@ -10,7 +10,7 @@ import {
 } from '@dnd-table/shared';
 import { nanoIdish } from '../../util.js';
 import { FormulaHint } from '../FormulaHint.js';
-import { DamageTypeSelect } from '../DefensesEditor.js';
+import { DamageTypeSelect, ExtraDamageEditor } from '../DefensesEditor.js';
 import type { EditorCtx } from '../SheetDock.js';
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -188,6 +188,13 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                       type="number"
                       value={it.damageBonusMisc ?? 0}
                       onChange={(e) => setItem(it.id, { damageBonusMisc: Number(e.target.value) })}
+                    />
+                  </label>
+                  <label className="grow">
+                    Sát thương phụ (flame tongue…)
+                    <ExtraDamageEditor
+                      parts={it.weaponExtraDamage}
+                      onChange={(parts) => setItem(it.id, { weaponExtraDamage: parts })}
                     />
                   </label>
                 </>

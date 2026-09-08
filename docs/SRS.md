@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.10.0
+- **Version:** 0.11.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -113,10 +113,14 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   attacker's original dice are auto-maxed, and one **extra die per damage
   source** (dice term) is rolled. `1d4+2d6+4` → `1d4+1d6+20`
   (`homebrewCritDamage`).
-- **Damage types + resistances.** Each hit has a damage type; a target's
-  `Defenses` apply: immunity (×0) → vulnerability (×2) → resistance (÷2, floor) →
-  flat `damageReduction`. **Crit immunity** (adamantine) makes a crit land as a
-  normal hit (no maxed dice / extra die).
+- **Damage types + resistances.** An attack has one or more **damage parts**
+  (dice + type) — from the action, its weapon (`weaponExtraDamage`) and any
+  standing **damage rider** on the sheet (a magic ring adding `1d4` fire to every
+  attack). Each part is resolved against the target's `Defenses` **separately**:
+  immunity (×0) → vulnerability (×2) → resistance (÷2, floor) → flat
+  `damageReduction`; the finals are summed. **Crit immunity** (adamantine, per
+  token — never leaks) makes a crit land as a normal hit (no maxed dice / extra
+  die). The homebrew crit rule treats each part as its own source.
 - **Cover.** `none` / `half` (+2 AC & Dex saves) / `threequarters` (+5) /
   `total`. The AC bonus is applied automatically to attack resolution. Total
   cover is **not** enforced — the DM sees a warning listing tokens in total cover
@@ -475,6 +479,11 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `Defenses { resistances[], immunities[], vulnerabilities[], damageReduction,
   critImmune }` — damage-type keys from `DAMAGE_TYPES` (13 5e types).
 - `CoverLevel = none | half | threequarters | total`
+- `DamagePart { dice, type, label? }` — one damage component of an attack.
+- `DamageRider { id, name, dice, type, enabled }` on `CharacterSheet.damageRiders`
+  — a standing extra-damage effect applied to every attack while enabled.
+- `SheetAction.extraDamage?: DamagePart[]`, `InventoryItem.weaponExtraDamage?:
+  DamagePart[]`.
 - `Statblock { id, name, meta, cr, size, ac, acNote?, maxHp, hpFormula?, speed,
   speedNote?, abilities, proficiencyBonus, saveProficiencies[], skills[], senses?,
   languages?, traits[], actions[], color, imageUrl?, tags[], notes, source? }`

@@ -3,6 +3,7 @@ import type {
   CharacterSheet,
   CoverLevel,
   Currency,
+  DamagePart,
   Defenses,
   InventoryItem,
   SheetAction,
@@ -101,9 +102,76 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         attackBonus: toHit,
         damage,
         damageType: it.damageType || '',
+        extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
         source: 'weapon' as const,
       };
     });
+}
+
+/**
+ * Every damage component of an action: its primary damage, its own extra
+ * damage parts, and any applicable standing rider (magic ring, feature…).
+ */
+export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): DamagePart[] {
+  const parts: DamagePart[] = [];
+  if (action.damage) parts.push({ dice: action.damage, type: action.damageType || '' });
+  for (const e of action.extraDamage ?? []) parts.push({ ...e });
+
+  const isAttack = typeof action.attackBonus === 'number';
+  // A "weapon" rider (e.g. a magic ring) rides every weapon attack — both the
+  // equipped-weapon actions and manual attack entries a player types by hand.
+  // "all" riders ride any attack. (Spell attacks aren't distinguished yet — turn
+  // a rider off where it shouldn't apply, or use the action's own extra damage.)
+  for (const r of sheet.damageRiders ?? []) {
+    if (!r.enabled || !isAttack) continue;
+    parts.push({ dice: r.dice, type: r.type, label: r.name });
+  }
+  return parts;
+}
+
+/** Damage parts for a bare stat-block action (no sheet riders). */
+export function statblockDamageParts(action: SheetAction): DamagePart[] {
+  const parts: DamagePart[] = [];
+  if (action.damage) parts.push({ dice: action.damage, type: action.damageType || '' });
+  for (const e of action.extraDamage ?? []) parts.push({ ...e });
+  return parts;
+}
+
+export interface PartOutcome {
+  label: string;
+  type: string;
+  raw: number;
+  final: number;
+  notes: string[];
+}
+
+export interface MultiDamageOutcome {
+  totalRaw: number;
+  totalFinal: number;
+  parts: PartOutcome[];
+}
+
+/** Apply per-type defences to each already-rolled damage part and total up. */
+export function resolveDamageParts(
+  rolled: { part: DamagePart; raw: number }[],
+  def: Defenses | undefined,
+): MultiDamageOutcome {
+  let totalRaw = 0;
+  let totalFinal = 0;
+  const parts: PartOutcome[] = [];
+  for (const { part, raw } of rolled) {
+    const o = applyDamageDefenses(raw, part.type, def);
+    totalRaw += o.raw;
+    totalFinal += o.final;
+    parts.push({
+      label: part.label || typeName(part.type) || 'sát thương',
+      type: part.type,
+      raw: o.raw,
+      final: o.final,
+      notes: o.notes,
+    });
+  }
+  return { totalRaw, totalFinal, parts };
 }
 
 /** Equipped-weapon actions + the sheet's own actions, weapons first. */
@@ -160,15 +228,15 @@ export function applyDamageDefenses(
   const t = (damageType ?? '').toLowerCase();
 
   if (def && t) {
-    if (def.immunities.includes(t as never)) {
+    if (def.immunities.includes(t)) {
       notes.push(`miễn nhiễm ${typeName(t)} (×0)`);
       return { raw, final: 0, notes };
     }
-    if (def.vulnerabilities.includes(t as never)) {
+    if (def.vulnerabilities.includes(t)) {
       dmg *= 2;
       notes.push(`yếu điểm ${typeName(t)} (×2)`);
     }
-    if (def.resistances.includes(t as never)) {
+    if (def.resistances.includes(t)) {
       dmg = Math.floor(dmg / 2);
       notes.push(`kháng ${typeName(t)} (÷2)`);
     }

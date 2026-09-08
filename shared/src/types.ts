@@ -37,14 +37,36 @@ export type ActionType = 'action' | 'bonus' | 'reaction' | 'free' | 'other';
 export const ACTION_TYPES: ActionType[] = ['action', 'bonus', 'reaction', 'free', 'other'];
 export type Recharge = 'short' | 'long' | 'other';
 
+/** One damage component of an attack (its own dice + damage type). */
+export interface DamagePart {
+  dice: string; // "2d6" or "1d4+2"
+  type: string; // a DamageType key, or free text
+  label?: string; // "Ring of fire", "Flame Tongue"
+}
+
+/**
+ * A standing extra-damage effect on a character (e.g. a magic ring that adds
+ * 1d4 fire to attacks) that isn't part of any one weapon. Applies to every
+ * attack action while enabled — toggle it off where it shouldn't count, or put
+ * weapon-specific riders in that weapon's `weaponExtraDamage` instead.
+ */
+export interface DamageRider {
+  id: string;
+  name: string;
+  dice: string;
+  type: string;
+  enabled: boolean;
+}
+
 /** An entry in the action economy: an attack, a utility roll, or just a note. */
 export interface SheetAction {
   id: string;
   name: string;
   actionType: ActionType;
   attackBonus?: number; // present -> it's an attack roll vs AC
-  damage?: string; // full damage notation, e.g. "2d6+8"
+  damage?: string; // primary damage notation, e.g. "2d6+8"
   damageType?: string;
+  extraDamage?: DamagePart[]; // additional damage sources on this action
   save?: { ability: Ability; dc: number }; // present -> it forces a saving throw
   notation?: string; // a generic roll (healing / utility), e.g. "2d4+2"
   description?: string;
@@ -103,6 +125,7 @@ export interface InventoryItem {
   weaponAbility?: WeaponAbility;
   damage?: string; // base damage dice only, e.g. "1d8"
   damageType?: string;
+  weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
   proficient?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
@@ -135,6 +158,8 @@ export interface CharacterSheet {
   initiativeMisc: number;
   /** Action economy. Equipped weapons add derived entries at render time. */
   actions: SheetAction[];
+  /** Standing extra-damage effects (magic ring, class feature…). */
+  damageRiders: DamageRider[];
   resources: ClassResource[];
   spellSlots: SpellSlots[];
   feats: Feat[];
@@ -179,11 +204,12 @@ export const DAMAGE_TYPE_VI: Record<DamageType, string> = {
   force: 'Lực',
 };
 
-/** Damage-type based defences + flat reduction + crit immunity (homebrew). */
+/** Damage-type based defences + flat reduction + crit immunity (homebrew).
+ *  The type arrays hold DamageType keys (kept as string[] for lenient input). */
 export interface Defenses {
-  resistances: DamageType[]; // half damage
-  immunities: DamageType[]; // no damage
-  vulnerabilities: DamageType[]; // double damage
+  resistances: string[]; // half damage
+  immunities: string[]; // no damage
+  vulnerabilities: string[]; // double damage
   damageReduction: number; // flat, subtracted after res/vuln
   critImmune: boolean; // e.g. adamantine armour — a crit hits as a normal hit
 }

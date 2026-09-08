@@ -6,6 +6,38 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-08
+
+### Added
+
+- **Multi-source damage.** An attack can now carry several damage components,
+  each with its own dice and damage type:
+  - per-action **extra damage** parts (sheet action editor + stat-block action
+    editor);
+  - per-weapon **extra damage** (`weaponExtraDamage`, e.g. Flame Tongue's +2d6
+    fire);
+  - sheet-level **damage riders** (`DamageRider`) — a standing effect like a
+    magic ring that adds `1d4` fire to every attack, toggleable, applied to
+    weapon and manual attacks automatically.
+  - Each part is resolved against the target's defences **independently** (so a
+    fire-resistant target halves only the fire part) and the homebrew crit rule
+    treats each part as its own source. The roll log shows the per-part
+    breakdown.
+
+### Fixed / verified
+
+- **Crit immunity is strictly per-token.** Confirmed with tests: a target with
+  no `defenses` always crits; `critImmune` (adamantine) downgrades the crit to a
+  normal hit for that token only; a later attack on a normal target still crits
+  (no shared state, no leak).
+
+### Changed
+
+- Protocol: `attack` / `damage` carry `damageParts: DamagePart[]` (+ per-part
+  `partTotals`) instead of a single `damageNotation` / `damageType`.
+- Shared: `actionDamageParts`, `statblockDamageParts`, `resolveDamageParts`,
+  `DamagePart`, `DamageRider` (+ tests, 45 total).
+
 ## [0.10.0] - 2026-09-08
 
 ### Changed (homebrew rules — replace 5e RAW on this server)
@@ -327,7 +359,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...v0.8.0
