@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.16.0
+- **Version:** 0.17.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -615,3 +615,5 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | Bestiary storage | Its own file (`BESTIARY_FILE`) so it is room/session-independent and OneDrive-syncable; broadcast in `RoomState` (DM-only UI) rather than a new event stream, matching the private-rolls trade-off. Excluded from `room.json`. |
 | 2026-09-08 | NPC stats | Embedded on the token as `TokenStatblock` (denormalised at spawn) rather than a hidden character sheet — no sheet-list clutter, and the map inspector is the single place NPC combat happens. |
 | 2026-09-08 | Bundled content | `docs/bestiary-srd-starter.json` uses SRD 5.1 under CC-BY-4.0 with attribution; it is import-only, never auto-loaded — the bundle itself ships no stat blocks. |
+| 2026-09-08 | Scenes | `RoomState.scenes[]` + `activeSceneId`; `map` / `tokens` are non-persisted live aliases of the active scene. Sheets and the bestiary stay room-global so a scene change never resets stats. Schema v6, protocol v5. |
+| 2026-09-08 | Image upload | `POST /upload` (base64 data URL → file under `UPLOADS_DIR`, served at `/uploads/…`). Open to players. Kept on the server, not in `room.json` (only the URL is). 6 MB cap, raster image mimes only. No auth — consistent with the trusted-LAN model. |

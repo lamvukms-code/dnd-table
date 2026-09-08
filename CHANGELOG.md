@@ -6,6 +6,18 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-08
+
+### Added
+
+- **Image upload, kept on the server.** `POST /upload` accepts a base64 data URL
+  (PNG / JPEG / WebP / GIF, ≤ 6 MB), writes it under `UPLOADS_DIR`
+  (`server/data/uploads`, git-ignored) and serves it from `/uploads/…`. The
+  token inspector and the map-background field now have an "⬆ Tải lên" picker
+  (`ImageField`) alongside the paste-a-URL box — **players can upload their own
+  token art**, and it lives on the server rather than a third-party URL. Vite
+  dev-proxies `/upload` and `/uploads`.
+
 ## [0.16.0] - 2026-09-08
 
 ### Added
@@ -505,7 +517,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...v0.14.0

@@ -20,6 +20,8 @@ export default defineConfig({
     proxy: {
       '/ws': { target: target.replace('http', 'ws'), ws: true },
       '/health': { target },
+      '/upload': { target },
+      '/uploads': { target },
     },
   },
 });

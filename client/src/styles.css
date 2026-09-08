@@ -739,6 +739,20 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .scene-chip .scene-name { background: none; border: none; color: inherit; cursor: pointer; font: inherit; padding: 2px 0; }
 .scene-chip .scene-name em { color: var(--muted); font-style: normal; }
 .map-toolbar label.chk { flex-direction: row; align-items: center; gap: 3px; }
+
+.image-field { display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+.if-label { color: var(--muted); }
+.if-row { display: flex; gap: 4px; align-items: center; }
+.if-thumb {
+  width: 26px; height: 26px; border-radius: 4px; flex: none;
+  background-size: cover; background-position: center; border: 1px solid var(--line);
+}
+.if-upload {
+  cursor: pointer; white-space: nowrap; padding: 2px 6px;
+  border: 1px solid var(--line); border-radius: 4px; background: rgba(255,255,255,0.05);
+}
+.if-url { flex: 1; min-width: 80px; }
+.if-err { color: #e88; }
 .cover-warning {
   position: absolute;
   top: 40px;

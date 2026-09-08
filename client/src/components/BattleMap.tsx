@@ -16,6 +16,7 @@ import {
   type TokenSize,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
+import { uploadImage } from '../upload.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
@@ -368,19 +369,14 @@ function MapToolbar() {
   const room = useStore((s) => s.room)!;
   const send = useStore((s) => s.send);
   const { map } = room;
-  const [bg, setBg] = useState(map.backgroundUrl ?? '');
   const [aspect, setAspect] = useState<number | null>(null);
 
   // Auto grid: keep rows in step with the background's aspect ratio.
-  function loadAspect(url: string) {
+  function loadAspect(url: string | undefined) {
     if (!url) return setAspect(null);
     const img = new Image();
     img.onload = () => setAspect(img.naturalWidth / img.naturalHeight);
     img.src = url;
-  }
-  function applyBg() {
-    send({ t: 'updateMap', patch: { backgroundUrl: bg || undefined } });
-    loadAspect(bg);
   }
   function setCols(cols: number) {
     const patch: { cols: number; rows?: number } = { cols };
@@ -390,15 +386,14 @@ function MapToolbar() {
 
   return (
     <div className="map-toolbar">
-      <label>
-        Nền (URL / upload)
-        <input
-          value={bg}
-          onChange={(e) => setBg(e.target.value)}
-          onBlur={applyBg}
-          placeholder="https://…/map.jpg"
-        />
-      </label>
+      <ImageField
+        label="Nền bản đồ"
+        value={map.backgroundUrl}
+        onChange={(url) => {
+          send({ t: 'updateMap', patch: { backgroundUrl: url } });
+          loadAspect(url);
+        }}
+      />
       <label>
         Ô ngang
         <input
@@ -444,6 +439,74 @@ function MapToolbar() {
         />
         Snap (giữ Shift để tắt tạm)
       </label>
+    </div>
+  );
+}
+
+/** Image picker: upload a file to the server, or paste a URL. */
+function ImageField({
+  value,
+  onChange,
+  label = 'Ảnh',
+}: {
+  value: string | undefined;
+  onChange: (url: string | undefined) => void;
+  label?: string;
+}) {
+  const [url, setUrl] = useState(value ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setErr('');
+    try {
+      const u = await uploadImage(file);
+      setUrl(u);
+      onChange(u);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="image-field">
+      <span className="if-label">{label}</span>
+      <div className="if-row">
+        {value && <span className="if-thumb" style={{ backgroundImage: `url(${value})` }} />}
+        <label className="if-upload">
+          {busy ? '…' : '⬆ Tải lên'}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            hidden
+            disabled={busy}
+            onChange={(e) => pick(e.target.files?.[0])}
+          />
+        </label>
+        <input
+          className="if-url"
+          value={url}
+          placeholder="hoặc dán URL"
+          onChange={(e) => setUrl(e.target.value)}
+          onBlur={() => onChange(url || undefined)}
+        />
+        {value && (
+          <button
+            className="link"
+            onClick={() => {
+              setUrl('');
+              onChange(undefined);
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      {err && <span className="if-err">{err}</span>}
     </div>
   );
 }
@@ -735,6 +798,11 @@ function TokenInspector({
             onChange={(e) => patch({ color: e.target.value })}
           />
         </label>
+        <ImageField
+          label="Ảnh token"
+          value={token.imageUrl}
+          onChange={(url) => patch({ imageUrl: url })}
+        />
         {isDm && (
           <label className="chk">
             <input

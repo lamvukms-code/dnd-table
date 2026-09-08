@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { nanoid } from 'nanoid';
@@ -20,10 +20,41 @@ const DATA_FILE = process.env.ROOM_FILE ?? join(__dirname, '..', 'data', 'room.j
 // Point BESTIARY_FILE at a OneDrive folder to sync your monster library.
 const BESTIARY_FILE =
   process.env.BESTIARY_FILE ?? join(__dirname, '..', 'data', 'bestiary.json');
+const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(__dirname, '..', 'data', 'uploads');
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);
 const app = express();
+app.use(express.json({ limit: '12mb' }));
+
+mkdirSync(UPLOADS_DIR, { recursive: true });
+app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1y', immutable: true }));
+
+const IMG_EXT: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+
+/** Player/DM image upload (token portraits, map backgrounds). Kept on the server. */
+app.post('/upload', (req, res) => {
+  const dataUrl = (req.body as { dataUrl?: string })?.dataUrl;
+  const m = /^data:([\w/+.-]+);base64,(.+)$/s.exec(dataUrl ?? '');
+  if (!m) return res.status(400).json({ error: 'Expected { dataUrl: "data:<mime>;base64,…" }' });
+  const ext = IMG_EXT[m[1].toLowerCase()];
+  if (!ext) return res.status(415).json({ error: 'Chỉ nhận PNG / JPEG / WebP / GIF' });
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 6 * 1024 * 1024) return res.status(413).json({ error: 'Ảnh quá lớn (tối đa 6MB)' });
+  const name = `${nanoid(12)}.${ext}`;
+  try {
+    writeFileSync(join(UPLOADS_DIR, name), buf);
+  } catch (err) {
+    console.error('upload write failed:', err);
+    return res.status(500).json({ error: 'Không lưu được ảnh' });
+  }
+  res.json({ url: `/uploads/${name}` });
+});
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));
 
