@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  d20Check,
   doubleDiceCounts,
   rollNotation,
   type ClientAction,
@@ -57,6 +58,10 @@ interface StoreState {
   attackRoll: (params: AttackParams) => Promise<void>;
   /** Roll a damage formula and subtract the result from a target token's HP. */
   damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
+  /** Roll initiative (via dddice) and put the result on the top initiative bar. */
+  rollInitiativeForMe: (name: string, mod: number, tokenId?: string) => Promise<void>;
+  /** DM: silently roll initiative for a group of tokens straight onto the bar. */
+  rollInitiativeGroup: (tokenIds: string[]) => void;
   setRole: (participantId: string, role: 'dm' | 'player') => void;
   me: () => Participant | undefined;
   isDm: () => boolean;
@@ -162,6 +167,13 @@ export const useStore = create<StoreState>((set, get) => {
       const external = await externalRoll(notation);
       rawSend({ t: 'damage', label, notation, targetTokenId, external: external ?? undefined });
     },
+
+    rollInitiativeForMe: async (name, mod, tokenId) => {
+      const external = await externalRoll(d20Check(mod));
+      rawSend({ t: 'rollInitiative', name, mod, tokenId, external: external ?? undefined });
+    },
+
+    rollInitiativeGroup: (tokenIds) => rawSend({ t: 'rollInitiativeGroup', tokenIds }),
 
     setDddiceKey: (key) => {
       persistDddiceKey(key);

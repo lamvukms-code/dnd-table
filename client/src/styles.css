@@ -243,6 +243,7 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   user-select: none;
 }
 .token.sel { outline: 3px solid var(--accent); }
+.token.group-sel { outline: 3px dashed var(--accent-2); }
 .token.hidden { opacity: 0.5; border-style: dashed; }
 .tk-initial { text-transform: uppercase; font-size: 13px; text-shadow: 0 1px 2px #000; }
 .tk-label {
@@ -513,18 +514,40 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .formula-hint.ok { color: var(--accent-2); }
 .formula-hint.bad { color: #e88; }
 
-/* add-token button (everyone) */
-.add-token-fab {
+/* map top controls */
+.map-top-controls {
   position: absolute;
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 7;
+  display: flex;
+  gap: 6px;
+}
+.add-token-fab {
   font-size: 12px;
   padding: 4px 12px;
   background: var(--panel);
   border-radius: 8px;
 }
+.add-token-fab.on { background: var(--accent-2); color: #06121f; border-color: var(--accent-2); }
+.group-init-bar {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.insp-group { flex-direction: row; align-items: center; gap: 6px; }
 
 /* bestiary panel */
 .modal.bestiary { width: min(900px, 95vw); }

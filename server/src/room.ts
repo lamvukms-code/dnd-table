@@ -119,6 +119,42 @@ export class Room {
     }
   }
 
+  /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
+  private tokenInitMod(token: RoomState['tokens'][number]): number {
+    const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
+    if (sheet) return abilityMod(sheet.abilities.dex) + (sheet.initiativeMisc ?? 0);
+    if (token.statblock) return token.statblock.initiativeMod;
+    return 0;
+  }
+
+  /** Add or update an initiative entry (matched by tokenId, else by name). */
+  private upsertInitEntry(name: string, value: number, tokenId?: string): void {
+    const init = this.state.initiative;
+    const activeId = init.entries.find((e) => e.isActive)?.id;
+    const match = init.entries.find((e) =>
+      tokenId ? e.tokenId === tokenId : !e.tokenId && e.name === name,
+    );
+    if (match) {
+      match.initiative = value;
+      match.name = name;
+    } else {
+      init.entries.push({
+        id: nanoid(8),
+        name,
+        initiative: value,
+        tokenId,
+        isActive: false,
+        hasGone: false,
+      });
+    }
+    init.entries = sortInit(init.entries);
+    if (init.running) {
+      const idx = init.entries.findIndex((e) => e.id === activeId);
+      init.turnIndex = idx >= 0 ? idx : 0;
+      markActive(init);
+    }
+  }
+
   /** Apply an action from `actor`. Returns an error string or null. */
   apply(actor: Participant, action: ClientAction): string | null {
     const isDm = actor.role === 'dm';
@@ -330,27 +366,55 @@ export class Room {
 
       case 'initRollAll': {
         if (!isDm) return 'Chỉ DM được tung initiative';
-        const entries: InitiativeEntry[] = [];
-        for (const token of this.state.tokens) {
-          const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-          let mod = 0;
-          if (sheet) mod = abilityMod(sheet.abilities.dex) + (sheet.initiativeMisc ?? 0);
-          else if (token.statblock) mod = token.statblock.initiativeMod;
-          const roll = rollNotation(`1d20${mod >= 0 ? '+' : ''}${mod}`);
-          entries.push({
+        const entries: InitiativeEntry[] = this.state.tokens.map((token) => {
+          const roll = rollNotation(initNotation(this.tokenInitMod(token)));
+          return {
             id: nanoid(8),
             name: token.label,
             initiative: roll.total,
             tokenId: token.id,
             isActive: false,
             hasGone: false,
-          });
-        }
+          };
+        });
         this.state.initiative.entries = sortInit(entries);
         this.state.initiative.round = 1;
         this.state.initiative.turnIndex = 0;
         this.state.initiative.running = entries.length > 0;
         markActive(this.state.initiative);
+        this.touch();
+        break;
+      }
+
+      case 'rollInitiative': {
+        let result: RollResult;
+        if (action.external) {
+          result = externalRollResult(`1d20${action.mod >= 0 ? '+' : ''}${action.mod}`, action.external);
+        } else {
+          result = rollNotation(initNotation(action.mod));
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${action.name} · Initiative`,
+          result,
+        });
+        this.upsertInitEntry(action.name, result.total, action.tokenId);
+        this.touch();
+        break;
+      }
+
+      case 'rollInitiativeGroup': {
+        if (!isDm) return 'Chỉ DM được tung initiative cho nhóm';
+        for (const tokenId of action.tokenIds) {
+          const token = this.state.tokens.find((tk) => tk.id === tokenId);
+          if (!token) continue;
+          // silent: no pushRoll, no dddice
+          const total = rollNotation(initNotation(this.tokenInitMod(token))).total;
+          this.upsertInitEntry(token.label, total, token.id);
+        }
         this.touch();
         break;
       }
@@ -492,6 +556,10 @@ function migrateRoom(raw: RoomState): RoomState | null {
   }
 
   return s.version === SCHEMA_VERSION ? s : null;
+}
+
+function initNotation(mod: number): string {
+  return `1d20${mod >= 0 ? '+' : ''}${mod}`;
 }
 
 function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {

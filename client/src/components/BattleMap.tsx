@@ -30,12 +30,31 @@ export function BattleMap() {
   const { map, tokens, diceTray } = room;
 
   const [selected, setSelected] = useState<string | null>(null);
+  const [groupMode, setGroupMode] = useState(false);
+  const [groupSel, setGroupSel] = useState<Set<string>>(new Set());
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
 
   const selectedToken = tokens.find((t) => t.id === selected) ?? null;
 
+  function toggleGroup(id: string) {
+    setGroupSel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function exitGroup() {
+    setGroupMode(false);
+    setGroupSel(new Set());
+  }
+
   function onPointerDown(e: React.PointerEvent, token: Token) {
+    if (groupMode && isDm) {
+      toggleGroup(token.id);
+      return;
+    }
     const canMove = isDm || token.controllerId === meId;
     setSelected(token.id);
     if (!canMove) return;
@@ -83,9 +102,47 @@ export function BattleMap() {
 
   return (
     <div className="battlemap">
-      <button className="add-token-fab" onClick={addToken} title="Thêm token">
-        + Token
-      </button>
+      <div className="map-top-controls">
+        <button className="add-token-fab" onClick={addToken} title="Thêm token">
+          + Token
+        </button>
+        {isDm && (
+          <button
+            className={`add-token-fab ${groupMode ? 'on' : ''}`}
+            onClick={() => (groupMode ? exitGroup() : setGroupMode(true))}
+            title="Chọn nhiều token để tung initiative"
+          >
+            {groupMode ? '✓ Đang chọn nhóm' : '⊕ Chọn nhóm init'}
+          </button>
+        )}
+      </div>
+
+      {isDm && groupSel.size > 0 && (
+        <div className="group-init-bar">
+          <span>{groupSel.size} token</span>
+          <button
+            onClick={() => {
+              const npcIds = tokens.filter((t) => t.statblock).map((t) => t.id);
+              setGroupSel(new Set(npcIds));
+            }}
+          >
+            Chọn hết NPC
+          </button>
+          <button
+            className="primary"
+            onClick={() => {
+              send({ t: 'rollInitiativeGroup', tokenIds: [...groupSel] });
+              exitGroup();
+            }}
+          >
+            Tung initiative nhóm
+          </button>
+          <button className="link" onClick={exitGroup}>
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       {isDm && (
         <details className="map-toolbar-wrap">
           <summary>⚙ Bản đồ</summary>
@@ -122,7 +179,9 @@ export function BattleMap() {
               return (
                 <div
                   key={t.id}
-                  className={`token ${selected === t.id ? 'sel' : ''} ${t.hidden ? 'hidden' : ''}`}
+                  className={`token ${selected === t.id ? 'sel' : ''} ${
+                    groupSel.has(t.id) ? 'group-sel' : ''
+                  } ${t.hidden ? 'hidden' : ''}`}
                   style={{
                     left: t.x * CELL,
                     top: t.y * CELL,
@@ -163,7 +222,12 @@ export function BattleMap() {
       <DddiceCanvas />
 
       {selectedToken && (
-        <TokenInspector token={selectedToken} onClose={() => setSelected(null)} />
+        <TokenInspector
+          token={selectedToken}
+          onClose={() => setSelected(null)}
+          inGroup={groupSel.has(selectedToken.id)}
+          onToggleGroup={() => toggleGroup(selectedToken.id)}
+        />
       )}
     </div>
   );
@@ -218,7 +282,17 @@ function MapToolbar() {
   );
 }
 
-function TokenInspector({ token, onClose }: { token: Token; onClose: () => void }) {
+function TokenInspector({
+  token,
+  onClose,
+  inGroup,
+  onToggleGroup,
+}: {
+  token: Token;
+  onClose: () => void;
+  inGroup: boolean;
+  onToggleGroup: () => void;
+}) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
@@ -248,6 +322,12 @@ function TokenInspector({ token, onClose }: { token: Token; onClose: () => void 
           ✕
         </button>
       </div>
+      {isDm && (
+        <label className="chk insp-group">
+          <input type="checkbox" checked={inGroup} onChange={onToggleGroup} />
+          Thêm vào nhóm tung initiative
+        </label>
+      )}
       <div className="insp-grid">
         <label>
           HP

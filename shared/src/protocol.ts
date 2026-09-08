@@ -50,6 +50,16 @@ export type ClientAction =
   | { t: 'initPrev' }
   | { t: 'initReset' }
   | { t: 'initStart' }
+  // roll initiative for oneself from the character sheet (goes through dddice)
+  | {
+      t: 'rollInitiative';
+      name: string;
+      mod: number;
+      tokenId?: string;
+      external?: ExternalRoll;
+    }
+  // DM rolls initiative for a chosen group of tokens, silently (no dddice, no log)
+  | { t: 'rollInitiativeGroup'; tokenIds: string[] }
   | { t: 'upsertSheet'; sheet: CharacterSheet }
   | { t: 'removeSheet'; id: string }
   // bestiary (DM only)

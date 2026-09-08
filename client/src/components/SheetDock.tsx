@@ -202,6 +202,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const rollDice = useStore((s) => s.rollDice);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
+  const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
@@ -413,8 +414,14 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 onChange={(e) => set('speed', Number(e.target.value))}
               />
             </label>
-            <button className="roll-btn" onClick={() => roll('Initiative', initiativeBonus(draft))}>
-              Init {fmtMod(initiativeBonus(draft))}
+            <button
+              className="roll-btn"
+              title="Tung initiative và đưa lên thanh initiative"
+              onClick={() =>
+                rollInitiativeForMe(draft.name, initiativeBonus(draft), draft.tokenId)
+              }
+            >
+              ⚔ Init {fmtMod(initiativeBonus(draft))}
             </button>
             <button className="rest" onClick={() => commit(applyShortRest(draft))}>
               Nghỉ ngắn

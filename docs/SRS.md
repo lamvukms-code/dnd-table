@@ -261,8 +261,19 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 ### 3.6 Initiative tracker
 
 - **FR-50 (P0):** DM adds entries manually (name + initiative value) or rolls
-  initiative for every token at once (`1d20 + DEX mod + misc` where a linked
-  sheet exists, else `1d20`).
+  initiative for every token at once (`1d20 + DEX mod + misc` for a linked sheet,
+  else `1d20 + statblock init mod`, else `1d20`).
+- **FR-50a (P0):** A **player** rolls their own initiative from the character
+  sheet's Init button — it rolls through dddice (when enabled), is logged, and
+  its result is added to / updated on the initiative bar (matched to the sheet's
+  token if linked, else by name) without disturbing other entries
+  (`rollInitiative`).
+- **FR-50b (P0):** The **DM** selects a group of tokens on the map (a select
+  mode, or a per-token checkbox in the inspector; "Chọn hết NPC" = all
+  stat-blocked tokens) and rolls initiative for all of them with one button.
+  These rolls are **silent** — computed server-side, no dddice, no roll-log
+  entries — and land straight on the initiative bar (`rollInitiativeGroup`, DM
+  only). Existing entries are updated, not duplicated.
 - **FR-51 (P0):** Entries are ordered by initiative descending; the DM can edit
   values and remove entries.
 - **FR-52 (P0):** DM controls: start, next turn, previous turn, reset. Next past

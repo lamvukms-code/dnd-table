@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-08
+
+### Added
+
+- **Roll initiative from the character sheet.** The Chiến đấu section's
+  **⚔ Init** button rolls initiative (through dddice when enabled), logs it, and
+  puts the result straight onto the top **initiative bar** — linked to the
+  sheet's token when it has one (`rollInitiative` action).
+- **DM group-initiative roll.** A **⊕ Chọn nhóm init** mode on the map: click
+  tokens (or tick "Thêm vào nhóm tung initiative" in a token's inspector), then
+  **Tung initiative nhóm** rolls `1d20 + init mod` for every selected token
+  **silently** — no dddice, no roll-log entries — and drops the results on the
+  initiative bar (`rollInitiativeGroup` action, DM only). "Chọn hết NPC" selects
+  every stat-blocked token.
+- Both add or update entries (matched by token, else by name) without clearing
+  the rest, so players self-roll and the DM batches the enemies into one list.
+
 ## [0.6.1] - 2026-09-08
 
 ### Added
@@ -228,7 +245,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...v0.5.2
