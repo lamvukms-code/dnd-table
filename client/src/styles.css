@@ -483,6 +483,8 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .res-row { display: flex; align-items: center; gap: 6px; }
 .res-row .res-name { width: 96px; }
 .res-row .res-name.slot { color: var(--muted); }
+.res-row .res-name.pact { color: var(--accent, #a06cd5); display: inline-flex; align-items: center; gap: 3px; }
+.res-row .res-lvl { width: 34px; }
 .res-row .res-max { width: 42px; }
 .pips { display: inline-flex; align-items: center; gap: 3px; }
 .pip {

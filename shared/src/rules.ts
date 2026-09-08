@@ -254,6 +254,7 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
   return {
     ...sheet,
     resources: sheet.resources.map((r) => (r.recharge === 'short' ? { ...r, used: 0 } : r)),
+    pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
@@ -302,6 +303,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     tempHp: 0,
     resources: sheet.resources.map((r) => (r.recharge === 'other' ? r : { ...r, used: 0 })),
     spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })),
+    pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),

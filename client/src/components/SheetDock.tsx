@@ -798,6 +798,10 @@ function Resources({ draft, commit }: EditorCtx) {
       ),
     });
   }
+  function setPact(patch: Partial<NonNullable<typeof draft.pactSlots>>) {
+    if (!draft.pactSlots) return;
+    commit({ ...draft, pactSlots: { ...draft.pactSlots, ...patch } });
+  }
   const nextSlotLevel = [1, 2, 3, 4, 5, 6, 7, 8, 9].find(
     (l) => !draft.spellSlots.some((s) => s.level === l),
   );
@@ -894,6 +898,43 @@ function Resources({ draft, commit }: EditorCtx) {
           </div>
         ))}
 
+      {draft.pactSlots && (
+        <div className="res-row">
+          <span className="res-name slot pact" title="Warlock Pact Magic — hồi khi nghỉ ngắn hoặc dài">
+            Pact lv
+            <input
+              type="number"
+              className="res-lvl"
+              min={1}
+              max={5}
+              value={draft.pactSlots.level}
+              onChange={(e) =>
+                setPact({ level: Math.max(1, Math.min(5, Number(e.target.value))) })
+              }
+            />
+          </span>
+          <Pips
+            max={draft.pactSlots.max}
+            used={draft.pactSlots.used}
+            onChange={(u) =>
+              setPact({ used: Math.max(0, Math.min(draft.pactSlots!.max, u)) })
+            }
+          />
+          <input
+            type="number"
+            className="res-max"
+            value={draft.pactSlots.max}
+            onChange={(e) => setPact({ max: Math.max(0, Number(e.target.value)) })}
+          />
+          <button
+            className="link"
+            onClick={() => commit({ ...draft, pactSlots: null })}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="res-add">
         <button
           onClick={() =>
@@ -908,6 +949,15 @@ function Resources({ draft, commit }: EditorCtx) {
         >
           + Tài nguyên
         </button>
+        {!draft.pactSlots && (
+          <button
+            onClick={() =>
+              commit({ ...draft, pactSlots: { level: 1, max: 1, used: 0 } })
+            }
+          >
+            + Pact Magic
+          </button>
+        )}
         {nextSlotLevel && (
           <button
             onClick={() =>

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-08
+
+### Added
+
+- **Warlock Pact Magic slots.** `CharacterSheet.pactSlots` — a single pool of
+  same-level slots kept separate from the Vancian `spellSlots`. Recharges on a
+  **short or long** rest (`applyShortRest` now resets it too). Editor row under
+  Resources with a level field, pips and a `+ Pact Magic` / `✕` toggle.
+
 ## [0.11.0] - 2026-09-08
 
 ### Added
@@ -359,7 +368,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...v0.9.0

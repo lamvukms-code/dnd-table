@@ -162,6 +162,9 @@ export interface CharacterSheet {
   damageRiders: DamageRider[];
   resources: ClassResource[];
   spellSlots: SpellSlots[];
+  /** Warlock Pact Magic — all slots one level, recharge on a short OR long rest.
+   *  Kept separate from `spellSlots` (Vancian, long-rest only). */
+  pactSlots?: SpellSlots | null;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];

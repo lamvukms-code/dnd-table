@@ -168,6 +168,7 @@ describe('rests', () => {
         { id: 'rage', name: 'Rage', max: 3, used: 2, recharge: 'long' },
       ],
       spellSlots: [{ level: 1, max: 3, used: 3 }],
+      pactSlots: { level: 2, max: 2, used: 2 },
     });
 
   it('short rest restores only short-recharge resources', () => {
@@ -175,6 +176,8 @@ describe('rests', () => {
     expect(s.resources.find((r) => r.id === 'ki')!.used).toBe(0);
     expect(s.resources.find((r) => r.id === 'rage')!.used).toBe(2);
     expect(s.currentHp).toBe(5);
+    expect(s.pactSlots!.used).toBe(0); // pact magic recharges on a short rest
+    expect(s.spellSlots[0].used).toBe(3); // Vancian slots do not
   });
 
   it('long rest restores HP, slots and all rechargeable resources', () => {
@@ -183,6 +186,7 @@ describe('rests', () => {
     expect(s.tempHp).toBe(0);
     expect(s.resources.every((r) => r.used === 0)).toBe(true);
     expect(s.spellSlots[0].used).toBe(0);
+    expect(s.pactSlots!.used).toBe(0);
   });
 });
 
