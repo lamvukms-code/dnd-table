@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.22.0
+- **Version:** 0.23.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)

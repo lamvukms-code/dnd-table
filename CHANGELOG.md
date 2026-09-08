@@ -6,6 +6,17 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-09-08
+
+### Changed
+
+- Subclass-feature support verified for **Barbarian Path of the Experiment** (all
+  of levels 3–14) and **Monk Warrior of the Pestilent Haze** (levels 3, 6, 11
+  and 17 — the level-11 Miasmic Contagion feature was missing from the first
+  pass and is now included). No repo content — these live in the DM's
+  git-ignored `client/src/data/subclasses.local.json`; the app just derives and
+  displays whatever is in that file.
+
 ## [0.22.0] - 2026-09-08
 
 ### Added
@@ -627,7 +638,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...v0.20.0
