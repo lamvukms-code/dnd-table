@@ -276,10 +276,17 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   only). Existing entries are updated, not duplicated.
 - **FR-51 (P0):** Entries are ordered by initiative descending; the DM can edit
   values and remove entries.
-- **FR-52 (P0):** DM controls: start, next turn, previous turn, reset. Next past
-  the last entry increments the round and clears "has gone" flags.
-- **FR-53 (P0):** The active entry is highlighted for all participants; the
-  header shows the round number.
+- **FR-52 (P0):** The initiative strip is a **rotating queue**: `entries[0]` is
+  active; **end turn** moves it to the back and the next entry becomes active; a
+  full cycle (`turnIndex` counts turns) ticks `round` and clears "has gone". Prev
+  turn rotates the other way. `initNext` (end turn) is allowed for the DM **or**
+  whoever controls the active combatant (their token / linked sheet); prev/start/
+  reset/roll-all stay DM-only. A mid-combat `rollInitiative` appends rather than
+  re-sorting the live order.
+- **FR-53 (P0):** The active entry is highlighted for all participants; a "Vòng
+  N" badge shows the round while running. **End turn** buttons live on the strip
+  (DM) and at the top-right of the character sheet (its owner, only on their
+  turn).
 - **FR-54 (P1):** Tie-breaking by DEX; drag-to-reorder.
 - **FR-55 (P1):** Condition / status tags with a duration counter per entry.
 
@@ -320,8 +327,10 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   (`description` only), tagged `actionType` (action/bonus/reaction/free/other).
   Equipped weapons appear as derived `action` entries. Attack actions drive the
   same target flow as the map (to-hit vs AC → damage → HP).
-- **FR-64 (P0):** A sheet can be linked to a map token (`tokenId`) so initiative
-  rolls and, later, attacks can use its stats.
+- **FR-64 (P0):** A sheet is linked to a map token (`tokenId`) from a picker in
+  the sheet header **or** the token inspector (player → own sheets, DM → any).
+  The sheet header shows a **circular portrait** of the linked token (image, or
+  colour + initials, with an HP bar and a turn-glow).
 
 #### 3.7.1 Inventory, currency & derived combat
 
@@ -432,7 +441,8 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `TokenStatblock { name, meta?, abilities, proficiencyBonus, saveProficiencies[],
   skills[], initiativeMod, actions[], traits[], notes?, fromId? }` — the
   combat-relevant subset copied onto a spawned token.
-- `Initiative { entries[], round, turnIndex, running }`
+- `Initiative { entries[], round, turnIndex, running }` — rotating queue:
+  `entries[0]` active, `turnIndex` = turns taken this round.
 - `InitiativeEntry { id, name, initiative, tokenId?, isActive, hasGone }`
 - `CharacterSheet { id, ownerId, name, className, level, proficiencyBonus,
   abilities, saveProficiencies[], skillProficiencies[], skillExpertise[], maxHp,

@@ -127,10 +127,23 @@ export class Room {
     return 0;
   }
 
+  /** Whether `actor` controls the combatant whose turn is currently active. */
+  private actorOwnsActiveTurn(actor: Participant): boolean {
+    const active = this.state.initiative.entries.find((e) => e.isActive);
+    if (!active) return false;
+    if (active.tokenId) {
+      const token = this.state.tokens.find((t) => t.id === active.tokenId);
+      if (token?.controllerId === actor.id) return true;
+      if (this.state.sheets.some((s) => s.ownerId === actor.id && s.tokenId === active.tokenId)) {
+        return true;
+      }
+    }
+    return this.state.sheets.some((s) => s.ownerId === actor.id && s.name === active.name);
+  }
+
   /** Add or update an initiative entry (matched by tokenId, else by name). */
   private upsertInitEntry(name: string, value: number, tokenId?: string): void {
     const init = this.state.initiative;
-    const activeId = init.entries.find((e) => e.isActive)?.id;
     const match = init.entries.find((e) =>
       tokenId ? e.tokenId === tokenId : !e.tokenId && e.name === name,
     );
@@ -147,12 +160,10 @@ export class Room {
         hasGone: false,
       });
     }
-    init.entries = sortInit(init.entries);
-    if (init.running) {
-      const idx = init.entries.findIndex((e) => e.id === activeId);
-      init.turnIndex = idx >= 0 ? idx : 0;
-      markActive(init);
-    }
+    // Out of combat: keep the list sorted by initiative. In combat the list is
+    // in turn (rotation) order, so a new roll just appends and acts at round end.
+    if (!init.running) init.entries = sortInit(init.entries);
+    markActive(init);
   }
 
   /** Apply an action from `actor`. Returns an error string or null. */
@@ -430,7 +441,9 @@ export class Room {
       }
 
       case 'initNext': {
-        if (!isDm) return 'Chỉ DM được chuyển lượt';
+        if (!isDm && !this.actorOwnsActiveTurn(actor)) {
+          return 'Chỉ DM hoặc người đang tới lượt được kết thúc lượt';
+        }
         advanceTurn(this.state.initiative, 1);
         this.touch();
         break;
@@ -566,25 +579,37 @@ function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {
   return [...entries].sort((a, b) => b.initiative - a.initiative);
 }
 
+// Rotation model: entries[0] is the active combatant; ending a turn moves the
+// front entry to the back. `turnIndex` counts turns taken in the current round.
 function markActive(init: RoomState['initiative']): void {
-  init.entries.forEach((e, i) => (e.isActive = i === init.turnIndex && init.running));
+  init.entries.forEach((e, i) => (e.isActive = i === 0 && init.running));
 }
 
 function advanceTurn(init: RoomState['initiative'], dir: 1 | -1): void {
-  if (init.entries.length === 0) return;
+  const n = init.entries.length;
+  if (n === 0) return;
   init.running = true;
-  let next = init.turnIndex + dir;
-  if (next >= init.entries.length) {
-    next = 0;
-    init.round++;
-    init.entries.forEach((e) => (e.hasGone = false));
-  } else if (next < 0) {
-    next = init.entries.length - 1;
-    init.round = Math.max(1, init.round - 1);
+
+  if (dir === 1) {
+    const done = init.entries.shift()!;
+    done.hasGone = true;
+    init.entries.push(done);
+    init.turnIndex += 1;
+    if (init.turnIndex >= n) {
+      init.turnIndex = 0;
+      init.round += 1;
+      init.entries.forEach((e) => (e.hasGone = false));
+    }
+  } else {
+    const back = init.entries.pop()!;
+    init.entries.unshift(back);
+    back.hasGone = false;
+    if (init.turnIndex > 0) {
+      init.turnIndex -= 1;
+    } else if (init.round > 1) {
+      init.round -= 1;
+      init.turnIndex = n - 1;
+    }
   }
-  if (dir === 1 && init.entries[init.turnIndex]) {
-    init.entries[init.turnIndex].hasGone = true;
-  }
-  init.turnIndex = next;
   markActive(init);
 }

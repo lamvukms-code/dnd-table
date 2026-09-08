@@ -300,6 +300,9 @@ function TokenInspector({
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
   const tokens = useStore((s) => s.room?.tokens ?? []);
+  const sheets = useStore((s) => s.room?.sheets ?? []);
+  const mySheets = sheets.filter((s) => isDm || s.ownerId === meId);
+  const linkedSheet = sheets.find((s) => s.tokenId === token.id) ?? null;
   const [atkName, setAtkName] = useState('Đòn đánh');
   const [atkBonus, setAtkBonus] = useState('5');
   const [dmg, setDmg] = useState('1d8+3');
@@ -326,6 +329,29 @@ function TokenInspector({
         <label className="chk insp-group">
           <input type="checkbox" checked={inGroup} onChange={onToggleGroup} />
           Thêm vào nhóm tung initiative
+        </label>
+      )}
+      {mySheets.length > 0 && (
+        <label className="insp-link">
+          Gán token này cho nhân vật
+          <select
+            value={linkedSheet && mySheets.some((s) => s.id === linkedSheet.id) ? linkedSheet.id : ''}
+            onChange={(e) => {
+              const sheet = sheets.find((s) => s.id === e.target.value);
+              // unlink whatever this sheet pointed at, then link this token
+              if (linkedSheet && (!sheet || sheet.id !== linkedSheet.id)) {
+                send({ t: 'upsertSheet', sheet: { ...linkedSheet, tokenId: undefined } });
+              }
+              if (sheet) send({ t: 'upsertSheet', sheet: { ...sheet, tokenId: token.id } });
+            }}
+          >
+            <option value="">— không —</option>
+            {mySheets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </label>
       )}
       <div className="insp-grid">

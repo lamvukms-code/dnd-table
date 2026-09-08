@@ -198,12 +198,60 @@ export interface EditorCtx {
 
 /* ------------------------------------------------------------------ Basic */
 
+function TokenAvatar({
+  token,
+  active,
+}: {
+  token: { label: string; color: string; imageUrl?: string; currentHp?: number; maxHp?: number } | null;
+  active: boolean;
+}) {
+  if (!token) {
+    return (
+      <div className="bt-avatar empty" title="Chưa gán token">
+        ?
+      </div>
+    );
+  }
+  const hpPct =
+    typeof token.currentHp === 'number' && typeof token.maxHp === 'number' && token.maxHp > 0
+      ? Math.max(0, Math.min(100, (token.currentHp / token.maxHp) * 100))
+      : null;
+  return (
+    <div
+      className={`bt-avatar ${active ? 'active' : ''}`}
+      style={
+        token.imageUrl
+          ? { backgroundImage: `url(${token.imageUrl})` }
+          : { background: token.color }
+      }
+      title={token.label}
+    >
+      {!token.imageUrl && <span>{token.label.slice(0, 2)}</span>}
+      {hpPct !== null && (
+        <div className="bt-avatar-hp">
+          <div style={{ width: `${hpPct}%` }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function BasicTab({ draft, commit }: EditorCtx) {
+  const send = useStore((s) => s.send);
   const rollDice = useStore((s) => s.rollDice);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
   const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
   const tokens = useStore((s) => s.room?.tokens ?? []);
+  const initiative = useStore((s) => s.room?.initiative);
+  const linkedToken = tokens.find((t) => t.id === draft.tokenId) ?? null;
+  const activeEntry = initiative?.entries.find((e) => e.isActive) ?? null;
+  const myTurn = Boolean(
+    initiative?.running &&
+      activeEntry &&
+      ((draft.tokenId && activeEntry.tokenId === draft.tokenId) ||
+        activeEntry.name === draft.name),
+  );
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
@@ -227,9 +275,9 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
   return (
     <div className="basic-tab">
-      <div className="bt-cols">
-        {/* header + abilities */}
-        <div className="bt-col">
+      <div className="bt-header">
+        <TokenAvatar token={linkedToken} active={myTurn} />
+        <div className="bt-header-mid">
           <div className="bt-ident">
             <input
               className="bt-name"
@@ -257,6 +305,34 @@ function BasicTab({ draft, commit }: EditorCtx) {
             </label>
             <span className="bt-prof">Thành thạo {fmtMod(draft.proficiencyBonus)}</span>
           </div>
+          <label className="bt-tokenlink">
+            Token đại diện
+            <select
+              value={draft.tokenId ?? ''}
+              onChange={(e) => set('tokenId', e.target.value || undefined)}
+            >
+              <option value="">— chưa gán —</option>
+              {tokens.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <button
+          className={`end-turn-btn ${myTurn ? 'my-turn' : ''}`}
+          disabled={!myTurn}
+          title={myTurn ? 'Kết thúc lượt của bạn' : 'Chưa tới lượt bạn'}
+          onClick={() => send({ t: 'initNext' })}
+        >
+          Kết thúc lượt
+        </button>
+      </div>
+
+      <div className="bt-cols">
+        {/* abilities */}
+        <div className="bt-col">
 
           <div className="ability-head">
             <span>Chỉ số</span>

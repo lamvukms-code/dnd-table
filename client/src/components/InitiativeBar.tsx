@@ -30,8 +30,13 @@ export function InitiativeBar() {
     <div className={`init-bar ${expanded ? 'expanded' : ''}`}>
       <div className="ib-row">
         <button className="ib-toggle" onClick={() => setExpanded((v) => !v)} title="Initiative">
-          ⚔ {init.running ? `Vòng ${init.round}` : 'Initiative'} {expanded ? '▴' : '▾'}
+          ⚔ Initiative {expanded ? '▴' : '▾'}
         </button>
+        {init.running && (
+          <span className="ib-round" title="Vòng chiến đấu">
+            Vòng {init.round}
+          </span>
+        )}
 
         <ol className="ib-track">
           {init.entries.map((e) => (
@@ -56,8 +61,12 @@ export function InitiativeBar() {
             <button onClick={() => send({ t: 'initPrev' })} title="Lùi lượt">
               ◀
             </button>
-            <button className="primary" onClick={() => send({ t: 'initNext' })} title="Lượt tiếp">
-              ▶
+            <button
+              className="primary"
+              onClick={() => send({ t: 'initNext' })}
+              title="Kết thúc lượt hiện tại (đẩy về cuối)"
+            >
+              Kết thúc lượt ▶
             </button>
           </div>
         )}

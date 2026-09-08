@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-08
+
+### Added
+
+- **Link a map token to a character sheet** — a "Token đại diện" picker in the
+  sheet header, and a "Gán token này cho nhân vật" picker in the token inspector
+  (a player links their own sheet, the DM any sheet).
+- **Character portrait.** A circular avatar on the left of the sheet header shows
+  the linked token (its image, or its colour + initials), with a small HP bar and
+  a glow when it's that character's turn — Warcraft-style.
+- **End turn button** — on the initiative strip for the DM ("Kết thúc lượt ▶")
+  and at the top-right of the character sheet for the player (enabled only on
+  their turn; the server checks the active entry belongs to them).
+- **Prominent round counter** — a "Vòng N" badge on the initiative strip while
+  combat is running.
+
+### Changed
+
+- **Initiative is now a rotating queue.** Ending a turn moves the active
+  combatant to the **back** of the strip; the next one becomes active; a full
+  cycle ticks the round and clears the "has gone" marks. A mid-combat initiative
+  roll appends (acts at end of round) instead of re-sorting the live order.
+- `initNext` is allowed for the DM **or** whoever controls the active combatant.
+
 ## [0.7.0] - 2026-09-08
 
 ### Added
@@ -245,7 +269,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...v0.6.0
