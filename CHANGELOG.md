@@ -6,6 +6,28 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-09-08
+
+### Added
+
+- **Subclass features.** A separate **"Subclass features"** section on the sheet
+  (below "Class features") that auto-populates by class level from
+  `SubclassFeatureDef` data. Features with a limited-use pool render a spend
+  tracker (`max` = a number or `cha-mod` / `wis-mod` / `con-mod` / `prof`;
+  recharge short / long — a short rest resets short-recharge pools, a long rest
+  resets all).
+- **Local subclass data.** The repo ships **no** subclass content — non-SRD
+  subclasses (a setting you own, homebrew) go in a git-ignored
+  `client/src/data/subclasses.local.json`, loaded via `import.meta.glob` and
+  bundled into the client build (so the server ships it to every player). Format
+  in `client/src/data/subclasses.example.json` + `README.md`.
+
+### Changed
+
+- `CharacterSheet.subclassUses?: Record<string, number>`. Shared:
+  `SubclassFeatureDef`, `derivedSubclassFeatures`, `subclassUsesMax` (+ tests,
+  78 total). No protocol/schema change.
+
 ## [0.21.0] - 2026-09-08
 
 ### Added
@@ -605,7 +627,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...v0.19.0

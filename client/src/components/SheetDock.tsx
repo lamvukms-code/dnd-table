@@ -18,6 +18,7 @@ import {
   casterTypeOf,
   CONDITION_VI,
   CONDITIONS,
+  derivedSubclassFeatures,
   druidLevel,
   martialArtsDie,
   monkDc,
@@ -32,6 +33,7 @@ import {
   sheetClasses,
   skillBonus,
   sneakAttackDice,
+  subclassUsesMax,
   warlockLevel,
   wildShapeMax,
   spellAttackBonus,
@@ -50,6 +52,7 @@ import {
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
+import { SUBCLASS_DEFS } from '../subclassData.js';
 import { FormulaHint } from './FormulaHint.js';
 import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
@@ -558,7 +561,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
             >
               ⚔ Init {fmtMod(initiativeBonus(draft))}
             </button>
-            <button className="rest" onClick={() => commit(applyShortRest(draft))}>
+            <button className="rest" onClick={() => commit(withSubclassRest(applyShortRest(draft), 'short'))}>
               Nghỉ ngắn
             </button>
             <button className="rest" onClick={() => commit(applyLongRest(draft))}>
@@ -571,6 +574,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
       </div>
 
       <ClassFeatures draft={draft} commit={commit} />
+      <SubclassFeatures draft={draft} commit={commit} />
 
       {/* actions economy */}
       <div className="bt-actions">
@@ -1187,6 +1191,54 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
             </span>
           </div>
         ))}
+      </div>
+    </details>
+  );
+}
+
+/** Reset subclass-feature use pools that recharge on the given rest. */
+function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
+  const used = { ...(sheet.subclassUses ?? {}) };
+  let changed = false;
+  for (const f of derivedSubclassFeatures(sheet, SUBCLASS_DEFS)) {
+    if (f.uses && (kind === 'long' || f.uses.recharge === 'short') && used[f.id]) {
+      delete used[f.id];
+      changed = true;
+    }
+  }
+  return changed ? { ...sheet, subclassUses: used } : sheet;
+}
+
+/** Subclass features, from the DM's local subclass data file. Separate from class features. */
+function SubclassFeatures({ draft, commit }: EditorCtx) {
+  const feats = derivedSubclassFeatures(draft, SUBCLASS_DEFS);
+  if (feats.length === 0) return null;
+  const used = draft.subclassUses ?? {};
+  const setUse = (id: string, n: number) =>
+    commit({ ...draft, subclassUses: { ...used, [id]: Math.max(0, n) } });
+
+  return (
+    <details className="class-features subclass-features" open>
+      <summary>Subclass features</summary>
+      <div className="cf-list">
+        {feats.map((f) => {
+          const max = f.uses ? subclassUsesMax(f.uses.max, draft) : 0;
+          const u = Math.min(used[f.id] ?? 0, max);
+          return (
+            <div key={f.id} className="cf-row">
+              <span className="cf-lvl">L{f.level}</span>
+              <span className="cf-body">
+                <strong>{f.name}.</strong> {f.description}
+                {f.uses && (
+                  <span className="cf-uses">
+                    <FocusPips max={max} used={u} onChange={(n) => setUse(f.id, n)} />
+                    <em>hồi khi nghỉ {f.uses.recharge === 'short' ? 'ngắn' : 'dài'}</em>
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </details>
   );

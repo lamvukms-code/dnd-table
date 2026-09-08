@@ -30,6 +30,23 @@ export interface ClassFeatureDef {
     | 'wild-shape';
 }
 
+/**
+ * A subclass feature. Subclass content that isn't SRD (e.g. a published setting
+ * you own) is NOT shipped in this repo — the DM drops a JSON file of these into
+ * their local install (see client/src/data/subclasses.example.json). Same shape
+ * as a class feature plus a `subclass` tag and an optional limited-use pool.
+ */
+export interface SubclassFeatureDef {
+  id: string;
+  class: string; // lowercase class name
+  subclass: string; // subclass name (matched case-insensitively, loosely)
+  level: number; // class level at which it is gained
+  name: string;
+  description: string;
+  /** A limited-use pool this feature grants (rendered as a pip tracker). */
+  uses?: { max: number | 'cha-mod' | 'wis-mod' | 'con-mod' | 'prof'; recharge: 'short' | 'long' };
+}
+
 const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
   {
     id: 'rogue-expertise-1',
@@ -522,4 +539,51 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
   return CLASS_FEATURES.filter((f) => f.level <= (levels[f.class] ?? 0)).sort(
     (a, b) => a.level - b.level,
   );
+}
+
+function norm(s: string | undefined): string {
+  return (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Subclass features the sheet has earned, given a set of definitions (loaded
+ * from the DM's local file). Matches on class + subclass name + class level.
+ */
+export function derivedSubclassFeatures(
+  sheet: CharacterSheet,
+  defs: SubclassFeatureDef[],
+): SubclassFeatureDef[] {
+  const classes = (sheet.classes && sheet.classes.length > 0
+    ? sheet.classes
+    : [{ name: sheet.className, subclass: sheet.subclass, level: sheet.level }]
+  ).filter((c) => c.subclass);
+
+  const out: SubclassFeatureDef[] = [];
+  for (const c of classes) {
+    const cls = norm(c.name);
+    const sub = norm(c.subclass);
+    for (const d of defs) {
+      if (
+        d.level <= c.level &&
+        cls.includes(norm(d.class)) &&
+        (norm(d.subclass) === sub || sub.includes(norm(d.subclass)) || norm(d.subclass).includes(sub))
+      ) {
+        out.push(d);
+      }
+    }
+  }
+  return out.sort((a, b) => a.level - b.level);
+}
+
+/** Resolve a `uses.max` spec against a sheet. */
+export function subclassUsesMax(
+  spec: NonNullable<SubclassFeatureDef['uses']>['max'],
+  sheet: CharacterSheet,
+): number {
+  if (typeof spec === 'number') return spec;
+  const mod = (a: 'cha' | 'wis' | 'con') => Math.floor((sheet.abilities[a] - 10) / 2);
+  if (spec === 'cha-mod') return Math.max(1, mod('cha'));
+  if (spec === 'wis-mod') return Math.max(1, mod('wis'));
+  if (spec === 'con-mod') return Math.max(1, mod('con'));
+  return sheet.proficiencyBonus;
 }

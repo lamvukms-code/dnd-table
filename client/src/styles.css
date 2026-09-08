@@ -744,6 +744,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .cf-row { display: flex; gap: 6px; font-size: 11px; }
 .cf-row .cf-lvl { flex: none; color: var(--muted); width: 26px; }
 .cf-row .cf-body { flex: 1; }
+.subclass-features > summary { color: var(--accent, #a06cd5); }
+.cf-uses { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
+.cf-uses em { color: var(--muted); font-size: 10px; }
 
 .snap-ghost {
   position: absolute;

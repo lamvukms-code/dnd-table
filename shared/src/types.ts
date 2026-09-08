@@ -188,6 +188,8 @@ export interface CharacterSheet {
   focusUsed?: number;
   /** Druid: Wild Shape uses spent (max is derived from Druid level). */
   wildShapeUsed?: number;
+  /** Subclass-feature limited-use pools spent, keyed by feature id. */
+  subclassUses?: Record<string, number>;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];

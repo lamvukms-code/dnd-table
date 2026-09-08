@@ -39,7 +39,12 @@ import {
   tokenSaveBonus,
   tokenStatblockFrom,
 } from './rules.js';
-import { derivedClassFeatures } from './classFeatures.js';
+import {
+  derivedClassFeatures,
+  derivedSubclassFeatures,
+  subclassUsesMax,
+  type SubclassFeatureDef,
+} from './classFeatures.js';
 import { emptyDefenses } from './types.js';
 import type { CharacterSheet, InventoryItem, Statblock } from './types.js';
 
@@ -443,6 +448,20 @@ describe('class features (Rogue / Barbarian)', () => {
   it('Warlock features derive; short rest clears Monk focus', () => {
     expect(derivedClassFeatures(sheet({ className: 'Warlock', level: 11 })).some((f) => f.id === 'warlock-mystic-arcanum-6')).toBe(true);
     expect(applyShortRest(sheet({ className: 'Monk', level: 6, focusUsed: 4 })).focusUsed).toBe(0);
+  });
+
+  it('derivedSubclassFeatures matches class + subclass (loose) + level', () => {
+    const defs: SubclassFeatureDef[] = [
+      { id: 's3', class: 'rogue', subclass: 'Sinner', level: 3, name: 'Hex Slinger', description: '', uses: { max: 'cha-mod', recharge: 'short' } },
+      { id: 's9', class: 'rogue', subclass: 'Sinner', level: 9, name: 'Borrowed Luck', description: '' },
+      { id: 'x', class: 'rogue', subclass: 'Other', level: 3, name: 'Nope', description: '' },
+    ];
+    const s = sheet({ className: 'Rogue', subclass: 'sinner!', level: 5 });
+    const got = derivedSubclassFeatures(s, defs);
+    expect(got.map((f) => f.id)).toEqual(['s3']); // s9 needs level 9, "Other" doesn't match
+    expect(derivedSubclassFeatures(sheet({ className: 'Rogue', level: 5 }), defs)).toHaveLength(0); // no subclass set
+    expect(subclassUsesMax('cha-mod', sheet({ abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 18 } }))).toBe(4);
+    expect(subclassUsesMax(3, s)).toBe(3);
   });
 
   it('Druid: Wild Shape uses 2/3/4, features derive, rests recover', () => {

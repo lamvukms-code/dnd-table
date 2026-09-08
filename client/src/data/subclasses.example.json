@@ -1,0 +1,19 @@
+[
+  {
+    "id": "example-rogue-thing-3",
+    "class": "rogue",
+    "subclass": "Example Archetype",
+    "level": 3,
+    "name": "Example Feature",
+    "description": "Short paraphrase of what the feature does mechanically. Keep it terse.",
+    "uses": { "max": "cha-mod", "recharge": "short" }
+  },
+  {
+    "id": "example-rogue-thing-9",
+    "class": "rogue",
+    "subclass": "Example Archetype",
+    "level": 9,
+    "name": "Another Feature",
+    "description": "This one has no limited uses so `uses` is omitted."
+  }
+]

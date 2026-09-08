@@ -8,6 +8,7 @@ build/
 server/data/room.json
 server/data/bestiary.json
 server/data/uploads/
+client/src/data/subclasses.local.json
 .DS_Store
 .vite/
 coverage/
