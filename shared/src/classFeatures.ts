@@ -1,11 +1,11 @@
 import type { CharacterSheet } from './types.js';
-import { barbarianLevel, rogueLevel } from './rules.js';
+import { barbarianLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
 
 /**
  * Base-class feature progression (D&D 5e 2024). Descriptions are short
  * paraphrases of the mechanics — the System Reference Document 5.2 covers the
- * Barbarian and Rogue base classes under CC-BY-4.0 (© Wizards of the Coast).
- * Subclasses are intentionally out of scope for now.
+ * Barbarian, Rogue, Monk and Warlock base classes under CC-BY-4.0
+ * (© Wizards of the Coast). Subclasses are intentionally out of scope for now.
  *
  * "ASI" (ability score improvement) levels are omitted — they aren't a feature
  * to track. Levels that only grant a subclass feature are noted as such.
@@ -18,7 +18,15 @@ export interface ClassFeatureDef {
   name: string;
   description: string;
   /** Which semi-automatic control on the sheet drives this feature, if any. */
-  automation?: 'sneak-attack' | 'cunning-action' | 'rage' | 'reckless-attack';
+  automation?:
+    | 'sneak-attack'
+    | 'cunning-action'
+    | 'rage'
+    | 'reckless-attack'
+    | 'martial-arts'
+    | 'focus'
+    | 'stunning-strike'
+    | 'pact-magic';
 }
 
 const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
@@ -238,19 +246,204 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
 ];
 
+const MONK: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'monk-martial-arts',
+    level: 1,
+    name: 'Martial Arts',
+    description:
+      'Đòn không vũ khí & vũ khí monk dùng DEX, sát thương = Martial Arts die (1d6 → 1d8 cấp 5 → 1d10 cấp 11 → 1d12 cấp 17). Sau đòn Attack, đánh không vũ khí 1 lần bằng Bonus Action.',
+    automation: 'martial-arts',
+  },
+  {
+    id: 'monk-unarmored-defense',
+    level: 1,
+    name: 'Unarmored Defense',
+    description: 'Không giáp, không khiên: AC = 10 + DEX mod + WIS mod (dùng ô "AC ghi đè").',
+  },
+  {
+    id: 'monk-focus',
+    level: 2,
+    name: "Monk's Focus (Focus Points)",
+    description:
+      'Có Focus Points = cấp Monk, hồi hết khi nghỉ ngắn/dài. Dùng 1 điểm: Flurry of Blows (thêm 2 đòn không vũ khí, 3 từ cấp 10), Patient Defense (Disengage; hoặc +1 điểm để Dodge), Step of the Wind (Dash + Disengage; nhảy xa gấp đôi).',
+    automation: 'focus',
+  },
+  {
+    id: 'monk-unarmored-movement',
+    level: 2,
+    name: 'Unarmored Movement',
+    description: 'Tốc độ +10 ft khi không giáp/khiên (tăng dần: +15 cấp 6, +20 cấp 10, +25 cấp 14, +30 cấp 18).',
+  },
+  {
+    id: 'monk-uncanny-metabolism',
+    level: 2,
+    name: 'Uncanny Metabolism',
+    description: 'Một lần mỗi nghỉ dài, khi lăn initiative: hồi hết Focus Points và hồi HP = tung Martial Arts die + cấp Monk.',
+  },
+  {
+    id: 'monk-deflect-attacks',
+    level: 3,
+    name: 'Deflect Attacks',
+    description:
+      'Reaction khi trúng đòn cận/xa (chỉ đập/đâm/chém): giảm sát thương đi 1d10 + DEX mod + cấp Monk. Nếu về 0, dùng 1 Focus Point để ném lại.',
+  },
+  { id: 'monk-subclass-3', level: 3, name: 'Monk Subclass', description: 'Chọn subclass (chưa hỗ trợ trong app).' },
+  {
+    id: 'monk-slow-fall',
+    level: 4,
+    name: 'Slow Fall',
+    description: 'Reaction khi ngã: giảm sát thương ngã đi 5 × cấp Monk.',
+  },
+  {
+    id: 'monk-extra-attack',
+    level: 5,
+    name: 'Extra Attack',
+    description: 'Tấn công 2 lần khi dùng action Attack.',
+  },
+  {
+    id: 'monk-stunning-strike',
+    level: 5,
+    name: 'Stunning Strike',
+    description:
+      'Một lần mỗi lượt, khi trúng đòn cận chiến: dùng 1 Focus Point → mục tiêu save CON (DC = 8 + PB + WIS mod); thất bại → Stunned tới hết lượt sau của bạn (thành công → tốc độ = 0 tới đầu lượt sau).',
+    automation: 'stunning-strike',
+  },
+  {
+    id: 'monk-empowered-strikes',
+    level: 6,
+    name: 'Empowered Strikes',
+    description: 'Đòn không vũ khí có thể gây sát thương Force thay vì Bludgeoning.',
+  },
+  {
+    id: 'monk-evasion',
+    level: 7,
+    name: 'Evasion',
+    description: 'Save DEX để giảm nửa: thành công = 0, thất bại = nửa.',
+  },
+  {
+    id: 'monk-acrobatic-movement',
+    level: 9,
+    name: 'Acrobatic Movement',
+    description: 'Khi không giáp/khiên: đi trên mặt nước/tường thẳng đứng khi di chuyển.',
+  },
+  {
+    id: 'monk-heightened-focus',
+    level: 10,
+    name: 'Heightened Focus',
+    description: 'Flurry đánh 3 đòn; Patient Defense cho tạm HP 2 × cấp Monk; Step of the Wind cho đồng minh kề bên +½ tốc độ.',
+  },
+  {
+    id: 'monk-deflect-energy',
+    level: 13,
+    name: 'Deflect Energy',
+    description: 'Deflect Attacks áp dụng cho mọi loại sát thương.',
+  },
+  {
+    id: 'monk-disciplined-survivor',
+    level: 14,
+    name: 'Disciplined Survivor',
+    description: 'Thành thạo mọi saving throw. Dùng 1 Focus Point để reroll 1 save.',
+  },
+  {
+    id: 'monk-perfect-focus',
+    level: 15,
+    name: 'Perfect Focus',
+    description: 'Khi lăn initiative mà còn ≤ 3 Focus Point: hồi lên 4.',
+  },
+  {
+    id: 'monk-superior-defense',
+    level: 18,
+    name: 'Superior Defense',
+    description: 'Đầu lượt, dùng 3 Focus Point: 1 phút kháng mọi sát thương trừ Force.',
+  },
+  {
+    id: 'monk-body-and-mind',
+    level: 20,
+    name: 'Body and Mind',
+    description: 'DEX và WIS +4 (tối đa 25).',
+  },
+];
+
+const WARLOCK: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'warlock-eldritch-invocations',
+    level: 1,
+    name: 'Eldritch Invocations',
+    description:
+      'Học Invocation (số lượng theo cấp: 1/3/5/7/9… — xem bảng). Đổi 1 khi lên cấp. Pact of the Blade / Tome / Chain là Invocation cấp 1.',
+  },
+  {
+    id: 'warlock-pact-magic',
+    level: 1,
+    name: 'Pact Magic',
+    description:
+      'Ô phép Pact (quản lý ở tab Phép — số ô & cấp ô tự tính theo cấp Warlock, hồi khi nghỉ ngắn/dài). Spell save DC & spell attack tự tính, ability = CHA.',
+    automation: 'pact-magic',
+  },
+  {
+    id: 'warlock-magical-cunning',
+    level: 2,
+    name: 'Magical Cunning',
+    description:
+      'Một lần mỗi nghỉ dài, nghi lễ 1 phút hồi số ô Pact = ½ số ô tối đa (làm tròn lên).',
+  },
+  { id: 'warlock-subclass-3', level: 3, name: 'Warlock Subclass', description: 'Chọn subclass (chưa hỗ trợ trong app).' },
+  {
+    id: 'warlock-contact-patron',
+    level: 9,
+    name: 'Contact Patron',
+    description: 'Đúc kết Contact Other Plane với patron, luôn thành công; đúc miễn phí 1 lần mỗi nghỉ dài.',
+  },
+  {
+    id: 'warlock-mystic-arcanum-6',
+    level: 11,
+    name: 'Mystic Arcanum (cấp 6)',
+    description: 'Chọn 1 phép cấp 6, đúc miễn phí 1 lần mỗi nghỉ dài (không tốn ô Pact).',
+  },
+  {
+    id: 'warlock-mystic-arcanum-7',
+    level: 13,
+    name: 'Mystic Arcanum (cấp 7)',
+    description: 'Thêm 1 phép cấp 7, miễn phí 1 lần mỗi nghỉ dài.',
+  },
+  {
+    id: 'warlock-mystic-arcanum-8',
+    level: 15,
+    name: 'Mystic Arcanum (cấp 8)',
+    description: 'Thêm 1 phép cấp 8, miễn phí 1 lần mỗi nghỉ dài.',
+  },
+  {
+    id: 'warlock-mystic-arcanum-9',
+    level: 17,
+    name: 'Mystic Arcanum (cấp 9)',
+    description: 'Thêm 1 phép cấp 9, miễn phí 1 lần mỗi nghỉ dài.',
+  },
+  {
+    id: 'warlock-eldritch-master',
+    level: 20,
+    name: 'Eldritch Master',
+    description: 'Nghi lễ 1 phút, 1 lần mỗi nghỉ dài: hồi hết ô Pact.',
+  },
+];
+
 export const CLASS_FEATURES: ClassFeatureDef[] = [
   ...ROGUE.map((f) => ({ ...f, class: 'rogue' })),
   ...BARBARIAN.map((f) => ({ ...f, class: 'barbarian' })),
+  ...MONK.map((f) => ({ ...f, class: 'monk' })),
+  ...WARLOCK.map((f) => ({ ...f, class: 'warlock' })),
 ];
 
 /** Classes we have a feature table for. */
-export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian'];
+export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock'];
 
 /** The class features this sheet has earned, from CLASS_FEATURES, ordered by level. */
 export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
   const levels: Record<string, number> = {
     rogue: rogueLevel(sheet),
     barbarian: barbarianLevel(sheet),
+    monk: monkLevel(sheet),
+    warlock: warlockLevel(sheet),
   };
   return CLASS_FEATURES.filter((f) => f.level <= (levels[f.class] ?? 0)).sort(
     (a, b) => a.level - b.level,

@@ -18,6 +18,10 @@ import {
   casterTypeOf,
   CONDITION_VI,
   CONDITIONS,
+  martialArtsDie,
+  monkDc,
+  monkFocusMax,
+  monkLevel,
   proficiencyByLevel,
   rageDamageBonus,
   rageMax,
@@ -27,6 +31,7 @@ import {
   sheetClasses,
   skillBonus,
   sneakAttackDice,
+  warlockLevel,
   spellAttackBonus,
   spellcastingAbilityOf,
   spellSaveDc,
@@ -1011,17 +1016,50 @@ function Resources({ draft, commit }: EditorCtx) {
 
 /* ------------------------------------------------------ Class features */
 
+function FocusPips({
+  max,
+  used,
+  onChange,
+}: {
+  max: number;
+  used: number;
+  onChange: (u: number) => void;
+}) {
+  return (
+    <span className="cf-pips">
+      {Array.from({ length: max }).map((_, i) => (
+        <button
+          key={i}
+          className={`cf-pip ${i < used ? 'used' : ''}`}
+          title="Dùng / hồi điểm"
+          onClick={() => onChange(i < used ? i : i + 1)}
+        >
+          ●
+        </button>
+      ))}
+      <em>
+        {max - used}/{max}
+      </em>
+    </span>
+  );
+}
+
 function ClassFeatures({ draft, commit }: EditorCtx) {
   const feats = derivedClassFeatures(draft);
   if (feats.length === 0) return null;
   const rl = rogueLevel(draft);
   const bl = barbarianLevel(draft);
+  const ml = monkLevel(draft);
+  const wl = warlockLevel(draft);
   const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
 
   const sneakDice = sneakAttackDice(draft);
   const rMax = rageMax(draft);
   const rUsed = Math.min(draft.rageUsed ?? 0, rMax);
   const rBonus = rageDamageBonus(draft);
+  const fMax = monkFocusMax(draft);
+  const fUsed = Math.min(draft.focusUsed ?? 0, fMax);
+  const spendFocus = (n = 1) => set({ focusUsed: Math.min(fMax, fUsed + n) });
 
   function toggleRage() {
     if (draft.raging) return set({ raging: false });
@@ -1034,6 +1072,8 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
         Class features
         {rl > 0 && <em> · Rogue {rl}</em>}
         {bl > 0 && <em> · Barbarian {bl}</em>}
+        {ml > 0 && <em> · Monk {ml}</em>}
+        {wl > 0 && <em> · Warlock {wl}</em>}
       </summary>
 
       {bl > 0 && (
@@ -1044,21 +1084,50 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
               ? `Đang Rage — +${rBonus} dmg cận chiến · kháng đâm/chém/đập · lợi thế STR`
               : 'Vào Rage'}
           </button>
-          <span className="cf-pips">
-            Rage charge:
-            {Array.from({ length: rMax }).map((_, i) => (
-              <button
-                key={i}
-                className={`cf-pip ${i < rUsed ? 'used' : ''}`}
-                title="Dùng / hồi charge"
-                onClick={() => set({ rageUsed: i < rUsed ? i : i + 1 })}
-              >
-                ●
+          <span className="cf-label">Rage charge:</span>
+          <FocusPips max={rMax} used={rUsed} onChange={(u) => set({ rageUsed: u })} />
+        </div>
+      )}
+
+      {ml > 0 && (
+        <div className="cf-auto cf-monk">
+          <span className="cf-btn static">🥋 Martial Arts die: {martialArtsDie(draft)}</span>
+          {fMax > 0 && (
+            <>
+              <span className="cf-label">Focus:</span>
+              <FocusPips max={fMax} used={fUsed} onChange={(u) => set({ focusUsed: u })} />
+              <button className="cf-btn" disabled={fUsed >= fMax} onClick={() => spendFocus()}
+                title="Thêm 2 đòn không vũ khí (3 từ cấp 10)">
+                Flurry of Blows −1
               </button>
-            ))}
-            <em>
-              {rMax - rUsed}/{rMax}
-            </em>
+              <button className="cf-btn" disabled={fUsed >= fMax} onClick={() => spendFocus()}
+                title="Disengage bonus action">
+                Patient Defense −1
+              </button>
+              <button className="cf-btn" disabled={fUsed >= fMax} onClick={() => spendFocus()}
+                title="Dash + Disengage; nhảy xa gấp đôi">
+                Step of the Wind −1
+              </button>
+              {ml >= 5 && (
+                <button
+                  className="cf-btn"
+                  disabled={fUsed >= fMax}
+                  onClick={() => spendFocus()}
+                  title="Khi trúng đòn: mục tiêu save CON hoặc Stunned — DM/hệ thống roll save qua panel Hiệu ứng"
+                >
+                  Stunning Strike −1 (DC {monkDc(draft)})
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {wl > 0 && (
+        <div className="cf-auto">
+          <span className="hint">
+            Pact Magic: quản lý ô phép, spell save DC & spell attack ở tab <strong>Phép</strong> (tự
+            theo cấp Warlock). Invocations / Mystic Arcanum: xem danh sách dưới.
           </span>
         </div>
       )}

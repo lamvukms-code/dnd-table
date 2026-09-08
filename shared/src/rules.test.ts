@@ -21,7 +21,10 @@ import {
   derivedActions,
   derivedDefenses,
   emptyCurrency,
+  martialArtsDie,
   mergeDefenses,
+  monkFocusMax,
+  monkUnarmedAction,
   rageDamageBonus,
   rageMax,
   resolveDamageParts,
@@ -414,6 +417,30 @@ describe('class features (Rogue / Barbarian)', () => {
     const long = applyLongRest(s);
     expect(long.rageUsed).toBe(0);
     expect(long.raging).toBe(false);
+  });
+
+  it('Monk: martial arts die scales, focus = level from 2, unarmed action uses the die', () => {
+    expect(martialArtsDie(sheet({ className: 'Monk', level: 1 }))).toBe('1d6');
+    expect(martialArtsDie(sheet({ className: 'Monk', level: 5 }))).toBe('1d8');
+    expect(martialArtsDie(sheet({ className: 'Monk', level: 17 }))).toBe('1d12');
+    expect(monkFocusMax(sheet({ className: 'Monk', level: 1 }))).toBe(0);
+    expect(monkFocusMax(sheet({ className: 'Monk', level: 6 }))).toBe(6);
+
+    const s = sheet({
+      className: 'Monk',
+      level: 5,
+      proficiencyBonus: 3,
+      abilities: { str: 10, dex: 16, con: 12, int: 10, wis: 14, cha: 8 },
+    });
+    const a = monkUnarmedAction(s)!;
+    expect(a.attackBonus).toBe(3 + 3); // DEX +3, prof +3
+    expect(a.damage).toBe('1d8+3');
+    expect(derivedClassFeatures(s).some((f) => f.id === 'monk-stunning-strike')).toBe(true);
+  });
+
+  it('Warlock features derive; short rest clears Monk focus', () => {
+    expect(derivedClassFeatures(sheet({ className: 'Warlock', level: 11 })).some((f) => f.id === 'warlock-mystic-arcanum-6')).toBe(true);
+    expect(applyShortRest(sheet({ className: 'Monk', level: 6, focusUsed: 4 })).focusUsed).toBe(0);
   });
 });
 

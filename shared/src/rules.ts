@@ -245,6 +245,41 @@ export function classLevelOf(sheet: CharacterSheet, key: string): number {
 }
 export const rogueLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'rogue');
 export const barbarianLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'barbarian');
+export const monkLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'monk');
+export const warlockLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'warlock');
+
+/** Monk Martial Arts damage die (1d6 → 1d8 at 5 → 1d10 at 11 → 1d12 at 17). '' if not a Monk. */
+export function martialArtsDie(sheet: CharacterSheet): string {
+  const lvl = monkLevel(sheet);
+  if (lvl <= 0) return '';
+  return lvl >= 17 ? '1d12' : lvl >= 11 ? '1d10' : lvl >= 5 ? '1d8' : '1d6';
+}
+/** Monk Focus Points = Monk level (from level 2). */
+export function monkFocusMax(sheet: CharacterSheet): number {
+  const lvl = monkLevel(sheet);
+  return lvl >= 2 ? lvl : 0;
+}
+/** Monk save DC for Stunning Strike etc: 8 + proficiency + WIS modifier. */
+export function monkDc(sheet: CharacterSheet): number {
+  return 8 + sheet.proficiencyBonus + abilityMod(sheet.abilities.wis);
+}
+/** The Monk's unarmed-strike action (Martial Arts die, DEX or STR — whichever is higher). */
+export function monkUnarmedAction(sheet: CharacterSheet): SheetAction | null {
+  const die = martialArtsDie(sheet);
+  if (!die) return null;
+  const abMod = Math.max(abilityMod(sheet.abilities.str), abilityMod(sheet.abilities.dex));
+  const toHit = abMod + sheet.proficiencyBonus;
+  const dmg = abMod === 0 ? die : abMod > 0 ? `${die}+${abMod}` : `${die}${abMod}`;
+  return {
+    id: 'monk-unarmed',
+    name: 'Đánh không vũ khí (Martial Arts)',
+    actionType: 'action',
+    attackBonus: toHit,
+    damage: dmg,
+    damageType: 'bludgeoning',
+    source: 'weapon',
+  };
+}
 
 /** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
 export function sneakAttackDice(sheet: CharacterSheet): number {
@@ -599,10 +634,12 @@ export function resolveDamageParts(
   return { totalRaw, totalFinal, parts };
 }
 
-/** Equipped-weapon actions + the sheet's own actions, weapons first. */
+/** Equipped-weapon actions + a Monk's unarmed strike + the sheet's own actions. */
 export function allActions(sheet: CharacterSheet): SheetAction[] {
+  const monk = monkUnarmedAction(sheet);
   return [
     ...derivedActions(sheet),
+    ...(monk ? [monk] : []),
     ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
   ];
 }
@@ -682,6 +719,8 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
     pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
     // 2024 Barbarian: regain one expended Rage on a short rest.
     rageUsed: typeof sheet.rageUsed === 'number' ? Math.max(0, sheet.rageUsed - 1) : sheet.rageUsed,
+    // 2024 Monk: all Focus Points return on a short (or long) rest.
+    focusUsed: 0,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
@@ -733,6 +772,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,
     rageUsed: 0,
     raging: false,
+    focusUsed: 0,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),

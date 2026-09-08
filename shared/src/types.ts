@@ -184,6 +184,8 @@ export interface CharacterSheet {
   rageUsed?: number;
   /** Rogue: Sneak Attack "armed" for the next attack (one-shot). */
   sneakAttackArmed?: boolean;
+  /** Monk: Focus Points spent (max is derived from Monk level). */
+  focusUsed?: number;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];

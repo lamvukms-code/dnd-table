@@ -732,6 +732,10 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
   border: 1px solid var(--line); background: rgba(255,255,255,0.05); cursor: pointer;
 }
 .cf-btn.on { background: var(--accent-2); color: #06121f; border-color: var(--accent-2); }
+.cf-btn.static { cursor: default; opacity: 0.9; }
+.cf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cf-label { font-size: 11px; color: var(--muted); }
+.cf-monk { row-gap: 4px; }
 .cf-pips { display: inline-flex; align-items: center; gap: 2px; }
 .cf-pip { background: none; border: none; color: var(--line); cursor: pointer; font-size: 12px; padding: 0 1px; }
 .cf-pip.used { color: var(--accent-2); }

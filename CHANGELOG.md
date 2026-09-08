@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-08
+
+### Added
+
+- **Class features — Monk & Warlock** (base class; subclasses later), same
+  data-driven "Class features" section as Rogue/Barbarian.
+- **Monk semi-automatic:**
+  - **Martial Arts** — a derived **"Đánh không vũ khí" action** (attack + damage
+    using the Martial Arts die 1d6 → 1d8 (5) → 1d10 (11) → 1d12 (17), DEX or STR
+    whichever is higher) shows up in the action list automatically.
+  - **Focus Points** — pip tracker (max = Monk level from level 2; all return on
+    a short or long rest) with one-tap spend buttons for Flurry of Blows,
+    Patient Defense, Step of the Wind, and Stunning Strike (shows the Monk DC
+    `8 + PB + WIS`).
+- **Warlock** — feature list incl. Mystic Arcanum; Pact Magic points to the
+  existing Phép tab (slots / DC / attack already auto-computed from Warlock
+  level since 0.15).
+
+### Changed
+
+- `CharacterSheet.focusUsed?`. Shared: `monkLevel`, `warlockLevel`,
+  `martialArtsDie`, `monkFocusMax`, `monkDc`, `monkUnarmedAction` (folded into
+  `allActions`) (+ tests, 76 total). No protocol/schema change.
+
 ## [0.19.0] - 2026-09-08
 
 ### Added
@@ -567,7 +591,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...v0.17.0
