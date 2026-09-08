@@ -12,6 +12,7 @@ import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { blankStatblock, mergeBestiary, normalizeStatblock } from '../statblock.js';
 import { FormulaHint } from './FormulaHint.js';
+import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 
 const SIZES: TokenSize[] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 
@@ -312,6 +313,11 @@ function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: () => vo
 
       <TraitsEditor traits={sb.traits} onChange={(traits) => set('traits', traits)} />
 
+      <details className="sb-def-details">
+        <summary>Phòng thủ (kháng / miễn / DR / crit immune)</summary>
+        <DefensesEditor defenses={sb.defenses} onChange={(d) => set('defenses', d)} />
+      </details>
+
       <div className="sb-row">
         <label className="grow">
           Tags (phẩy)
@@ -407,6 +413,7 @@ export function ActionsEditor({
             value={a.damage ?? ''}
             onChange={(e) => upd(a.id, { damage: e.target.value || undefined })}
           />
+          <DamageTypeSelect value={a.damageType} onChange={(v) => upd(a.id, { damageType: v })} />
           <input
             placeholder="roll khác"
             value={a.notation ?? ''}

@@ -11,8 +11,10 @@ import {
   SCHEMA_VERSION,
 } from './factory.js';
 import {
-  doubleDiceCounts,
+  applyDamageDefenses,
+  coverAcBonus,
   externalRollResult,
+  homebrewCritDamage,
   resolveAttack,
   rollNotation,
   tokenStatblockFrom,
@@ -201,9 +203,10 @@ export class Room {
             return (err as Error).message;
           }
         }
+        const dmgOut = applyDamageDefenses(result.total, action.damageType, target.defenses);
         let amount = 0;
         if (typeof target.currentHp === 'number') {
-          amount = Math.min(target.currentHp, Math.max(0, Math.round(result.total)));
+          amount = Math.min(target.currentHp, dmgOut.final);
           target.currentHp -= amount;
         }
         this.pushRoll({
@@ -213,7 +216,14 @@ export class Room {
           actorName: actor.name,
           label: action.label || 'Sát thương',
           result,
-          damage: { targetTokenId: target.id, targetName: target.label, amount },
+          damage: {
+            targetTokenId: target.id,
+            targetName: target.label,
+            amount,
+            raw: dmgOut.raw,
+            damageType: action.damageType,
+            notes: dmgOut.notes.length ? dmgOut.notes : undefined,
+          },
         });
         this.touch();
         break;
@@ -230,6 +240,12 @@ export class Room {
             return (err as Error).message;
           }
         }
+        // Homebrew: skill / ability / save checks crit on nat 20 and fail on nat 1.
+        const checkNat = result.d20?.isCrit
+          ? ('success' as const)
+          : result.d20?.isFumble
+            ? ('fail' as const)
+            : undefined;
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
@@ -237,6 +253,7 @@ export class Room {
           actorName: actor.name,
           label: action.label || 'Roll',
           result,
+          checkNat,
           private: action.private && isDm ? true : undefined,
         });
         this.touch();
@@ -246,7 +263,10 @@ export class Room {
       case 'attack': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
-        const ac = target.armorClass ?? 10;
+        // Cover benefit is added to the target's AC automatically (homebrew).
+        const baseAc = target.armorClass ?? 10;
+        const cover = target.cover ?? 'none';
+        const ac = baseAc + coverAcBonus(cover);
         let attackRoll: RollResult;
         if (action.external) {
           attackRoll = externalRollResult(action.attackNotation, action.external.attack);
@@ -257,13 +277,16 @@ export class Room {
             return (err as Error).message;
           }
         }
-        // Server is authoritative for hit/crit vs its own AC copy, from whatever
-        // die values it was handed (dddice or its own RNG).
         const res = resolveAttack(attackRoll, ac);
+        // Adamantine / crit-immune: a crit lands as an ordinary hit.
+        const critImmune = target.defenses?.critImmune ?? false;
+        const effectiveCrit = res.crit && !critImmune;
+
         let damageResult: RollResult | undefined;
+        let outcome: ReturnType<typeof applyDamageDefenses> | undefined;
         if (res.hit) {
-          const dmgNotation = res.crit
-            ? doubleDiceCounts(action.damageNotation)
+          const dmgNotation = effectiveCrit
+            ? homebrewCritDamage(action.damageNotation)
             : action.damageNotation;
           if (action.external?.damage) {
             damageResult = externalRollResult(dmgNotation, action.external.damage);
@@ -274,35 +297,62 @@ export class Room {
               return (err as Error).message;
             }
           }
+          outcome = applyDamageDefenses(
+            damageResult.total,
+            action.damageType,
+            target.defenses,
+          );
         }
+
+        const coverNote =
+          cover === 'total'
+            ? ' · ⚠ mục tiêu che hoàn toàn'
+            : cover !== 'none'
+              ? ` · ${cover === 'half' ? 'nửa che' : '3/4 che'} (+${coverAcBonus(cover)} AC)`
+              : '';
+
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: action.label || 'Attack',
+          label: `${action.label || 'Attack'}${coverNote}`,
           result: attackRoll,
           attack: {
             targetTokenId: target.id,
             targetName: target.label,
             targetAc: ac,
             hit: res.hit,
-            crit: res.crit,
+            crit: effectiveCrit,
             fumble: res.fumble,
           },
         });
-        if (damageResult) {
+        if (damageResult && outcome) {
+          const applied = typeof target.currentHp === 'number' ? outcome.final : 0;
+          if (typeof target.currentHp === 'number') {
+            target.currentHp = Math.max(0, target.currentHp - applied);
+          }
+          const critTag = effectiveCrit
+            ? ' (chí mạng homebrew)'
+            : res.crit && critImmune
+              ? ' (chí mạng bị chặn — adamantine)'
+              : '';
           this.pushRoll({
             id: nanoid(8),
             ts: Date.now(),
             actorId: actor.id,
             actorName: actor.name,
-            label: `${action.label || 'Attack'} — sát thương${res.crit ? ' (chí mạng)' : ''}`,
+            label: `${action.label || 'Attack'} — sát thương${critTag}`,
             result: damageResult,
+            damage: {
+              targetTokenId: target.id,
+              targetName: target.label,
+              amount: applied,
+              raw: outcome.raw,
+              damageType: action.damageType,
+              notes: outcome.notes.length ? outcome.notes : undefined,
+            },
           });
-          if (typeof target.currentHp === 'number') {
-            target.currentHp = Math.max(0, target.currentHp - damageResult.total);
-          }
         }
         this.touch();
         break;
@@ -360,8 +410,10 @@ export class Room {
             maxHp: src.maxHp,
             hidden: isDm ? src.hidden : false,
             controllerId: isDm ? src.controllerId : actor.id,
+            cover: src.cover,
             // deep copy so the two tokens track HP / actions independently
             statblock: src.statblock ? JSON.parse(JSON.stringify(src.statblock)) : undefined,
+            defenses: src.defenses ? JSON.parse(JSON.stringify(src.defenses)) : undefined,
           }),
         );
         this.touch();
@@ -573,6 +625,7 @@ export class Room {
             maxHp: hp,
             hidden: action.hidden ?? false,
             statblock: tokenStatblockFrom(sb),
+            defenses: sb.defenses ? { ...sb.defenses } : undefined,
           }),
         );
         this.touch();

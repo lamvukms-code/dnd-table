@@ -6,6 +6,35 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-08
+
+### Changed (homebrew rules — replace 5e RAW on this server)
+
+- **Skill / ability / save checks crit & fail.** A natural 20 shows
+  "THÀNH CÔNG TUYỆT ĐỐI", a natural 1 "THẤT BẠI THẢM HẠI" in the roll log
+  (`RollLogEntry.checkNat`); the DM adjudicates the effect.
+- **Modified critical damage.** Instead of doubling dice, a crit auto-maxes the
+  character's original dice and adds **one extra die per damage source**.
+  Rogue dagger + lv3 sneak attack: `1d4+2d6+4` → **`1d4+1d6+20`**
+  (`homebrewCritDamage`, replaces `doubleDiceCounts` in the attack flow).
+
+### Added
+
+- **Damage types + resistances.** Actions carry a `damageType` (13 5e types via a
+  dropdown, on sheet actions, weapons, stat-block actions and the map attack
+  box). Tokens and stat blocks get a **Defenses** block — resistance (÷2),
+  immunity (×0), vulnerability (×2), flat **damage reduction**, and
+  **crit immunity (adamantine)** — applied server-side; the roll log shows the
+  breakdown ("gốc 40 · fire · kháng Lửa (÷2) · giảm 3 (DR)").
+- **Cover.** A cover state on each token (none / half +2 AC / 3/4 +5 AC / total).
+  The AC bonus is added automatically when resolving attacks; a badge shows on
+  the token; **the DM gets a warning listing every token in total cover** ("đừng
+  đánh tầm xa"). Range attacks are *not* blocked — the warning is the mechanism.
+- Shared: `homebrewCritDamage`, `applyDamageDefenses`, `coverAcBonus`,
+  `emptyDefenses`, `DAMAGE_TYPES` / `DAMAGE_TYPE_VI`, `Defenses`, `CoverLevel`;
+  `docs/bestiary-srd-starter.json` gains real damage types + Skeleton/Zombie
+  defenses. Tests for the new helpers.
+
 ## [0.9.0] - 2026-09-08
 
 ### Added
@@ -298,7 +327,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.1...v0.7.0

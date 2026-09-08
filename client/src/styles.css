@@ -253,6 +253,17 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 }
 .token.sel { outline: 3px solid var(--accent); }
 .token.group-sel { outline: 3px dashed var(--accent-2); }
+.token.cover-total { outline: 3px dotted #e88; }
+.tk-cover {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  font-size: 10px;
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 0 2px;
+  line-height: 1.4;
+}
 .token.hidden { opacity: 0.5; border-style: dashed; }
 .tk-initial { text-transform: uppercase; font-size: 13px; text-shadow: 0 1px 2px #000; }
 .tk-label {
@@ -619,6 +630,43 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .formula-hint { font-size: 11px; margin-top: 2px; }
 .formula-hint.ok { color: var(--accent-2); }
 .formula-hint.bad { color: #e88; }
+
+/* damage type + defences */
+.dmg-type-select { max-width: 92px; }
+.defenses-editor { display: flex; flex-direction: column; gap: 5px; font-size: 11px; }
+.defenses-editor .def-line { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.defenses-editor .def-line .chk { flex-direction: row; align-items: center; gap: 4px; }
+.defenses-editor .def-line input[type='number'] { width: 52px; }
+.def-row { display: flex; gap: 6px; align-items: baseline; }
+.def-row .def-label { flex: none; width: 78px; color: var(--muted); }
+.def-chips { display: flex; flex-wrap: wrap; gap: 3px; }
+.def-chip {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+.def-chip.on { background: var(--accent-2); color: #06121f; border-color: var(--accent-2); }
+.def-details > summary, .sb-def-details > summary { font-size: 11px; }
+.cover-total-note { border-left: 3px solid #e88; padding-left: 6px; color: #e88; }
+.cover-warning {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  background: #4a1f1f;
+  border: 1px solid #e88;
+  color: #f7caca;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  max-width: 80%;
+}
+.rl-dmg-raw { color: var(--muted); }
+.rl-dmg-type { color: var(--accent-2); }
+.rl-dmg-note { color: #e0b060; }
 
 /* map top controls */
 .map-top-controls {

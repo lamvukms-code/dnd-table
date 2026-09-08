@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   allActions,
+  applyDamageDefenses,
   applyLongRest,
   applyShortRest,
   carriedWeight,
   computeArmorClass,
+  coverAcBonus,
   currencyInGp,
   derivedActions,
   emptyCurrency,
@@ -13,6 +15,7 @@ import {
   tokenSaveBonus,
   tokenStatblockFrom,
 } from './rules.js';
+import { emptyDefenses } from './types.js';
 import type { CharacterSheet, InventoryItem, Statblock } from './types.js';
 
 function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
@@ -177,6 +180,34 @@ describe('rests', () => {
     expect(s.tempHp).toBe(0);
     expect(s.resources.every((r) => r.used === 0)).toBe(true);
     expect(s.spellSlots[0].used).toBe(0);
+  });
+});
+
+describe('cover + damage defences (homebrew)', () => {
+  it('cover AC bonus', () => {
+    expect(coverAcBonus('none')).toBe(0);
+    expect(coverAcBonus('half')).toBe(2);
+    expect(coverAcBonus('threequarters')).toBe(5);
+    expect(coverAcBonus('total')).toBe(0); // handled separately
+  });
+
+  it('resistance halves, vulnerability doubles, DR subtracts, immunity zeroes', () => {
+    const d = { ...emptyDefenses(), resistances: ['fire'], damageReduction: 3 };
+    // 20 fire → ÷2 = 10 → −3 DR = 7
+    expect(applyDamageDefenses(20, 'fire', d).final).toBe(7);
+
+    const v = { ...emptyDefenses(), vulnerabilities: ['cold'] };
+    expect(applyDamageDefenses(10, 'cold', v).final).toBe(20);
+
+    const im = { ...emptyDefenses(), immunities: ['poison'] };
+    expect(applyDamageDefenses(30, 'poison', im).final).toBe(0);
+
+    // wrong type → DR still applies, no res
+    expect(applyDamageDefenses(20, 'slashing', d).final).toBe(17);
+
+    // vuln then resist (both) → net unchanged
+    const both = { ...emptyDefenses(), resistances: ['acid'], vulnerabilities: ['acid'] };
+    expect(applyDamageDefenses(12, 'acid', both).final).toBe(12);
   });
 });
 

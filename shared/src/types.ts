@@ -147,6 +147,60 @@ export interface CharacterSheet {
 
 export type TokenSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
 
+export const DAMAGE_TYPES = [
+  'bludgeoning',
+  'piercing',
+  'slashing',
+  'fire',
+  'cold',
+  'lightning',
+  'thunder',
+  'acid',
+  'poison',
+  'necrotic',
+  'radiant',
+  'psychic',
+  'force',
+] as const;
+export type DamageType = (typeof DAMAGE_TYPES)[number];
+export const DAMAGE_TYPE_VI: Record<DamageType, string> = {
+  bludgeoning: 'Đập',
+  piercing: 'Xuyên',
+  slashing: 'Chém',
+  fire: 'Lửa',
+  cold: 'Băng',
+  lightning: 'Sét',
+  thunder: 'Âm thanh',
+  acid: 'Axit',
+  poison: 'Độc',
+  necrotic: 'Hoại tử',
+  radiant: 'Thánh',
+  psychic: 'Tâm linh',
+  force: 'Lực',
+};
+
+/** Damage-type based defences + flat reduction + crit immunity (homebrew). */
+export interface Defenses {
+  resistances: DamageType[]; // half damage
+  immunities: DamageType[]; // no damage
+  vulnerabilities: DamageType[]; // double damage
+  damageReduction: number; // flat, subtracted after res/vuln
+  critImmune: boolean; // e.g. adamantine armour — a crit hits as a normal hit
+}
+
+export function emptyDefenses(): Defenses {
+  return {
+    resistances: [],
+    immunities: [],
+    vulnerabilities: [],
+    damageReduction: 0,
+    critImmune: false,
+  };
+}
+
+/** Battlefield cover (homebrew: benefit auto-applied to AC). */
+export type CoverLevel = 'none' | 'half' | 'threequarters' | 'total';
+
 export interface StatblockTrait {
   name: string;
   description: string;
@@ -173,6 +227,7 @@ export interface Statblock {
   languages?: string;
   traits: StatblockTrait[];
   actions: SheetAction[];
+  defenses?: Defenses;
   color: string;
   imageUrl?: string;
   tags: string[];
@@ -191,6 +246,7 @@ export interface TokenStatblock {
   initiativeMod: number;
   actions: SheetAction[];
   traits: StatblockTrait[];
+  defenses?: Defenses;
   notes?: string;
   fromId?: string; // bestiary entry it was spawned from
 }
@@ -210,6 +266,8 @@ export interface Token {
   hidden: boolean; // DM-only visibility
   controllerId?: string; // participant allowed to move it besides DM
   statblock?: TokenStatblock; // NPC/monster stats (from the bestiary)
+  defenses?: Defenses; // damage resist/immune/vuln, flat DR, crit immunity
+  cover?: CoverLevel; // battlefield cover — benefit auto-applied
 }
 
 export interface BattleMap {
@@ -257,8 +315,13 @@ export interface RollLogEntry {
   damage?: {
     targetTokenId?: string;
     targetName: string;
-    amount: number; // HP actually removed
+    amount: number; // HP actually removed (after defences)
+    raw?: number; // rolled total before defences
+    damageType?: string;
+    notes?: string[]; // "kháng lửa (÷2)", "giảm 3 (DR)", …
   };
+  // homebrew: nat 20 / nat 1 on a skill / ability / save check
+  checkNat?: 'success' | 'fail';
   private?: boolean; // DM-only roll
 }
 

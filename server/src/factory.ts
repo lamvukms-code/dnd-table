@@ -130,5 +130,7 @@ export function createToken(partial: Partial<Token>): Token {
     hidden: partial.hidden ?? false,
     controllerId: partial.controllerId,
     statblock: partial.statblock,
+    defenses: partial.defenses,
+    cover: partial.cover ?? 'none',
   };
 }

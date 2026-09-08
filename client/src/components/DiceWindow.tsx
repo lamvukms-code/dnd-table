@@ -106,8 +106,24 @@ export function DiceWindow() {
                     )
                     .join(' ')}
                 </span>
-                {e.result.d20?.isCrit && <span className="crit">CHÍ MẠNG</span>}
-                {e.result.d20?.isFumble && <span className="fumble">HỎNG</span>}
+                {e.result.d20?.isCrit && (
+                  <span className="crit">
+                    {e.attack
+                      ? 'CHÍ MẠNG'
+                      : e.checkNat === 'success'
+                        ? 'THÀNH CÔNG TUYỆT ĐỐI'
+                        : '20 TỰ NHIÊN'}
+                  </span>
+                )}
+                {e.result.d20?.isFumble && (
+                  <span className="fumble">
+                    {e.attack
+                      ? 'HỎNG'
+                      : e.checkNat === 'fail'
+                        ? 'THẤT BẠI THẢM HẠI'
+                        : '1 TỰ NHIÊN'}
+                  </span>
+                )}
               </div>
               {e.attack && (
                 <div className="rl-attack">
@@ -120,6 +136,15 @@ export function DiceWindow() {
               {e.damage && (
                 <div className="rl-attack">
                   → {e.damage.targetName}: <strong>−{e.damage.amount} HP</strong>
+                  {typeof e.damage.raw === 'number' && e.damage.raw !== e.damage.amount && (
+                    <span className="rl-dmg-raw"> (gốc {e.damage.raw})</span>
+                  )}
+                  {e.damage.damageType && (
+                    <span className="rl-dmg-type"> · {e.damage.damageType}</span>
+                  )}
+                  {e.damage.notes?.map((n) => (
+                    <span key={n} className="rl-dmg-note"> · {n}</span>
+                  ))}
                 </div>
               )}
             </li>

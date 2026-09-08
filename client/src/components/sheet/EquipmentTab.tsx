@@ -10,6 +10,7 @@ import {
 } from '@dnd-table/shared';
 import { nanoIdish } from '../../util.js';
 import { FormulaHint } from '../FormulaHint.js';
+import { DamageTypeSelect } from '../DefensesEditor.js';
 import type { EditorCtx } from '../SheetDock.js';
 
 const ITEM_TYPE_LABEL: Record<ItemType, string> = {
@@ -160,7 +161,10 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                   </label>
                   <label>
                     Loại dmg
-                    <input value={it.damageType ?? ''} onChange={(e) => setItem(it.id, { damageType: e.target.value })} />
+                    <DamageTypeSelect
+                      value={it.damageType}
+                      onChange={(v) => setItem(it.id, { damageType: v ?? '' })}
+                    />
                   </label>
                   <label className="chk">
                     <input

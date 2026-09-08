@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.6.0
+- **Version:** 0.10.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -103,6 +103,25 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
 - One room per server process. Running multiple games means multiple processes
   on different ports.
 - Background map images are supplied by the user as URLs they trust.
+
+### 2.5 Homebrew ruleset (replaces 5e RAW where they differ)
+
+- **Skill / ability / save checks crit and fumble.** Nat 20 → critical success,
+  nat 1 → critical fail, flagged in the log (`RollLogEntry.checkNat`). Effect is
+  the DM's call — the system only labels it.
+- **Modified critical damage.** A crit does **not** double dice. Instead: the
+  attacker's original dice are auto-maxed, and one **extra die per damage
+  source** (dice term) is rolled. `1d4+2d6+4` → `1d4+1d6+20`
+  (`homebrewCritDamage`).
+- **Damage types + resistances.** Each hit has a damage type; a target's
+  `Defenses` apply: immunity (×0) → vulnerability (×2) → resistance (÷2, floor) →
+  flat `damageReduction`. **Crit immunity** (adamantine) makes a crit land as a
+  normal hit (no maxed dice / extra die).
+- **Cover.** `none` / `half` (+2 AC & Dex saves) / `threequarters` (+5) /
+  `total`. The AC bonus is applied automatically to attack resolution. Total
+  cover is **not** enforced — the DM sees a warning listing tokens in total cover
+  and is trusted not to make ranged attacks against them (keeps the server
+  light).
 
 ---
 
@@ -239,10 +258,14 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   - natural 20 → automatic hit **and** critical;
   - natural 1 → automatic miss;
   - otherwise hit iff total ≥ AC.
-- **FR-42 (P0):** On a hit, the server rolls the damage notation; on a critical
-  it doubles the **dice counts** (not flat modifiers) before rolling.
+- **FR-42 (P0):** On a hit the server rolls the damage notation; on a crit it
+  applies the **homebrew crit** transform (2.5) unless the target is crit-immune.
+- **FR-42a (P0):** The rolled damage total is passed through the target's
+  `Defenses` (type resistance / immunity / vulnerability, then flat DR) and the
+  cover bonus is added to the target's AC before the hit check (2.5). The roll
+  log records `raw`, `damageType` and the list of modifiers applied.
 - **FR-43 (P0):** On a hit against a token with current HP, the server subtracts
-  the damage total (floored at 0).
+  the **post-defence** damage (floored at 0, capped at remaining HP).
 - **FR-44 (P0):** Attack and damage results are written to the roll log with the
   target name, target AC, and hit/crit/miss verdict; the map shows the dice
   (dddice 3D when enabled, else the 2D tray).
@@ -447,7 +470,11 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `Participant { id, name, role, color, connected, lastSeen }`
 - `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid }`
 - `Token { id, label, x, y, size, color, imageUrl?, currentHp?, maxHp?,
-  armorClass?, hidden, controllerId?, statblock?: TokenStatblock }`
+  armorClass?, hidden, controllerId?, statblock?: TokenStatblock,
+  defenses?: Defenses, cover?: CoverLevel }`
+- `Defenses { resistances[], immunities[], vulnerabilities[], damageReduction,
+  critImmune }` — damage-type keys from `DAMAGE_TYPES` (13 5e types).
+- `CoverLevel = none | half | threequarters | total`
 - `Statblock { id, name, meta, cr, size, ac, acNote?, maxHp, hpFormula?, speed,
   speedNote?, abilities, proficiencyBonus, saveProficiencies[], skills[], senses?,
   languages?, traits[], actions[], color, imageUrl?, tags[], notes, source? }`
@@ -497,7 +524,8 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 
 | Date | Question | Decision |
 |---|---|---|
-| 2026-09-08 | Ruleset | D&D 5e **2024**. Crit doubles dice only; nat 20 always hits+crits; nat 1 always misses. |
+| 2026-09-08 | Ruleset | D&D 5e **2024** base; nat 20 always hits+crits; nat 1 always misses. |
+| 2026-09-08 | Homebrew (0.10.0) | Replace RAW: skill/save crit & fail flags; crit = max original dice + 1 extra die/source (not ×dice); damage types + resist/immune/vuln + flat DR + adamantine crit-immunity, applied server-side; cover AC auto-applied, total cover warned not blocked. See §2.5. |
 | 2026-09-08 | Sync strategy | Full-state broadcast for now; revisit if rooms grow. |
 | 2026-09-08 | Auth | None. LAN-trust model, documented as a hard constraint. |
 | 2026-09-08 | 3D dice | Deferred in 0.1.0 (2D tray). **0.2.0:** integrate dddice (`dddice-js`) as an optional 3D layer that is authoritative for die values when on. |

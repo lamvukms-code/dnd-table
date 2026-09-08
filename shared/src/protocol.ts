@@ -23,6 +23,7 @@ export type ClientAction =
       label: string;
       notation: string;
       targetTokenId: string;
+      damageType?: string;
       external?: ExternalRoll;
     }
   | {
@@ -30,12 +31,15 @@ export type ClientAction =
       label: string;
       attackNotation: string;
       damageNotation: string;
+      damageType?: string;
       targetTokenId: string;
       // When present, the client already rolled (via dddice) and the server
       // only resolves hit/crit vs AC and applies damage — it does not re-roll.
+      // `damage` should already be the homebrew-crit notation's roll on a crit.
       external?: {
         attack: ExternalRoll;
         damage?: ExternalRoll;
+        crit?: boolean;
       };
     }
   | { t: 'clearLog' }

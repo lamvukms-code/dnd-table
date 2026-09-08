@@ -5,11 +5,13 @@ import {
   d20Check,
   fmtMod,
   tokenSaveBonus,
+  type CoverLevel,
   type Token,
   type TokenSize,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
+import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
 
 const CELL = 56; // display px per grid cell
@@ -160,6 +162,16 @@ export function BattleMap() {
         </details>
       )}
 
+      {isDm && tokens.some((t) => t.cover === 'total') && (
+        <div className="cover-warning">
+          ⚠ Che hoàn toàn (đừng đánh tầm xa):{' '}
+          {tokens
+            .filter((t) => t.cover === 'total')
+            .map((t) => t.label)
+            .join(', ')}
+        </div>
+      )}
+
       {isDm && groupSel.size > 0 && (
         <div className="group-init-bar">
           <span>{groupSel.size} token</span>
@@ -228,7 +240,9 @@ export function BattleMap() {
                   key={t.id}
                   className={`token ${selected === t.id ? 'sel' : ''} ${
                     groupSel.has(t.id) ? 'group-sel' : ''
-                  } ${t.hidden ? 'hidden' : ''}`}
+                  } ${t.hidden ? 'hidden' : ''} ${
+                    t.cover === 'total' ? 'cover-total' : ''
+                  }`}
                   style={{
                     left: t.x * CELL,
                     top: t.y * CELL,
@@ -240,6 +254,20 @@ export function BattleMap() {
                   title={t.label}
                 >
                   {!t.imageUrl && <span className="tk-initial">{t.label.slice(0, 2)}</span>}
+                  {t.cover && t.cover !== 'none' && (
+                    <span
+                      className="tk-cover"
+                      title={
+                        t.cover === 'total'
+                          ? 'Che hoàn toàn'
+                          : t.cover === 'half'
+                            ? 'Nửa che (+2 AC)'
+                            : '3/4 che (+5 AC)'
+                      }
+                    >
+                      {t.cover === 'total' ? '🛡!' : t.cover === 'half' ? '🛡½' : '🛡¾'}
+                    </span>
+                  )}
                   {typeof t.currentHp === 'number' && typeof t.maxHp === 'number' && (
                     <div className="tk-hpbar">
                       <div
@@ -353,6 +381,7 @@ function TokenInspector({
   const [atkName, setAtkName] = useState('Đòn đánh');
   const [atkBonus, setAtkBonus] = useState('5');
   const [dmg, setDmg] = useState('1d8+3');
+  const [dmgType, setDmgType] = useState<string | undefined>(undefined);
   const [attackerId, setAttackerId] = useState('');
   const [sbTargetId, setSbTargetId] = useState('');
   const [sbRollMode, setSbRollMode] = useState<RollMode>('normal');
@@ -480,7 +509,33 @@ function TokenInspector({
             Ẩn với người chơi
           </label>
         )}
+        <label>
+          Che chắn (cover)
+          <select
+            value={token.cover ?? 'none'}
+            onChange={(e) => patch({ cover: e.target.value as CoverLevel })}
+          >
+            <option value="none">Không che</option>
+            <option value="half">Nửa che (+2 AC)</option>
+            <option value="threequarters">3/4 che (+5 AC)</option>
+            <option value="total">Che hoàn toàn</option>
+          </select>
+        </label>
       </div>
+
+      {token.cover === 'total' && (
+        <p className="hint cover-total-note">
+          ⚠ Mục tiêu đang <strong>che hoàn toàn</strong> — không thể bị nhắm bởi đòn tầm xa.
+        </p>
+      )}
+
+      <details className="def-details">
+        <summary>Phòng thủ (kháng / miễn / DR)</summary>
+        <DefensesEditor
+          defenses={token.defenses}
+          onChange={(d) => patch({ defenses: d })}
+        />
+      </details>
 
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
@@ -573,6 +628,7 @@ function TokenInspector({
                         label: `${base} → ${sbTargetName}${mtag}`,
                         attackNotation: sbd20(a.attackBonus!),
                         damageNotation: a.damage!,
+                        damageType: a.damageType,
                         targetTokenId: sbTargetId,
                       })
                     }
@@ -593,7 +649,7 @@ function TokenInspector({
                     className="roll-btn"
                     onClick={() =>
                       sbTargetId
-                        ? damageRoll(`${base} → ${sbTargetName}`, a.damage!, sbTargetId)
+                        ? damageRoll(`${base} → ${sbTargetName}`, a.damage!, sbTargetId, a.damageType)
                         : rollDice(`${base} (dmg)`, a.damage!)
                     }
                   >
@@ -646,6 +702,7 @@ function TokenInspector({
             Sát thương
             <input value={dmg} onChange={(e) => setDmg(e.target.value)} />
           </label>
+          <DamageTypeSelect value={dmgType} onChange={setDmgType} />
         </div>
         <button
           className="primary"
@@ -656,6 +713,7 @@ function TokenInspector({
                 : atkName,
               attackNotation: `1d20+${Number(atkBonus) || 0}`,
               damageNotation: dmg,
+              damageType: dmgType,
               targetTokenId: token.id,
             })
           }

@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import {
+  coverAcBonus,
   d20Check,
-  doubleDiceCounts,
+  homebrewCritDamage,
   rollNotation,
   type ClientAction,
   type ExternalRoll,
@@ -38,6 +39,7 @@ interface AttackParams {
   attackNotation: string;
   damageNotation: string;
   targetTokenId: string;
+  damageType?: string;
 }
 
 interface StoreState {
@@ -57,7 +59,12 @@ interface StoreState {
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
   /** Roll a damage formula and subtract the result from a target token's HP. */
-  damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
+  damageRoll: (
+    label: string,
+    notation: string,
+    targetTokenId: string,
+    damageType?: string,
+  ) => Promise<void>;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
     name: string,
@@ -168,9 +175,16 @@ export const useStore = create<StoreState>((set, get) => {
 
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
 
-    damageRoll: async (label, notation, targetTokenId) => {
+    damageRoll: async (label, notation, targetTokenId, damageType) => {
       const external = await externalRoll(notation);
-      rawSend({ t: 'damage', label, notation, targetTokenId, external: external ?? undefined });
+      rawSend({
+        t: 'damage',
+        label,
+        notation,
+        targetTokenId,
+        damageType,
+        external: external ?? undefined,
+      });
     },
 
     rollInitiativeForMe: async (name, mod, tokenId, mode = 'normal') => {
@@ -192,27 +206,25 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'roll', label, notation, private: opts?.private, external: external ?? undefined });
     },
 
-    attackRoll: async ({ label, attackNotation, damageNotation, targetTokenId }) => {
-      if (!dddiceActive()) {
-        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId });
-        return;
-      }
+    attackRoll: async ({ label, attackNotation, damageNotation, targetTokenId, damageType }) => {
+      const plain = () =>
+        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId, damageType });
+      if (!dddiceActive()) return plain();
       const attack = await externalRoll(attackNotation);
-      if (!attack) {
-        rawSend({ t: 'attack', label, attackNotation, damageNotation, targetTokenId });
-        return;
-      }
+      if (!attack) return plain();
+
       const token = get().room?.tokens.find((tk) => tk.id === targetTokenId);
-      const ac = token?.armorClass ?? 10;
-      const crit = attack.d20Natural === 20;
+      const ac = (token?.armorClass ?? 10) + coverAcBonus(token?.cover);
+      const critImmune = token?.defenses?.critImmune ?? false;
+      const nat20 = attack.d20Natural === 20;
       const fumble = attack.d20Natural === 1;
-      const hit = crit || (!fumble && attack.total >= ac);
+      const effectiveCrit = nat20 && !critImmune;
+      const hit = nat20 || (!fumble && attack.total >= ac);
       let damage: ExternalRoll | undefined;
       if (hit) {
-        const dmgNotation = crit ? doubleDiceCounts(damageNotation) : damageNotation;
+        // homebrew: on a (non-immune) crit, roll the maxed + extra-die formula
+        const dmgNotation = effectiveCrit ? homebrewCritDamage(damageNotation) : damageNotation;
         damage = (await externalRoll(dmgNotation)) ?? undefined;
-        // dddice hiccup mid-attack: fall back to a local damage roll so the
-        // server still has values to apply.
         if (!damage) {
           const r = rollNotation(dmgNotation);
           damage = { total: r.total, faces: [], source: 'dddice' };
@@ -223,8 +235,9 @@ export const useStore = create<StoreState>((set, get) => {
         label,
         attackNotation,
         damageNotation,
+        damageType,
         targetTokenId,
-        external: { attack, damage },
+        external: { attack, damage, crit: effectiveCrit },
       });
     },
 

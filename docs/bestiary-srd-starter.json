@@ -25,7 +25,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "1d6+2",
-        "damageType": "chém"
+        "damageType": "slashing"
       },
       {
         "id": "srd-002",
@@ -34,7 +34,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "1d6+2",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "tầm 80/320 ft"
       }
     ],
@@ -89,7 +89,7 @@
         "source": "manual",
         "attackBonus": 5,
         "damage": "1d12+3",
-        "damageType": "chém"
+        "damageType": "slashing"
       },
       {
         "id": "srd-005",
@@ -98,7 +98,7 @@
         "source": "manual",
         "attackBonus": 5,
         "damage": "1d6+3",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "tầm 30/120 ft"
       }
     ],
@@ -161,7 +161,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "2d4+2",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "Nếu trúng: DC 11 STR save hoặc ngã (prone)."
       }
     ],
@@ -214,7 +214,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "1d4+2",
-        "damageType": "xuyên"
+        "damageType": "piercing"
       }
     ],
     "tags": [
@@ -256,7 +256,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "1d6+2",
-        "damageType": "xuyên"
+        "damageType": "piercing"
       },
       {
         "id": "srd-00c",
@@ -265,7 +265,7 @@
         "source": "manual",
         "attackBonus": 4,
         "damage": "1d6+2",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "tầm 80/320 ft"
       }
     ],
@@ -273,7 +273,7 @@
       "srd",
       "undead"
     ],
-    "notes": "Yếu điểm: bludgeoning. Miễn: poison; poisoned, exhaustion.",
+    "notes": "Miễn: poisoned, exhaustion.",
     "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
     "name": "Skeleton",
     "meta": "Medium undead, lawful evil",
@@ -290,6 +290,17 @@
       "cha": 5
     },
     "senses": "darkvision 60 ft, passive Perception 9",
+    "defenses": {
+      "resistances": [],
+      "immunities": [
+        "poison"
+      ],
+      "vulnerabilities": [
+        "bludgeoning"
+      ],
+      "damageReduction": 0,
+      "critImmune": false
+    },
     "color": "#bdc3c7",
     "id": "srd-00d"
   },
@@ -316,14 +327,14 @@
         "source": "manual",
         "attackBonus": 3,
         "damage": "1d6+1",
-        "damageType": "đập"
+        "damageType": "bludgeoning"
       }
     ],
     "tags": [
       "srd",
       "undead"
     ],
-    "notes": "Miễn: poison; poisoned.",
+    "notes": "Miễn: poisoned.",
     "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
     "name": "Zombie",
     "meta": "Medium undead, neutral evil",
@@ -339,6 +350,15 @@
       "cha": 5
     },
     "senses": "darkvision 60 ft, passive Perception 8",
+    "defenses": {
+      "resistances": [],
+      "immunities": [
+        "poison"
+      ],
+      "vulnerabilities": [],
+      "damageReduction": 0,
+      "critImmune": false
+    },
     "color": "#7b8a5a",
     "id": "srd-00f"
   },
@@ -358,7 +378,7 @@
         "source": "manual",
         "attackBonus": 3,
         "damage": "1d6+1",
-        "damageType": "chém"
+        "damageType": "slashing"
       },
       {
         "id": "srd-00h",
@@ -367,7 +387,7 @@
         "source": "manual",
         "attackBonus": 3,
         "damage": "1d8+1",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "tầm 80/320 ft"
       }
     ],
@@ -417,7 +437,7 @@
         "source": "manual",
         "attackBonus": 3,
         "damage": "1d6+1",
-        "damageType": "xuyên",
+        "damageType": "piercing",
         "description": "hoặc 1d8+1 khi cầm 2 tay đánh gần; tầm ném 20/60 ft"
       }
     ],

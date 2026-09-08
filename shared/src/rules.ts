@@ -1,13 +1,15 @@
 import type {
   Ability,
   CharacterSheet,
+  CoverLevel,
   Currency,
+  Defenses,
   InventoryItem,
   SheetAction,
   Statblock,
   TokenStatblock,
 } from './types.js';
-import { COIN_TYPES, SKILLS } from './types.js';
+import { COIN_TYPES, DAMAGE_TYPE_VI, SKILLS } from './types.js';
 
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
@@ -116,6 +118,69 @@ export function allActions(sheet: CharacterSheet): SheetAction[] {
 // Rests
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Homebrew: cover + damage-type defences
+// ---------------------------------------------------------------------------
+
+/** Cover benefit added to a target's AC (total cover handled separately). */
+export function coverAcBonus(cover: CoverLevel | undefined): number {
+  return cover === 'half' ? 2 : cover === 'threequarters' ? 5 : 0;
+}
+/** Same bonus applies to the target's Dexterity saving throws. */
+export const coverDexSaveBonus = coverAcBonus;
+
+export const COVER_LABEL: Record<CoverLevel, string> = {
+  none: 'Không che',
+  half: 'Nửa che (+2 AC)',
+  threequarters: '3/4 che (+5 AC)',
+  total: 'Che hoàn toàn',
+};
+
+export interface DamageOutcome {
+  raw: number;
+  final: number;
+  notes: string[];
+}
+
+function typeName(t: string): string {
+  return (DAMAGE_TYPE_VI as Record<string, string>)[t] ?? t;
+}
+
+/**
+ * Apply damage-type defences to a rolled total.
+ * Order: immunity → vulnerability (×2) → resistance (÷2 floor) → flat DR.
+ */
+export function applyDamageDefenses(
+  raw: number,
+  damageType: string | undefined,
+  def: Defenses | undefined,
+): DamageOutcome {
+  const notes: string[] = [];
+  let dmg = Math.max(0, Math.round(raw));
+  const t = (damageType ?? '').toLowerCase();
+
+  if (def && t) {
+    if (def.immunities.includes(t as never)) {
+      notes.push(`miễn nhiễm ${typeName(t)} (×0)`);
+      return { raw, final: 0, notes };
+    }
+    if (def.vulnerabilities.includes(t as never)) {
+      dmg *= 2;
+      notes.push(`yếu điểm ${typeName(t)} (×2)`);
+    }
+    if (def.resistances.includes(t as never)) {
+      dmg = Math.floor(dmg / 2);
+      notes.push(`kháng ${typeName(t)} (÷2)`);
+    }
+  }
+  if (def && def.damageReduction > 0) {
+    const before = dmg;
+    dmg = Math.max(0, dmg - def.damageReduction);
+    if (before !== dmg) notes.push(`giảm ${def.damageReduction} (DR)`);
+  }
+  return { raw: Math.max(0, Math.round(raw)), final: dmg, notes };
+}
+
 /** Restore short-rest resources / feature uses. Returns a new sheet. */
 export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
   return {
@@ -147,6 +212,7 @@ export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
     initiativeMod: statblockInitiativeMod(sb),
     actions: sb.actions.map((a) => ({ ...a })),
     traits: sb.traits.map((t) => ({ ...t })),
+    defenses: sb.defenses ? { ...sb.defenses } : undefined,
     notes: sb.notes || undefined,
     fromId: sb.id,
   };

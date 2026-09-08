@@ -66,10 +66,13 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
    input (spaces, case, implied 1, dashes) and runs on every path including
    dddice; `parseTerms` / `rollStats` / `describeNotation` inspect a formula
    without rolling — use them for UI feedback, never a second ad-hoc parser.
-4. **Keep the D&D correct.** Target 5e 2024: nat 20 always hits and crits, nat 1
-   always misses, crit doubles dice (not flat modifiers), advantage = 2d20 keep
-   highest. When a rule is ambiguous, add a short note in the SRS and pick the
-   2024 PHB reading.
+4. **Keep the D&D correct.** 5e 2024 base, but this server runs a **homebrew
+   ruleset (SRS §2.5)** that overrides RAW: skill/save crit & fumble flags;
+   crit damage = max original dice + one extra die per source
+   (`homebrewCritDamage`, NOT `doubleDiceCounts`); damage-type resist/immune/vuln
+   + flat DR + adamantine crit-immunity (`applyDamageDefenses`, server-side);
+   cover AC auto-applied (`coverAcBonus`), total cover warned not blocked.
+   advantage = `2d20kh1`. When a rule is ambiguous, note it in the SRS.
 4a. **Character sheets** have four sub-tabs (Cơ bản / Trang bị / Đặc điểm /
    Năng lực). Effective AC and equipped-weapon actions are *derived* in
    `shared/rules.ts` (`computeArmorClass`, `derivedActions`, `allActions`) —

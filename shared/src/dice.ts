@@ -282,12 +282,42 @@ export function externalRollResult(
   return result;
 }
 
-/** Double the dice counts in a notation (5e crit): "1d8+3" -> "2d8+3". */
+/** Double the dice counts in a notation (5e RAW crit): "1d8+3" -> "2d8+3". */
 export function doubleDiceCounts(notation: string): string {
   return notation.replace(/(\d*)d(\d+|%)/gi, (_m, count: string, sides: string) => {
     const c = count === '' ? 1 : parseInt(count, 10);
     return `${c * 2}d${sides}`;
   });
+}
+
+/**
+ * Homebrew crit damage: the character's original dice are auto-maxed and they
+ * roll ONE extra die per damage source (dice term). Flat modifiers pass through.
+ * e.g. "1d4+2d6+4" -> "1d4+1d6+20"  (4 + 12 maxed dice, + the +4 modifier).
+ */
+export function homebrewCritDamage(notation: string): string {
+  let terms: ParsedTerm[];
+  try {
+    terms = parseTerms(notation);
+  } catch {
+    return notation;
+  }
+  const extras: string[] = [];
+  let constant = 0;
+  for (const t of terms) {
+    if (t.kind === 'flat') {
+      constant += t.sign * t.flat!;
+    } else {
+      const n = t.count!;
+      const m = t.sides!;
+      constant += t.sign * n * m; // original dice auto-max
+      extras.push(`${t.sign < 0 ? '-' : '+'}1d${m}`); // + one extra die of this source
+    }
+  }
+  let out = extras.join('').replace(/^\+/, '');
+  if (constant > 0) out += `+${constant}`;
+  else if (constant < 0) out += `${constant}`;
+  return out || '0';
 }
 
 /** Resolve an attack roll against a target AC per 5e rules. */

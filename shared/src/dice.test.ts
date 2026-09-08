@@ -4,6 +4,7 @@ import {
   describeNotation,
   doubleDiceCounts,
   externalRollResult,
+  homebrewCritDamage,
   normalizeNotation,
   resolveAttack,
   rollNotation,
@@ -103,6 +104,19 @@ describe('doubleDiceCounts', () => {
     expect(doubleDiceCounts('1d8+3')).toBe('2d8+3');
     expect(doubleDiceCounts('2d6+1d4+2')).toBe('4d6+2d4+2');
     expect(doubleDiceCounts('d10')).toBe('2d10');
+  });
+});
+
+describe('homebrewCritDamage', () => {
+  it('maxes original dice, adds one extra die per source (rogue example)', () => {
+    // dagger 1d4 + sneak attack 2d6 + STR/DEX +4
+    expect(homebrewCritDamage('1d4+2d6+4')).toBe('1d4+1d6+20');
+  });
+  it('single source', () => {
+    expect(homebrewCritDamage('1d8+3')).toBe('1d8+11'); // 8 maxed + 3 mod
+  });
+  it('no flat modifier', () => {
+    expect(homebrewCritDamage('3d6')).toBe('1d6+18');
   });
 });
 

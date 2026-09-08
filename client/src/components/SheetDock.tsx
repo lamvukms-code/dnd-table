@@ -22,6 +22,7 @@ import {
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { FormulaHint } from './FormulaHint.js';
+import { DamageTypeSelect } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
 
 const ABILITY_LABEL: Record<Ability, string> = {
@@ -614,8 +615,14 @@ function ActionRow({
     attackNotation: string;
     damageNotation: string;
     targetTokenId: string;
+    damageType?: string;
   }) => Promise<void>;
-  damageRoll: (label: string, notation: string, targetTokenId: string) => Promise<void>;
+  damageRoll: (
+    label: string,
+    notation: string,
+    targetTokenId: string,
+    damageType?: string,
+  ) => Promise<void>;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
@@ -642,6 +649,7 @@ function ActionRow({
               label: `${base} → ${targetName}`,
               attackNotation: atkNotation(action.attackBonus!),
               damageNotation: action.damage!,
+              damageType: action.damageType,
               targetTokenId: targetId,
             })
           }
@@ -662,7 +670,7 @@ function ActionRow({
           className="roll-btn"
           onClick={() =>
             targetId
-              ? damageRoll(`${base} → ${targetName}`, action.damage!, targetId)
+              ? damageRoll(`${base} → ${targetName}`, action.damage!, targetId, action.damageType)
               : rollDice(`${base} (sát thương)`, action.damage!)
           }
         >
@@ -716,6 +724,10 @@ function ActionEditor({ draft, commit }: EditorCtx) {
             placeholder="dmg 2d6+8"
             value={a.damage ?? ''}
             onChange={(e) => upd(a.id, { damage: e.target.value || undefined })}
+          />
+          <DamageTypeSelect
+            value={a.damageType}
+            onChange={(v) => upd(a.id, { damageType: v })}
           />
           <input
             placeholder="roll khác"

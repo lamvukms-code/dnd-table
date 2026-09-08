@@ -1,4 +1,4 @@
-import type { Statblock } from '@dnd-table/shared';
+import { emptyDefenses, type Statblock } from '@dnd-table/shared';
 import { nanoIdish } from './util.js';
 
 export function blankStatblock(): Statblock {
@@ -42,6 +42,9 @@ export function normalizeStatblock(raw: Partial<Statblock>): Statblock {
     })),
     tags: raw.tags ?? [],
     notes: raw.notes ?? '',
+    defenses: raw.defenses
+      ? { ...emptyDefenses(), ...raw.defenses }
+      : undefined,
   };
 }
 
