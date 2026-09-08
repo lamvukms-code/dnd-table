@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allAttacks,
+  allActions,
+  applyLongRest,
+  applyShortRest,
   carriedWeight,
   computeArmorClass,
   currencyInGp,
-  derivedAttacks,
+  derivedActions,
   emptyCurrency,
 } from './rules.js';
 import type { CharacterSheet, InventoryItem } from './types.js';
@@ -28,7 +30,11 @@ function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
     acOverride: null,
     speed: 30,
     initiativeMisc: 0,
-    attacks: [],
+    actions: [],
+    resources: [],
+    spellSlots: [],
+    feats: [],
+    features: [],
     inventory: [],
     currency: emptyCurrency(),
     notes: '',
@@ -84,7 +90,7 @@ describe('computeArmorClass', () => {
   });
 });
 
-describe('derivedAttacks', () => {
+describe('derivedActions', () => {
   it('builds an attack from an equipped proficient weapon', () => {
     const s = sheet({
       inventory: [
@@ -100,10 +106,11 @@ describe('derivedAttacks', () => {
         }),
       ],
     });
-    const [atk] = derivedAttacks(s);
+    const [atk] = derivedActions(s);
     expect(atk.attackBonus).toBe(3 + 2); // STR +3, prof +2
     expect(atk.damage).toBe('1d8+3');
     expect(atk.source).toBe('weapon');
+    expect(atk.actionType).toBe('action');
   });
 
   it('finesse uses the better of STR/DEX and adds magic bonus', () => {
@@ -123,18 +130,49 @@ describe('derivedAttacks', () => {
         }),
       ],
     });
-    const [atk] = derivedAttacks(s);
+    const [atk] = derivedActions(s);
     expect(atk.attackBonus).toBe(4 + 2 + 1); // DEX +4, prof +2, magic +1
     expect(atk.damage).toBe('1d4+5'); // DEX +4 + magic +1
   });
 
-  it('allAttacks merges manual + derived', () => {
+  it('allActions merges the sheet actions + derived weapons', () => {
     const s = sheet({
-      attacks: [{ id: 'm', name: 'Punch', attackBonus: 5, damage: '1d4', damageType: '' }],
+      actions: [
+        { id: 'm', name: 'Shove', actionType: 'action', notation: '1d4', source: 'manual' },
+      ],
       inventory: [item({ id: 'w', type: 'weapon', equipped: true, damage: '1d6', proficient: true })],
     });
-    expect(allAttacks(s)).toHaveLength(2);
-    expect(allAttacks(s)[0].source).toBe('weapon');
+    expect(allActions(s)).toHaveLength(2);
+    expect(allActions(s)[0].source).toBe('weapon');
+  });
+});
+
+describe('rests', () => {
+  const base = () =>
+    sheet({
+      maxHp: 30,
+      currentHp: 5,
+      tempHp: 4,
+      resources: [
+        { id: 'ki', name: 'Ki', max: 5, used: 4, recharge: 'short' },
+        { id: 'rage', name: 'Rage', max: 3, used: 2, recharge: 'long' },
+      ],
+      spellSlots: [{ level: 1, max: 3, used: 3 }],
+    });
+
+  it('short rest restores only short-recharge resources', () => {
+    const s = applyShortRest(base());
+    expect(s.resources.find((r) => r.id === 'ki')!.used).toBe(0);
+    expect(s.resources.find((r) => r.id === 'rage')!.used).toBe(2);
+    expect(s.currentHp).toBe(5);
+  });
+
+  it('long rest restores HP, slots and all rechargeable resources', () => {
+    const s = applyLongRest(base());
+    expect(s.currentHp).toBe(30);
+    expect(s.tempHp).toBe(0);
+    expect(s.resources.every((r) => r.used === 0)).toBe(true);
+    expect(s.spellSlots[0].used).toBe(0);
   });
 });
 

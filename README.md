@@ -24,16 +24,24 @@ và quản lý character sheet — tất cả trên một trang.
   trúng / trượt / chí mạng, tự nhân đôi xúc xắc sát thương khi chí mạng, trừ máu
   token.
 - **Initiative tracker:** tung cho toàn bộ token, đếm vòng, chuyển lượt.
-- **Character sheet 5e 2024 (kiểu D&D Beyond):** chia section Chỉ số / Chiến đấu
-  / Túi đồ. 6 chỉ số, thành thạo, kỹ năng/tinh thông, save, HP, initiative — mỗi
-  mục có nút roll gửi thẳng vào nhật ký chung. **Túi đồ**: vật phẩm (vũ khí/giáp/
-  khiên/đồ dùng) có trọng lượng, đánh dấu trang bị, tiền pp/gp/ep/sp/cp. **AC tự
-  tính** từ giáp + khiên trang bị (có ô ghi đè). **Đòn tấn công tự sinh** từ vũ
-  khí trang bị (STR/DEX/linh hoạt + thành thạo + phụ trội). Liên kết token.
+- **Giao diện một màn hình:** battle map là khu vực chính, character sheet là
+  panel ngang co giãn ngay bên dưới (kéo mép trên), lịch sử/roll thủ công là cửa
+  sổ nhỏ góc dưới-trái, initiative là thanh mỏng trên đỉnh map. Không phải đổi
+  tab để vừa đánh vừa quản lý nhân vật.
+- **Character sheet 5e 2024 (kiểu D&D Beyond):** 4 sub-tab —
+  - **Cơ bản**: 6 chỉ số + save + kỹ năng, khối chiến đấu (AC/HP/tốc độ/init),
+    **tài nguyên class** (ki, rage, bardic…) và **spell slot** dạng pip, nút
+    **Nghỉ ngắn / Nghỉ dài** hồi đúng loại tài nguyên, và **action economy**
+    (Action / Bonus / Reaction) kèm ô chọn mục tiêu.
+  - **Trang bị**: vật phẩm (vũ khí/giáp/khiên/đồ dùng) + tiền pp/gp/ep/sp/cp.
+  - **Đặc điểm**: feats.
+  - **Năng lực**: đặc điểm class/chủng tộc, có bộ đếm lượt dùng.
+  - **AC tự tính** từ giáp+khiên trang bị (ô ghi đè cho ca đặc biệt). **Đòn tấn
+    công tự sinh** từ vũ khí trang bị.
   - Người chơi chỉ xem/sửa nhân vật của mình; DM xem/sửa tất cả.
   - Chọn **Mục tiêu** rồi bấm đòn: hệ thống tự hiểu công thức **xdy** (vd
     “2d6 + 8”), tung trên dddice, so AC, trừ máu token mục tiêu. Ô công thức có
-    gợi ý trực tiếp (min–max, trung bình) và báo nếu viết sai.
+    gợi ý trực tiếp (min–max, trung bình).
 - **Phân quyền:** người vào phòng đầu tiên là DM; người sau là người chơi. DM đổi
   vai trò trong Cài đặt → “Người trong phòng”.
 

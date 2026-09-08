@@ -62,9 +62,13 @@ export function BattleMap() {
 
   return (
     <div className="battlemap">
-      {isDm && <MapToolbar />}
+      {isDm && (
+        <details className="map-toolbar-wrap">
+          <summary>⚙ Bản đồ</summary>
+          <MapToolbar />
+        </details>
+      )}
 
-      <div className="board-viewport">
       <div className="board-scroll">
         <div
           ref={boardRef}
@@ -131,9 +135,8 @@ export function BattleMap() {
             </div>
           )}
         </div>
-        <DddiceCanvas />
       </div>
-      </div>
+      <DddiceCanvas />
 
       {selectedToken && (
         <TokenInspector token={selectedToken} onClose={() => setSelected(null)} />

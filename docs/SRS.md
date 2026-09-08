@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.4.0
+- **Version:** 0.5.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -127,6 +127,22 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 - **FR-3 (P0):** The client auto-reconnects on WebSocket drop and re-syncs; a
   reconnecting participant keeps the role the server gave them.
 - **FR-4 (P1):** A participant can change their display name after joining.
+
+### 3.1a Screen layout (0.5.0)
+
+- **FR-5 (P0):** One screen, no top-level tabs. The **battle map is the permanent
+  main area**. The **character sheet is docked as a horizontal panel below it**
+  (default ≈ 1/4 of the stage height), resizable by dragging its top edge (height
+  persists in `localStorage`) and hideable from the top bar. A player manages
+  their character without leaving the map.
+- **FR-6 (P0):** The **dice window** — manual rolling + shared roll history — is a
+  small floating panel at the bottom-left of the map, collapsible to a 🎲 button.
+  Private (DM) rolls are not shown to players there.
+- **FR-7 (P0):** The **initiative strip** is pinned to the top of the map: a thin
+  always-visible bar (order, round, ◀/▶ turn) that expands for the DM's
+  roll-all / add / reset controls.
+- **FR-8 (P0):** The dddice 3D canvas overlays the whole map area (FR-32);
+  pointer events pass through it to the map and the floating panels.
 
 ### 3.2 Dice roller
 
@@ -256,17 +272,34 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 - **FR-61 (P0):** Fields: name, class, level, proficiency bonus (auto-suggested
   from level, editable), six ability scores, save proficiencies, skill
   proficiency and expertise, AC (`armorClass` fallback + `acOverride`),
-  current/max/temp HP, speed, initiative misc bonus, a manual attacks list,
-  inventory, currency, free-text notes.
-- **FR-61a (P0):** The editor is organised into sections — **Chỉ số** (abilities,
-  saves, skills), **Chiến đấu** (AC, HP, speed, initiative, attacks, token link,
-  notes), **Túi đồ** (inventory + currency).
+  current/max/temp HP, speed, initiative misc bonus, `actions`, `resources`,
+  `spellSlots`, `feats`, `features`, inventory, currency, notes, token link.
+- **FR-61a (P0):** The dock sheet has four sub-tabs:
+  - **Cơ bản** — identity, abilities with check/save rolls, skills, the combat
+    block (AC badge + override, HP/temp, speed, initiative), **class resources**
+    and **spell slots**, **Nghỉ ngắn / Nghỉ dài**, and the **action economy**
+    (Action / Bonus / Reaction groups) with a target picker.
+  - **Trang bị** — inventory + currency (3.7.1).
+  - **Đặc điểm** — `feats` (name + description).
+  - **Năng lực** — `features` (name, source, description, optional limited-use
+    tracker).
+- **FR-61b (P0):** **Class resources** (`ClassResource`) and **spell slots**
+  (`SpellSlots` per level) are pip trackers with a `recharge` type
+  (`short`/`long`/`other`). **Short rest** resets `short` resources / feature
+  uses; **long rest** resets HP to max, temp HP, all slots, and every
+  `short`/`long` resource and feature use (`applyShortRest` / `applyLongRest`,
+  pure helpers).
 - **FR-62 (P0):** Derived values are computed live: ability modifiers, save
   bonuses, skill bonuses (expertise = 2× proficiency), initiative bonus,
-  effective AC, equipped-weapon attacks, carried weight.
+  effective AC, equipped-weapon actions, carried weight.
 - **FR-63 (P0):** One-click roll buttons for each ability check, each save, each
-  skill, initiative, and each attack's to-hit and damage — all posting to the
-  shared log labelled with the character name, and through dddice when enabled.
+  skill, initiative, each action's roll(s) — all posting to the shared log
+  labelled with the character name, and through dddice when enabled.
+- **FR-63h (P0):** An **action** (`SheetAction`) is an attack (`attackBonus` +
+  `damage`), a utility roll (`notation`), a save-forcer (`save`), or a note
+  (`description` only), tagged `actionType` (action/bonus/reaction/free/other).
+  Equipped weapons appear as derived `action` entries. Attack actions drive the
+  same target flow as the map (to-hit vs AC → damage → HP).
 - **FR-64 (P0):** A sheet can be linked to a map token (`tokenId`) so initiative
   rolls and, later, attacks can use its stats.
 
@@ -347,10 +380,16 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `InitiativeEntry { id, name, initiative, tokenId?, isActive, hasGone }`
 - `CharacterSheet { id, ownerId, name, className, level, proficiencyBonus,
   abilities, saveProficiencies[], skillProficiencies[], skillExpertise[], maxHp,
-  currentHp, tempHp, armorClass, acOverride?, speed, initiativeMisc, attacks[],
-  inventory[], currency, notes, tokenId? }`
-- `Attack { id, name, attackBonus, damage, damageType, source? }` — `source:
-  'weapon'` marks a derived (read-only) attack.
+  currentHp, tempHp, armorClass, acOverride?, speed, initiativeMisc, actions[],
+  resources[], spellSlots[], feats[], features[], inventory[], currency, notes,
+  tokenId? }`
+- `SheetAction { id, name, actionType: action|bonus|reaction|free|other,
+  attackBonus?, damage?, damageType?, save?: {ability, dc}, notation?,
+  description?, source? }` — `source: 'weapon'` = derived, read-only.
+- `ClassResource { id, name, max, used, recharge: short|long|other }`
+- `SpellSlots { level, max, used }`
+- `Feat { id, name, description }`
+- `Feature { id, name, source, description, uses?: { max, used, recharge } }`
 - `InventoryItem { id, name, type: weapon|armor|shield|gear, quantity, weight,
   equipped, notes, weaponAbility?, damage?, damageType?, proficient?,
   attackBonusMisc?, damageBonusMisc?, armorBase?, armorCategory?,
@@ -392,3 +431,6 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | Sheet ownership | Players view/edit only sheets they created (server-enforced in `upsertSheet` / `removeSheet`); DM sees and edits all. |
 | 2026-09-08 | Formula convention | `xdy` = x dice, y faces. Player input is normalised (spaces, case, implied 1, dashes) so "2d6 + 8" works. `describeNotation` gives typed feedback without rolling. |
 | 2026-09-08 | Damage from sheet | New `damage` action rolls a formula (dddice or server) and subtracts from a target token's HP, clamped, logged. Any participant may use it; hit/AC logic stays in the `attack` action. |
+| 2026-09-08 | Layout (0.5.0) | No top-level tabs. Battle map is the permanent stage; character sheet is a resizable dock beneath it; dice history/manual-roll is a floating bottom-left window; initiative is a top strip. Goal: manage a character without switching away from the map. |
+| 2026-09-08 | Sheet model | `attacks[]` generalised to `actions[]` (`SheetAction` with `actionType`). Added `resources`, `spellSlots`, `feats`, `features`. Rests are pure helpers. No spell *list* / compendium yet (FR-66). |
+| 2026-09-08 | Private rolls | Now filtered from players in the dice window (client-side). Full state is still broadcast — consistent with the trusted-LAN model; a server-side per-client filter is deferred. |

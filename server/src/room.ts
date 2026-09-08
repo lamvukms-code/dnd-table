@@ -388,9 +388,10 @@ function migrateRoom(raw: RoomState): RoomState | null {
   if (s.version === 1) return null;
 
   // v2 -> v3: character-sheet inventory / currency / AC override.
-  if (s.version === 2) {
-    for (const sheet of s.sheets ?? []) Object.assign(sheet, normalizeSheet(sheet));
-    s.version = 3;
+  // v3 -> v4: action economy, class resources, spell slots, feats, features.
+  if (s.version === 2 || s.version === 3) {
+    s.sheets = (s.sheets ?? []).map((sheet) => normalizeSheet(sheet));
+    s.version = SCHEMA_VERSION;
   }
 
   return s.version === SCHEMA_VERSION ? s : null;

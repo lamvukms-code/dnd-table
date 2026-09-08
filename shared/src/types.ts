@@ -33,6 +33,54 @@ export interface Attack {
   source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
 }
 
+export type ActionType = 'action' | 'bonus' | 'reaction' | 'free' | 'other';
+export const ACTION_TYPES: ActionType[] = ['action', 'bonus', 'reaction', 'free', 'other'];
+export type Recharge = 'short' | 'long' | 'other';
+
+/** An entry in the action economy: an attack, a utility roll, or just a note. */
+export interface SheetAction {
+  id: string;
+  name: string;
+  actionType: ActionType;
+  attackBonus?: number; // present -> it's an attack roll vs AC
+  damage?: string; // full damage notation, e.g. "2d6+8"
+  damageType?: string;
+  save?: { ability: Ability; dc: number }; // present -> it forces a saving throw
+  notation?: string; // a generic roll (healing / utility), e.g. "2d4+2"
+  description?: string;
+  source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
+}
+
+/** Limited-use class resource: Ki, Rage, Bardic Inspiration, Sorcery Points… */
+export interface ClassResource {
+  id: string;
+  name: string;
+  max: number;
+  used: number;
+  recharge: Recharge;
+}
+
+export interface SpellSlots {
+  level: number; // 1..9
+  max: number;
+  used: number;
+}
+
+export interface Feat {
+  id: string;
+  name: string;
+  description: string;
+}
+
+/** Class / racial feature or ability, optionally with limited uses. */
+export interface Feature {
+  id: string;
+  name: string;
+  source: string; // "Fighter 3", "Wood Elf", …
+  description: string;
+  uses?: { max: number; used: number; recharge: Recharge };
+}
+
 export type ItemType = 'weapon' | 'armor' | 'shield' | 'gear';
 export type ArmorCategory = 'light' | 'medium' | 'heavy';
 /** How a weapon's attack/damage ability is chosen. */
@@ -85,7 +133,12 @@ export interface CharacterSheet {
   acOverride?: number | null;
   speed: number;
   initiativeMisc: number;
-  attacks: Attack[]; // manual attacks; equipped weapons add derived ones
+  /** Action economy. Equipped weapons add derived entries at render time. */
+  actions: SheetAction[];
+  resources: ClassResource[];
+  spellSlots: SpellSlots[];
+  feats: Feat[];
+  features: Feature[];
   inventory: InventoryItem[];
   currency: Currency;
   notes: string;

@@ -1,9 +1,9 @@
 import type {
   Ability,
-  Attack,
   CharacterSheet,
   Currency,
   InventoryItem,
+  SheetAction,
 } from './types.js';
 import { COIN_TYPES, SKILLS } from './types.js';
 
@@ -78,8 +78,8 @@ function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {
   return 'str';
 }
 
-/** Attacks contributed by currently equipped weapons. */
-export function derivedAttacks(sheet: CharacterSheet): Attack[] {
+/** Action-economy entries contributed by currently equipped weapons. */
+export function derivedActions(sheet: CharacterSheet): SheetAction[] {
   return sheet.inventory
     .filter((it) => it.type === 'weapon' && it.equipped)
     .map((it) => {
@@ -93,6 +93,7 @@ export function derivedAttacks(sheet: CharacterSheet): Attack[] {
       return {
         id: `weapon:${it.id}`,
         name: it.name,
+        actionType: 'action' as const,
         attackBonus: toHit,
         damage,
         damageType: it.damageType || '',
@@ -101,12 +102,41 @@ export function derivedAttacks(sheet: CharacterSheet): Attack[] {
     });
 }
 
-/** Manual + equipped-weapon attacks, weapons first. */
-export function allAttacks(sheet: CharacterSheet): Attack[] {
+/** Equipped-weapon actions + the sheet's own actions, weapons first. */
+export function allActions(sheet: CharacterSheet): SheetAction[] {
   return [
-    ...derivedAttacks(sheet),
-    ...sheet.attacks.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
+    ...derivedActions(sheet),
+    ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Rests
+// ---------------------------------------------------------------------------
+
+/** Restore short-rest resources / feature uses. Returns a new sheet. */
+export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
+  return {
+    ...sheet,
+    resources: sheet.resources.map((r) => (r.recharge === 'short' ? { ...r, used: 0 } : r)),
+    features: sheet.features.map((f) =>
+      f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
+    ),
+  };
+}
+
+/** Restore everything a long rest gives back (HP, slots, short/long resources). */
+export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
+  return {
+    ...sheet,
+    currentHp: sheet.maxHp,
+    tempHp: 0,
+    resources: sheet.resources.map((r) => (r.recharge === 'other' ? r : { ...r, used: 0 })),
+    spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })),
+    features: sheet.features.map((f) =>
+      f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
+    ),
+  };
 }
 
 export interface AcResult {

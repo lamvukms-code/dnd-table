@@ -6,6 +6,45 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-08
+
+### Changed
+
+- **New screen layout.** The three top tabs are gone. The battle map is the
+  permanent main area; the character sheet lives in a **resizable horizontal dock
+  below it** (drag the top edge; height persists) so a player manages their
+  character without leaving the map. The dock can be toggled from the top bar.
+- **dddice roll history + manual rolling** moved into a small floating window at
+  the **bottom-left of the map**, collapsible to a 🎲 button. Private (DM) rolls
+  are now hidden from players in that window.
+- **Initiative** is a thin collapsible strip pinned to the top of the map (order,
+  round, ◀/▶ turn controls; expand for roll-all / add / reset).
+- The DM map controls collapsed into a small **⚙ Bản đồ** popover.
+
+### Added
+
+- **Sectioned character sheet** in the dock: **Cơ bản** (abilities + saves +
+  skills, AC/HP/speed/initiative, class resources, spell slots, and the
+  action / bonus action / reaction economy with a target picker), **Trang bị**
+  (inventory + currency), **Đặc điểm** (feats), **Năng lực** (class/racial
+  features with limited-use trackers).
+- **Class resources & spell slots**: pip trackers (Ki, Rage, Bardic Inspiration,
+  spell slots by level…), each with a recharge type. **Nghỉ ngắn / Nghỉ dài**
+  buttons restore the right resources / HP / slots (`applyShortRest` /
+  `applyLongRest`).
+- **Action economy**: `SheetAction` (attack / utility roll / save / note),
+  grouped by `actionType`. Equipped-weapon attacks appear as derived actions.
+  Each attack action drives the same target flow as the map (to-hit vs AC →
+  damage → HP).
+- Shared: `derivedActions`, `allActions`, `applyShortRest`, `applyLongRest`
+  (replacing `derivedAttacks` / `allAttacks`).
+
+### Migration
+
+- Room schema **v4**. v2/v3 rooms migrate in place: each sheet's `attacks[]`
+  becomes `actions[]` (`actionType: 'action'`), and `resources`, `spellSlots`,
+  `feats`, `features` are initialised.
+
 ## [0.4.0] - 2026-09-08
 
 ### Added
@@ -119,7 +158,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.1.0...v0.2.0

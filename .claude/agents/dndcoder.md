@@ -24,9 +24,15 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
   (debounced), broadcasts full state snapshots. Runs under `tsx` (no build step).
 - `client/` — React 18 + Vite + Zustand. `store.ts` owns the WebSocket and the
   mirrored room state; components are presentational and dispatch actions via
-  `send()`. Roll buttons call `store.rollDice()` / `store.attackRoll()`, which
-  route through dddice when enabled and fall back to a plain server `roll` /
-  `attack` action otherwise.
+  `send()`. Roll buttons call `store.rollDice()` / `store.attackRoll()` /
+  `store.damageRoll()`, which route through dddice when enabled and fall back to a
+  plain server action otherwise.
+  - **Layout** (`App.tsx`): no tabs. `.map-area` holds `BattleMap` (permanent),
+    `InitiativeBar` (top strip), `DiceWindow` (floating bottom-left, roll history
+    + manual roll), and the dddice canvas. `SheetDock` is the resizable
+    bottom panel; its sub-tabs live in `components/SheetDock.tsx` +
+    `components/sheet/`. Keep the map visible — new player-facing panels float or
+    dock, they don't replace the map.
 - `client/src/dddice.ts` — lazy wrapper around `dddice-js` (three.js): one shared
   `ThreeDDice` engine on the battle-map overlay canvas, plus `rollEquation()`,
   `createGuestKey()`, `createRoom()`. dddice API keys live only in `localStorage`
@@ -58,13 +64,14 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
    always misses, crit doubles dice (not flat modifiers), advantage = 2d20 keep
    highest. When a rule is ambiguous, add a short note in the SRS and pick the
    2024 PHB reading.
-4a. **Character sheets** are sectioned (Chỉ số / Chiến đấu / Túi đồ). Effective AC
-   and equipped-weapon attacks are *derived* in `shared/rules.ts`
-   (`computeArmorClass`, `derivedAttacks`, `allAttacks`) — never stored. Edge
-   cases (Unarmored Defense, etc.) go through the manual `acOverride` field, not
-   new special-casing. Adding sheet fields = bump `SCHEMA_VERSION`, extend
-   `normalizeSheet` and `migrateRoom` in the server so old `room.json` upgrades
-   in place rather than being discarded.
+4a. **Character sheets** have four sub-tabs (Cơ bản / Trang bị / Đặc điểm /
+   Năng lực). Effective AC and equipped-weapon actions are *derived* in
+   `shared/rules.ts` (`computeArmorClass`, `derivedActions`, `allActions`) —
+   never stored. Rests are pure helpers (`applyShortRest` / `applyLongRest`).
+   Edge cases (Unarmored Defense, etc.) go through the manual `acOverride` field.
+   Adding sheet fields = bump `SCHEMA_VERSION`, extend `normalizeSheet` and
+   `migrateRoom` so old `room.json` upgrades in place rather than being discarded
+   (v2→v3→v4 all migrate in place).
 5. **dddice is optional and authoritative-for-values-only.** When
    `RoomState.dddice.enabled`, dddice supplies the die numbers and the server
    records them via `ExternalRoll` without re-rolling — but the server still owns

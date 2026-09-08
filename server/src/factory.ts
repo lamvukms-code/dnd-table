@@ -7,7 +7,7 @@ import type {
   Token,
 } from '@dnd-table/shared';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const ROLL_LOG_CAP = 200;
 export const DICE_TRAY_CAP = 12;
 
@@ -65,22 +65,53 @@ export function createBlankSheet(ownerId: string, name: string): CharacterSheet 
     acOverride: null,
     speed: 30,
     initiativeMisc: 0,
-    attacks: [],
+    actions: [],
+    resources: [],
+    spellSlots: [],
+    feats: [],
+    features: [],
     inventory: [],
     currency: emptyCurrency(),
     notes: '',
   };
 }
 
+interface LegacyAttack {
+  id: string;
+  name: string;
+  attackBonus: number;
+  damage: string;
+  damageType?: string;
+  source?: 'manual' | 'weapon';
+}
+
 /** Backfill fields added in later schema versions onto an existing sheet. */
 export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
-  return {
+  const legacy = sheet as CharacterSheet & { attacks?: LegacyAttack[] };
+  const migratedActions =
+    sheet.actions ??
+    (legacy.attacks ?? []).map((a) => ({
+      id: a.id,
+      name: a.name,
+      actionType: 'action' as const,
+      attackBonus: a.attackBonus,
+      damage: a.damage,
+      damageType: a.damageType ?? '',
+      source: a.source ?? ('manual' as const),
+    }));
+  const next: CharacterSheet = {
     ...sheet,
     acOverride: sheet.acOverride ?? null,
-    attacks: (sheet.attacks ?? []).map((a) => ({ ...a, source: a.source ?? 'manual' })),
+    actions: migratedActions,
+    resources: sheet.resources ?? [],
+    spellSlots: sheet.spellSlots ?? [],
+    feats: sheet.feats ?? [],
+    features: sheet.features ?? [],
     inventory: sheet.inventory ?? [],
     currency: sheet.currency ?? emptyCurrency(),
   };
+  delete (next as CharacterSheet & { attacks?: unknown }).attacks;
+  return next;
 }
 
 export function createToken(partial: Partial<Token>): Token {
