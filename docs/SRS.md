@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.13.0
+- **Version:** 0.14.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -138,11 +138,25 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   players and monsters both); failure drops concentration. No auto-break UI —
   the roll and result go to the log.
 - **Active effects** (0.13.0). `Token.effects: ActiveEffect[]` — the 14 5e
-  conditions (advisory badge + tooltip; auto-wiring the ~7 combat-critical ones
-  into advantage/auto-crit is Release B), damage **riders** (Hex, Hunter's Mark
-  — `targetRiderParts` adds them when the effect's source hits the token,
-  resolved per-part like any other damage part), and `save` / `note` /
-  `expiresRound` fields for the save-ends spells built in Release B.
+  conditions, damage **riders** (Hex, Hunter's Mark — `targetRiderParts` adds
+  them when the effect's source hits the token, resolved per-part like any
+  other damage part), and `save` / `note` / `expiresRound` fields.
+- **Thin-auto conditions** (0.14.0). Only the combat-critical conditions are
+  wired into rolls: `conditionAttackMode` gives advantage (target
+  blinded/paralyzed/restrained/stunned/unconscious/prone) or disadvantage
+  (attacker blinded/frightened/poisoned/prone/restrained), combined with the
+  manual roll mode the 5e way (`combineRollModes`); `conditionAutoCrit`
+  auto-crits a melee hit on a paralyzed/unconscious target. Everything else is
+  an advisory badge. "Save ends" effects re-roll at the turn boundary
+  (`processTurnEffects` on `initNext`); `expiresRound` effects auto-clear.
+- **Spellcasting** (0.14.0). `casterTypeOf(sheet)` → full / half / third / pact
+  / none, from class then subclass then `casterTypeOverride`. The spell-slot
+  section shows only for a caster. `spellSaveDc` = `8 + prof + mod`,
+  `spellAttackBonus` = `prof + mod` (5e 2024), ability from `spellcastingAbility`
+  or class default. `CharacterSheet.spells: Spell[]` — known, level-1+ cast only
+  while `prepared`. Point-click cast: rider → concentration rider on the target;
+  save → `spellSave` (server rolls the target's save vs the DC, applies the
+  effect on a failure); attack → spell attack roll.
 
 ---
 
@@ -502,6 +516,13 @@ See `shared/src/types.ts` for the authoritative definitions.
   repeat }, note?, expiresRound? }` on `Token.effects`.
 - `Concentration { name, since }` — the one effect a token concentrates on.
 - `InventoryItem.grantsCritImmune?` — adamantine; feeds `derivedDefenses`.
+- `Spell { id, name, level, prepared, castKind: attack|save|rider|utility,
+  concentration?, save?: { ability, dcOverride?, repeat? }, damage?, rider?,
+  effect?: { name, condition?, note?, expiresInRounds? } }` on
+  `CharacterSheet.spells`.
+- `CasterType = full | half | third | pact | none`; `RollMode = normal |
+  advantage | disadvantage`.
+- `CharacterSheet.subclass?`, `.casterTypeOverride?`, `.spellcastingAbility?`.
 - `DamagePart { dice, type, label? }` — one damage component of an attack.
 - `DamageRider { id, name, dice, type, enabled }` on `CharacterSheet.damageRiders`
   — a standing extra-damage effect applied to every attack while enabled.

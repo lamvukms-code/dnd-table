@@ -1,4 +1,5 @@
 import type {
+  Ability,
   ActiveEffect,
   BattleMap,
   CharacterSheet,
@@ -51,6 +52,18 @@ export type ClientAction =
   | { t: 'applyEffect'; targetTokenId: string; effect: ActiveEffect }
   | { t: 'removeEffect'; tokenId: string; effectId: string }
   | { t: 'clearConcentration'; tokenId: string }
+  // cast a save spell: the server rolls the target's save and, on a failure,
+  // applies `effectOnFail` (a concentration effect ties to the caster's token).
+  | {
+      t: 'spellSave';
+      targetTokenId: string;
+      ability: Ability;
+      dc: number;
+      label: string;
+      effectOnFail?: ActiveEffect;
+      sourceSheetId?: string;
+      sourceTokenId?: string;
+    }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }
   | { t: 'updateDddice'; patch: Partial<DddiceConfig> }

@@ -689,6 +689,31 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .eff-add { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 11px; }
 .eff-add select, .eff-custom input { font-size: 11px; }
 .eff-custom { display: inline-flex; gap: 3px; align-items: center; }
+.cast-banner { cursor: pointer; background: var(--accent, #a06cd5); color: #06121f; }
+
+/* spells tab */
+.spells-tab { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.spell-head { display: flex; flex-wrap: wrap; gap: 8px; }
+.spell-head label { display: flex; flex-direction: column; font-size: 11px; }
+.spell-stats { margin: 0; padding: 4px 6px; background: rgba(255,255,255,0.05); border-radius: 4px; }
+.cast-armed { border-left: 3px solid var(--accent, #a06cd5); padding-left: 6px; }
+.spell-group { border-top: 1px solid var(--line); padding-top: 4px; }
+.sg-label { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+.spell-row { border-left: 2px solid var(--line); padding-left: 6px; margin: 3px 0; }
+.sr-line { display: flex; gap: 4px; align-items: center; }
+.sr-name { flex: 1; min-width: 80px; }
+.sr-lvl { width: 40px; }
+.sr-tag {
+  font-size: 10px; font-weight: 700; background: var(--accent-2); color: #06121f;
+  border-radius: 3px; padding: 0 3px;
+}
+.sr-detail {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 4px 0 4px 4px; font-size: 11px;
+}
+.sr-detail label { display: inline-flex; flex-direction: column; }
+.sr-detail label.chk { flex-direction: row; gap: 3px; align-items: center; }
+.sr-detail label.grow { flex-basis: 100%; }
 .cover-warning {
   position: absolute;
   top: 40px;

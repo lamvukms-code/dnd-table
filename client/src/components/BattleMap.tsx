@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ABILITIES,
   abilityMod,
@@ -36,7 +36,17 @@ export function BattleMap() {
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
   const me = useStore((s) => s.me());
+  const castingSpell = useStore((s) => s.castingSpell);
+  const cancelCast = useStore((s) => s.cancelCast);
+  const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
   const { map, tokens, diceTray } = room;
+
+  useEffect(() => {
+    if (!castingSpell) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cancelCast();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [castingSpell, cancelCast]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [groupMode, setGroupMode] = useState(false);
@@ -60,6 +70,10 @@ export function BattleMap() {
   }
 
   function onPointerDown(e: React.PointerEvent, token: Token) {
+    if (castingSpell) {
+      void resolveCastOnToken(token.id);
+      return;
+    }
     if (groupMode && isDm) {
       toggleGroup(token.id);
       return;
@@ -166,6 +180,12 @@ export function BattleMap() {
               ))}
           </div>
         </details>
+      )}
+
+      {castingSpell && (
+        <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
+          🪄 Ra <strong>{castingSpell.spell.name}</strong> — bấm token mục tiêu (Esc / bấm đây để hủy)
+        </div>
       )}
 
       {isDm && tokens.some((t) => t.cover === 'total') && (
@@ -749,7 +769,8 @@ function TokenInspector({
                     onClick={() =>
                       attackRoll({
                         label: `${base} → ${sbTargetName}${mtag}`,
-                        attackNotation: sbd20(a.attackBonus!),
+                        attackBonus: a.attackBonus!,
+                        rollMode: sbRollMode,
                         damageParts: parts,
                         targetTokenId: sbTargetId,
                         attackerTokenId: token.id,
@@ -836,7 +857,8 @@ function TokenInspector({
               label: attackerId
                 ? `${tokens.find((t) => t.id === attackerId)?.label ?? ''} · ${atkName}`
                 : atkName,
-              attackNotation: `1d20+${Number(atkBonus) || 0}`,
+              attackBonus: Number(atkBonus) || 0,
+              rollMode: sbRollMode,
               damageParts: [{ dice: dmg, type: dmgType ?? '' }],
               targetTokenId: token.id,
               attackerTokenId: attackerId || undefined,

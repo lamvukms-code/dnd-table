@@ -1,18 +1,25 @@
 import { create } from 'zustand';
 import {
+  combineRollModes,
+  conditionAttackMode,
   coverAcBonus,
   d20Check,
   derivedDefenses,
   homebrewCritDamage,
   mergeDefenses,
   rollNotation,
+  spellAttackBonus,
+  spellSaveDc,
+  tokenConditions,
   type ActiveEffect,
   type ClientAction,
   type DamagePart,
   type ExternalRoll,
   type Participant,
+  type RollMode,
   type RoomState,
   type ServerEvent,
+  type Spell,
 } from '@dnd-table/shared';
 import {
   getLocalKey,
@@ -40,7 +47,11 @@ function loadIdentity(): Identity | null {
 
 interface AttackParams {
   label: string;
-  attackNotation: string;
+  /** Pre-built notation (freeform box). Ignored when `attackBonus` is given. */
+  attackNotation?: string;
+  /** When given, the notation is built here, folding in condition advantage/disadvantage. */
+  attackBonus?: number;
+  rollMode?: RollMode;
   damageParts: DamagePart[];
   targetTokenId: string;
   attackerSheetId?: string;
@@ -74,6 +85,11 @@ interface StoreState {
   applyEffect: (targetTokenId: string, effect: ActiveEffect) => void;
   removeEffect: (tokenId: string, effectId: string) => void;
   clearConcentration: (tokenId: string) => void;
+  /** Point-click spell casting: arm a spell, then click a token on the map. */
+  castingSpell: { sheetId: string; spell: Spell } | null;
+  beginCast: (sheetId: string, spell: Spell) => void;
+  cancelCast: () => void;
+  resolveCastOnToken: (targetTokenId: string) => Promise<void>;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
     name: string,
@@ -165,6 +181,7 @@ export const useStore = create<StoreState>((set, get) => {
     error: null,
     dddiceKey: getLocalKey(),
     dddiceConnected: false,
+    castingSpell: null,
 
     join: (identity) => {
       localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
@@ -226,26 +243,46 @@ export const useStore = create<StoreState>((set, get) => {
     attackRoll: async ({
       label,
       attackNotation,
+      attackBonus,
+      rollMode,
       damageParts,
       targetTokenId,
       attackerSheetId,
       attackerTokenId,
     }) => {
+      const room = get().room;
+      // Fold condition-implied advantage/disadvantage into the manual roll mode.
+      let notation = attackNotation ?? '1d20';
+      let condNote = '';
+      if (typeof attackBonus === 'number') {
+        const atkTok = attackerTokenId
+          ? room?.tokens.find((t) => t.id === attackerTokenId)
+          : attackerSheetId
+            ? room?.tokens.find(
+                (t) => room?.sheets.find((s) => s.id === attackerSheetId)?.tokenId === t.id,
+              )
+            : undefined;
+        const tgtTok = room?.tokens.find((t) => t.id === targetTokenId);
+        const cm = conditionAttackMode(tokenConditions(atkTok), tokenConditions(tgtTok));
+        const finalMode = combineRollModes(rollMode ?? 'normal', cm.mode);
+        notation = d20Check(attackBonus, finalMode);
+        if (cm.mode !== 'normal') condNote = ` [${cm.mode === 'advantage' ? 'lợi thế' : 'bất lợi'}: ${cm.reasons.join(', ')}]`;
+      }
+      const finalLabel = label + condNote;
       const plain = () =>
         rawSend({
           t: 'attack',
-          label,
-          attackNotation,
+          label: finalLabel,
+          attackNotation: notation,
           damageParts,
           targetTokenId,
           attackerSheetId,
           attackerTokenId,
         });
       if (!dddiceActive()) return plain();
-      const attack = await externalRoll(attackNotation);
+      const attack = await externalRoll(notation);
       if (!attack) return plain();
 
-      const room = get().room;
       const token = room?.tokens.find((tk) => tk.id === targetTokenId);
       const linked = room?.sheets.find((s) => s.tokenId === targetTokenId);
       const ac = (token?.armorClass ?? 10) + coverAcBonus(token?.cover);
@@ -254,10 +291,13 @@ export const useStore = create<StoreState>((set, get) => {
         linked ? derivedDefenses(linked) : undefined,
       );
       const critImmune = def?.critImmune ?? false;
+      const targetConds = tokenConditions(token);
+      const autoCrit =
+        targetConds.includes('paralyzed') || targetConds.includes('unconscious');
       const nat20 = attack.d20Natural === 20;
       const fumble = attack.d20Natural === 1;
-      const effectiveCrit = nat20 && !critImmune;
       const hit = nat20 || (!fumble && attack.total >= ac);
+      const effectiveCrit = (nat20 || (hit && autoCrit)) && !critImmune;
       let partTotals: number[] | undefined;
       if (hit) {
         partTotals = [];
@@ -269,8 +309,8 @@ export const useStore = create<StoreState>((set, get) => {
       }
       rawSend({
         t: 'attack',
-        label,
-        attackNotation,
+        label: finalLabel,
+        attackNotation: notation,
         damageParts,
         targetTokenId,
         attackerSheetId,
@@ -283,6 +323,91 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'applyEffect', targetTokenId, effect }),
     removeEffect: (tokenId, effectId) => rawSend({ t: 'removeEffect', tokenId, effectId }),
     clearConcentration: (tokenId) => rawSend({ t: 'clearConcentration', tokenId }),
+
+    beginCast: (sheetId, spell) => set({ castingSpell: { sheetId, spell } }),
+    cancelCast: () => set({ castingSpell: null }),
+    resolveCastOnToken: async (targetTokenId) => {
+      const cast = get().castingSpell;
+      const room = get().room;
+      if (!cast || !room) return;
+      const { sheetId, spell } = cast;
+      const sheet = room.sheets.find((s) => s.id === sheetId);
+      set({ castingSpell: null });
+      if (!sheet) return;
+      const label = `${sheet.name} · ${spell.name}`;
+      const atkBonus = spellAttackBonus(sheet) ?? 0;
+      const dc = spell.save?.dcOverride ?? spellSaveDc(sheet) ?? 10;
+
+      if (spell.castKind === 'rider' && spell.rider) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId,
+          effect: {
+            id: '',
+            name: spell.name,
+            sourceSheetId: sheetId,
+            concentration: spell.concentration,
+            rider: spell.rider,
+          },
+        });
+        return;
+      }
+      if (spell.castKind === 'save' && spell.save) {
+        rawSend({
+          t: 'spellSave',
+          targetTokenId,
+          ability: spell.save.ability,
+          dc,
+          label,
+          sourceSheetId: sheetId,
+          effectOnFail: spell.effect
+            ? {
+                id: '',
+                name: spell.effect.name || spell.name,
+                sourceSheetId: sheetId,
+                concentration: spell.concentration,
+                condition: spell.effect.condition,
+                note: spell.effect.note,
+                save:
+                  spell.save.repeat && spell.save.repeat !== 'none'
+                    ? { ability: spell.save.ability, dc, repeat: spell.save.repeat }
+                    : undefined,
+                expiresRound: spell.effect.expiresInRounds
+                  ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds
+                  : undefined,
+              }
+            : undefined,
+        });
+        return;
+      }
+      if (spell.castKind === 'attack') {
+        await get().attackRoll({
+          label,
+          attackBonus: atkBonus,
+          rollMode: 'normal',
+          damageParts: spell.damage ?? [],
+          targetTokenId,
+          attackerSheetId: sheetId,
+          attackerTokenId: sheet.tokenId,
+        });
+        return;
+      }
+      // utility: drop a plain effect if the spell defines one
+      if (spell.effect) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId,
+          effect: {
+            id: '',
+            name: spell.effect.name || spell.name,
+            sourceSheetId: sheetId,
+            concentration: spell.concentration,
+            condition: spell.effect.condition,
+            note: spell.effect.note,
+          },
+        });
+      }
+    },
 
     me: () => {
       const { room, participantId } = get();

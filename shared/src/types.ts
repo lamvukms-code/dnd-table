@@ -145,6 +145,7 @@ export interface CharacterSheet {
   className: string;
   level: number;
   proficiencyBonus: number;
+  subclass?: string;
   abilities: Record<Ability, number>;
   saveProficiencies: Ability[];
   skillProficiencies: string[];
@@ -167,6 +168,12 @@ export interface CharacterSheet {
   /** Warlock Pact Magic — all slots one level, recharge on a short OR long rest.
    *  Kept separate from `spellSlots` (Vancian, long-rest only). */
   pactSlots?: SpellSlots | null;
+  /** Known spells; level-1+ ones are cast only while `prepared`. */
+  spells: Spell[];
+  /** Override the caster type derived from class/subclass (null = derive). */
+  casterTypeOverride?: CasterType | null;
+  /** Override the spellcasting ability derived from class (null = derive). */
+  spellcastingAbility?: Ability | null;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];
@@ -294,6 +301,40 @@ export interface ActiveEffect {
 export interface Concentration {
   name: string;
   since: number; // round it started
+}
+
+export type RollMode = 'normal' | 'advantage' | 'disadvantage';
+
+/**
+ * How much of a class level counts toward the Vancian spell-slot table.
+ * `pact` is Warlock (its own short-rest table); `none` = not a spellcaster.
+ */
+export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
+
+/** How a spell is used when cast at a target. */
+export type SpellCastKind = 'attack' | 'save' | 'rider' | 'utility';
+
+/** A spell on a character sheet — known, and (level 1+) optionally prepared. */
+export interface Spell {
+  id: string;
+  name: string;
+  level: number; // 0 = cantrip (always available, ignores `prepared`)
+  school?: string;
+  concentration?: boolean;
+  ritual?: boolean;
+  prepared: boolean;
+  castKind: SpellCastKind;
+  actionType?: ActionType;
+  /** 'save' spells: the save the target rolls. DC defaults to the sheet's spell save DC. */
+  save?: { ability: Ability; dcOverride?: number; repeat?: 'none' | 'start-of-turn' | 'end-of-turn' };
+  /** 'attack' spells: damage parts on a hit. */
+  damage?: DamagePart[];
+  /** 'rider' spells (Hex, Hunter's Mark): + damage when the caster hits the target. */
+  rider?: { dice: string; type: string };
+  /** The effect placed on the target (condition / note); for save spells, on a failed save. */
+  effect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
+  range?: string;
+  notes?: string;
 }
 
 export interface StatblockTrait {

@@ -1,17 +1,20 @@
 import type {
   Ability,
+  CasterType,
   CharacterSheet,
+  ConditionType,
   CoverLevel,
   Currency,
   DamagePart,
   Defenses,
   InventoryItem,
+  RollMode,
   SheetAction,
   Statblock,
   Token,
   TokenStatblock,
 } from './types.js';
-import { COIN_TYPES, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
+import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
@@ -172,6 +175,139 @@ export function targetRiderParts(
 /** Homebrew/5e-2024 concentration save DC after taking `damage`. */
 export function concentrationDc(damage: number): number {
   return Math.max(10, Math.floor(damage / 2));
+}
+
+// ---------------------------------------------------------------------------
+// Spellcasting (5e 2024)
+// ---------------------------------------------------------------------------
+
+/** Full spellcasters — one class level = one caster level. */
+const FULL_CASTERS = ['wizard', 'cleric', 'druid', 'bard', 'sorcerer'];
+/** Half casters — spells from level 1 in the 2024 rules. */
+const HALF_CASTERS = ['paladin', 'ranger', 'artificer'];
+/** Subclasses that grant third-caster progression. */
+const THIRD_CASTER_SUBCLASSES = ['eldritch knight', 'arcane trickster'];
+/** Default spellcasting ability by class. */
+const CLASS_SPELL_ABILITY: Record<string, Ability> = {
+  wizard: 'int',
+  cleric: 'wis',
+  druid: 'wis',
+  bard: 'cha',
+  sorcerer: 'cha',
+  paladin: 'cha',
+  ranger: 'wis',
+  warlock: 'cha',
+  artificer: 'int',
+};
+
+function classKey(sheet: CharacterSheet): string {
+  return (sheet.className ?? '').trim().toLowerCase();
+}
+function subclassKey(sheet: CharacterSheet): string {
+  return (sheet.subclass ?? '').trim().toLowerCase();
+}
+
+/** The caster type this sheet uses (override wins, else derived from class/subclass). */
+export function casterTypeOf(sheet: CharacterSheet): CasterType {
+  if (sheet.casterTypeOverride) return sheet.casterTypeOverride;
+  const sub = subclassKey(sheet);
+  if (THIRD_CASTER_SUBCLASSES.includes(sub)) return 'third';
+  const cls = classKey(sheet);
+  if (cls.includes('warlock')) return 'pact';
+  if (FULL_CASTERS.some((c) => cls.includes(c))) return 'full';
+  if (HALF_CASTERS.some((c) => cls.includes(c))) return 'half';
+  return 'none';
+}
+
+/** The spellcasting ability for this sheet, or null if it isn't a caster. */
+export function spellcastingAbilityOf(sheet: CharacterSheet): Ability | null {
+  if (sheet.spellcastingAbility) return sheet.spellcastingAbility;
+  if (THIRD_CASTER_SUBCLASSES.includes(subclassKey(sheet))) return 'int';
+  const cls = classKey(sheet);
+  for (const [k, v] of Object.entries(CLASS_SPELL_ABILITY)) if (cls.includes(k)) return v;
+  return null;
+}
+
+/** 5e 2024 spell save DC: 8 + proficiency bonus + spellcasting ability modifier. */
+export function spellSaveDc(sheet: CharacterSheet): number | null {
+  const ab = spellcastingAbilityOf(sheet);
+  if (!ab || casterTypeOf(sheet) === 'none') return null;
+  return 8 + sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
+}
+
+/** Spell attack modifier: proficiency bonus + spellcasting ability modifier. */
+export function spellAttackBonus(sheet: CharacterSheet): number | null {
+  const ab = spellcastingAbilityOf(sheet);
+  if (!ab || casterTypeOf(sheet) === 'none') return null;
+  return sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
+}
+
+// ---------------------------------------------------------------------------
+// Thin-auto conditions (only the combat-critical ones are wired into rolls)
+// ---------------------------------------------------------------------------
+
+const ATTACKER_DISADVANTAGE: ConditionType[] = [
+  'blinded',
+  'frightened',
+  'poisoned',
+  'prone',
+  'restrained',
+];
+const TARGET_GRANTS_ADVANTAGE: ConditionType[] = [
+  'blinded',
+  'paralyzed',
+  'restrained',
+  'stunned',
+  'unconscious',
+];
+
+/** The conditions currently on a token (from its active effects). */
+export function tokenConditions(token: Pick<Token, 'effects'> | undefined): ConditionType[] {
+  return (token?.effects ?? [])
+    .map((e) => e.condition)
+    .filter((c): c is ConditionType => !!c);
+}
+
+/** Advantage/disadvantage on an attack implied by the attacker's & target's conditions. */
+export function conditionAttackMode(
+  attackerConds: ConditionType[],
+  targetConds: ConditionType[],
+): { mode: RollMode; reasons: string[] } {
+  const reasons: string[] = [];
+  let adv = false;
+  let dis = false;
+  for (const c of attackerConds) {
+    if (ATTACKER_DISADVANTAGE.includes(c)) {
+      dis = true;
+      reasons.push(`bạn ${CONDITION_VI[c]}`);
+    }
+  }
+  for (const c of targetConds) {
+    if (TARGET_GRANTS_ADVANTAGE.includes(c)) {
+      adv = true;
+      reasons.push(`mục tiêu ${CONDITION_VI[c]}`);
+    }
+  }
+  // prone target: advantage in melee (our default), disadvantage at range — we
+  // don't track range, so assume the common melee case.
+  if (targetConds.includes('prone')) {
+    adv = true;
+    reasons.push('mục tiêu ngã (giả định cận chiến)');
+  }
+  const mode: RollMode = adv && dis ? 'normal' : adv ? 'advantage' : dis ? 'disadvantage' : 'normal';
+  return { mode, reasons };
+}
+
+/** Paralyzed / unconscious targets are auto-crit when hit in melee. */
+export function conditionAutoCrit(targetConds: ConditionType[]): boolean {
+  return targetConds.includes('paralyzed') || targetConds.includes('unconscious');
+}
+
+/** Combine two roll modes the 5e way: many advantages don't stack, adv+dis cancel. */
+export function combineRollModes(a: RollMode, b: RollMode): RollMode {
+  const adv = a === 'advantage' || b === 'advantage';
+  const dis = a === 'disadvantage' || b === 'disadvantage';
+  return adv && dis ? 'normal' : adv ? 'advantage' : dis ? 'disadvantage' : 'normal';
 }
 
 /** Preset spell riders for the quick "cast on target" control. */

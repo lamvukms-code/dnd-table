@@ -12,6 +12,7 @@ import {
 } from './factory.js';
 import {
   concentrationDc,
+  conditionAutoCrit,
   coverAcBonus,
   derivedDefenses,
   externalRollResult,
@@ -21,7 +22,9 @@ import {
   resolveDamageParts,
   rollNotation,
   targetRiderParts,
+  tokenConditions,
   tokenStatblockFrom,
+  type Ability,
   type ActiveEffect,
   type ClientAction,
   type DamagePart,
@@ -163,23 +166,36 @@ export class Room {
     return mergeDefenses(token.defenses, sheet ? derivedDefenses(sheet) : undefined);
   }
 
-  /** CON saving-throw bonus for a token (linked sheet, else stat block, else 0). */
-  private tokenConSaveBonus(token: Token): number {
+  /** Saving-throw bonus for a token in one ability (linked sheet, else stat block, else 0). */
+  private tokenSaveBonus(token: Token, ability: Ability): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
     if (sheet) {
       return (
-        abilityMod(sheet.abilities.con) +
-        (sheet.saveProficiencies.includes('con') ? sheet.proficiencyBonus : 0)
+        abilityMod(sheet.abilities[ability]) +
+        (sheet.saveProficiencies.includes(ability) ? sheet.proficiencyBonus : 0)
       );
     }
     const sb = token.statblock;
     if (sb) {
       return (
-        abilityMod(sb.abilities.con) +
-        (sb.saveProficiencies.includes('con') ? sb.proficiencyBonus : 0)
+        abilityMod(sb.abilities[ability]) +
+        (sb.saveProficiencies.includes(ability) ? sb.proficiencyBonus : 0)
       );
     }
     return 0;
+  }
+
+  /** Roll a d20 save for a token (nat 20 auto-pass, nat 1 auto-fail — homebrew). */
+  private rollTokenSave(
+    token: Token,
+    ability: Ability,
+    dc: number,
+  ): { d20: number; total: number; pass: boolean; bonus: number } {
+    const bonus = this.tokenSaveBonus(token, ability);
+    const d20 = 1 + Math.floor(Math.random() * 20);
+    const total = d20 + bonus;
+    const pass = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
+    return { d20, total, pass, bonus };
   }
 
   /** The token id that a rider/effect source resolves to (for concentration). */
@@ -215,10 +231,7 @@ export class Room {
   private maybeBreakConcentration(token: Token, damage: number): void {
     if (!token.concentration || damage <= 0) return;
     const dc = concentrationDc(damage);
-    const bonus = this.tokenConSaveBonus(token);
-    const d20 = 1 + Math.floor(Math.random() * 20);
-    const total = d20 + bonus;
-    const kept = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
+    const { d20, total, pass: kept, bonus } = this.rollTokenSave(token, 'con', dc);
     this.pushRoll({
       id: nanoid(8),
       ts: Date.now(),
@@ -233,6 +246,48 @@ export class Room {
       }),
     });
     if (!kept) this.dropConcentration(token, `thất bại CON save DC ${dc}`);
+  }
+
+  /** At a turn boundary: run "save ends" effects on `token` and clear expired ones. */
+  private processTurnEffects(token: Token, phase: 'start-of-turn' | 'end-of-turn'): void {
+    const round = this.state.initiative.round;
+    const keep: ActiveEffect[] = [];
+    for (const e of token.effects ?? []) {
+      if (typeof e.expiresRound === 'number' && round >= e.expiresRound) {
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: `${token.label}: hết hiệu ứng ${e.name}`,
+          result: externalRollResult('', { total: 0, faces: [] }),
+        });
+        continue;
+      }
+      if (e.save && e.save.repeat === phase) {
+        const { d20, total, pass, bonus } = this.rollTokenSave(token, e.save.ability, e.save.dc);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: `${token.label}: ${e.save.ability.toUpperCase()} cứu (${e.name}) ${total} vs DC ${e.save.dc} — ${
+            pass ? 'THOÁT' : 'vẫn dính'
+          }`,
+          result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { total, faces: [d20] }),
+        });
+        if (pass) {
+          if (e.concentration) {
+            const srcId = this.sourceTokenId(e);
+            const src = srcId && this.state.tokens.find((t) => t.id === srcId);
+            if (src && src.concentration?.name === e.name) src.concentration = null;
+          }
+          continue;
+        }
+      }
+      keep.push(e);
+    }
+    token.effects = keep;
   }
 
   /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
@@ -401,7 +456,9 @@ export class Room {
         // equipped gear): a crit lands as an ordinary hit.
         const def = this.effectiveDefenses(target);
         const critImmune = def?.critImmune ?? false;
-        const effectiveCrit = res.crit && !critImmune;
+        // Thin-auto: a paralyzed / unconscious target is auto-crit when hit.
+        const autoCrit = res.hit && conditionAutoCrit(tokenConditions(target));
+        const effectiveCrit = (res.crit || autoCrit) && !critImmune;
 
         // Target-bound riders (Hex / Hunter's Mark placed on this token by the attacker).
         const dmgParts = [
@@ -456,7 +513,9 @@ export class Room {
           }
           this.maybeBreakConcentration(target, applied);
           const critTag = effectiveCrit
-            ? ' (chí mạng homebrew)'
+            ? autoCrit && !res.crit
+              ? ' (chí mạng — mục tiêu tê liệt/bất tỉnh)'
+              : ' (chí mạng homebrew)'
             : res.crit && critImmune
               ? ' (chí mạng bị chặn — adamantine)'
               : '';
@@ -639,6 +698,52 @@ export class Room {
         break;
       }
 
+      case 'spellSave': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        const ownsSource =
+          (action.sourceSheetId &&
+            this.state.sheets.some(
+              (s) => s.id === action.sourceSheetId && s.ownerId === actor.id,
+            )) ||
+          (action.sourceTokenId &&
+            this.state.tokens.find((t) => t.id === action.sourceTokenId)?.controllerId ===
+              actor.id);
+        if (!isDm && !ownsSource) return 'Bạn chỉ ra phép từ nhân vật của mình';
+        const { d20, total, pass, bonus } = this.rollTokenSave(
+          target,
+          action.ability,
+          action.dc,
+        );
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${action.label} → ${target.label}: ${action.ability.toUpperCase()} cứu ${total} vs DC ${action.dc} — ${
+            pass ? 'THOÁT' : 'DÍNH'
+          }`,
+          result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {
+            total,
+            faces: [d20],
+          }),
+        });
+        if (!pass && action.effectOnFail) {
+          const effect: ActiveEffect = { ...action.effectOnFail, id: nanoid(8) };
+          if (effect.concentration) {
+            const srcId = this.sourceTokenId(effect);
+            const src = srcId && this.state.tokens.find((t) => t.id === srcId);
+            if (src) {
+              this.dropConcentration(src, `chuyển sang ${effect.name}`, actor);
+              src.concentration = { name: effect.name, since: this.state.initiative.round };
+            }
+          }
+          target.effects = [...(target.effects ?? []), effect];
+        }
+        this.touch();
+        break;
+      }
+
       case 'initSet': {
         if (!isDm) return 'Chỉ DM được sửa initiative';
         this.state.initiative.entries = sortInit(action.entries);
@@ -715,7 +820,13 @@ export class Room {
         if (!isDm && !this.actorOwnsActiveTurn(actor)) {
           return 'Chỉ DM hoặc người đang tới lượt được kết thúc lượt';
         }
+        const endingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
         advanceTurn(this.state.initiative, 1);
+        const startingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
+        const ending = endingId && this.state.tokens.find((t) => t.id === endingId);
+        if (ending) this.processTurnEffects(ending, 'end-of-turn');
+        const starting = startingId && this.state.tokens.find((t) => t.id === startingId);
+        if (starting) this.processTurnEffects(starting, 'start-of-turn');
         this.touch();
         break;
       }

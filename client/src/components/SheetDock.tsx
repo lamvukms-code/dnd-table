@@ -12,15 +12,24 @@ import {
   emptyCurrency,
   fmtMod,
   initiativeBonus,
+  casterTypeOf,
+  CONDITION_VI,
+  CONDITIONS,
   proficiencyByLevel,
   RIDER_PRESETS,
   saveBonus,
   skillBonus,
+  spellAttackBonus,
+  spellcastingAbilityOf,
+  spellSaveDc,
   type Ability,
   type ActionType,
+  type CasterType,
   type CharacterSheet,
+  type ConditionType,
   type DamagePart,
   type SheetAction,
+  type Spell,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -114,6 +123,7 @@ export function blankSheet(ownerId: string): CharacterSheet {
     damageRiders: [],
     resources: [],
     spellSlots: [],
+    spells: [],
     feats: [],
     features: [],
     inventory: [],
@@ -122,7 +132,7 @@ export function blankSheet(ownerId: string): CharacterSheet {
   };
 }
 
-type SubTab = 'basic' | 'skills' | 'equipment' | 'feats' | 'abilities';
+type SubTab = 'basic' | 'skills' | 'equipment' | 'spells' | 'feats' | 'abilities';
 
 const DOCK_H_KEY = 'dnd-table.dockHeight';
 
@@ -196,6 +206,7 @@ export function SheetDock() {
                 ['basic', 'Cơ bản'],
                 ['skills', 'Kỹ năng'],
                 ['equipment', 'Trang bị'],
+                ['spells', 'Phép'],
                 ['feats', 'Đặc điểm'],
                 ['abilities', 'Năng lực'],
               ] as [SubTab, string][]
@@ -239,6 +250,7 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
       {sub === 'basic' && <BasicTab {...ctx} />}
       {sub === 'skills' && <SkillsTab {...ctx} />}
       {sub === 'equipment' && <EquipmentTab {...ctx} />}
+      {sub === 'spells' && <SpellsTab {...ctx} />}
       {sub === 'feats' && <FeatsTab {...ctx} />}
       {sub === 'abilities' && <AbilitiesTab {...ctx} />}
     </div>
@@ -684,9 +696,11 @@ function ActionRow({
   rollDice: (label: string, notation: string) => Promise<void>;
   attackRoll: (p: {
     label: string;
-    attackNotation: string;
+    attackNotation?: string;
     damageParts: DamagePart[];
     targetTokenId: string;
+    attackBonus?: number;
+    rollMode?: RollMode;
     attackerSheetId?: string;
     attackerTokenId?: string;
   }) => Promise<void>;
@@ -724,7 +738,8 @@ function ActionRow({
           onClick={() =>
             attackRoll({
               label: `${base} → ${targetName}`,
-              attackNotation: atkNotation(action.attackBonus!),
+              attackBonus: action.attackBonus!,
+              rollMode,
               damageParts: parts,
               targetTokenId: targetId,
               attackerSheetId: attacker.sheetId,
@@ -867,6 +882,10 @@ function Resources({ draft, commit }: EditorCtx) {
   const nextSlotLevel = [1, 2, 3, 4, 5, 6, 7, 8, 9].find(
     (l) => !draft.spellSlots.some((s) => s.level === l),
   );
+  const caster = casterTypeOf(draft);
+  // Vancian slots for full / half / third casters; pact slots for Warlock only.
+  const showVancian = caster === 'full' || caster === 'half' || caster === 'third';
+  const showPact = caster === 'pact';
 
   return (
     <div className="resources">
@@ -926,10 +945,11 @@ function Resources({ draft, commit }: EditorCtx) {
         </div>
       ))}
 
-      {draft.spellSlots
-        .slice()
-        .sort((a, b) => a.level - b.level)
-        .map((s) => (
+      {showVancian &&
+        draft.spellSlots
+          .slice()
+          .sort((a, b) => a.level - b.level)
+          .map((s) => (
           <div key={s.level} className="res-row">
             <span className="res-name slot">Slot {s.level}</span>
             <Pips max={s.max} used={s.used} onChange={(u) => setSlot(s.level, u)} />
@@ -960,7 +980,7 @@ function Resources({ draft, commit }: EditorCtx) {
           </div>
         ))}
 
-      {draft.pactSlots && (
+      {showPact && draft.pactSlots && (
         <div className="res-row">
           <span className="res-name slot pact" title="Warlock Pact Magic — hồi khi nghỉ ngắn hoặc dài">
             Pact lv
@@ -1011,7 +1031,7 @@ function Resources({ draft, commit }: EditorCtx) {
         >
           + Tài nguyên
         </button>
-        {!draft.pactSlots && (
+        {showPact && !draft.pactSlots && (
           <button
             onClick={() =>
               commit({ ...draft, pactSlots: { level: 1, max: 1, used: 0 } })
@@ -1020,7 +1040,7 @@ function Resources({ draft, commit }: EditorCtx) {
             + Pact Magic
           </button>
         )}
-        {nextSlotLevel && (
+        {showVancian && nextSlotLevel && (
           <button
             onClick={() =>
               commit({
@@ -1204,6 +1224,345 @@ function FeatsTab({ draft, commit }: EditorCtx) {
         + Thêm feat
       </button>
       {draft.feats.length === 0 && <p className="empty">Chưa có feat.</p>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ Spells */
+
+const CASTER_LABEL: Record<CasterType, string> = {
+  full: 'Full caster',
+  half: 'Half caster',
+  third: 'Third caster (subclass)',
+  pact: 'Pact Magic (Warlock)',
+  none: 'Không phải caster',
+};
+const CAST_KIND_LABEL: Record<Spell['castKind'], string> = {
+  attack: 'Đòn đánh phép',
+  save: 'Bắt cứu nguy (save)',
+  rider: 'Cộng dmg (rider)',
+  utility: 'Tiện ích / hiệu ứng',
+};
+
+function SpellsTab({ draft, commit }: EditorCtx) {
+  const beginCast = useStore((s) => s.beginCast);
+  const casting = useStore((s) => s.castingSpell);
+  const caster = casterTypeOf(draft);
+  const ability = spellcastingAbilityOf(draft);
+  const dc = spellSaveDc(draft);
+  const atk = spellAttackBonus(draft);
+  const spells = draft.spells ?? [];
+  const prepared = spells.filter((s) => s.level === 0 || s.prepared).length;
+
+  const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
+  const upd = (id: string, patch: Partial<Spell>) =>
+    set({ spells: spells.map((s) => (s.id === id ? { ...s, ...patch } : s)) });
+
+  const byLevel = new Map<number, Spell[]>();
+  for (const s of spells) byLevel.set(s.level, [...(byLevel.get(s.level) ?? []), s]);
+
+  return (
+    <div className="spells-tab">
+      <div className="spell-head">
+        <label>
+          Subclass
+          <input
+            value={draft.subclass ?? ''}
+            placeholder="vd Eldritch Knight"
+            onChange={(e) => set({ subclass: e.target.value || undefined })}
+          />
+        </label>
+        <label>
+          Loại caster
+          <select
+            value={draft.casterTypeOverride ?? ''}
+            onChange={(e) =>
+              set({ casterTypeOverride: (e.target.value || null) as CasterType | null })
+            }
+          >
+            <option value="">tự nhận ({CASTER_LABEL[caster]})</option>
+            {(['full', 'half', 'third', 'pact', 'none'] as CasterType[]).map((c) => (
+              <option key={c} value={c}>
+                {CASTER_LABEL[c]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Ability
+          <select
+            value={draft.spellcastingAbility ?? ''}
+            onChange={(e) => set({ spellcastingAbility: (e.target.value || null) as Ability | null })}
+          >
+            <option value="">tự nhận{ability ? ` (${ABILITY_LABEL[ability]})` : ''}</option>
+            {ABILITIES.map((a) => (
+              <option key={a} value={a}>
+                {ABILITY_LABEL[a]}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {caster === 'none' ? (
+        <p className="hint">
+          Class này không phải spellcaster. Nếu sai, chọn "Loại caster" ở trên.
+        </p>
+      ) : (
+        <p className="spell-stats">
+          <strong>Spell save DC {dc ?? '—'}</strong> · Spell atk {atk == null ? '—' : fmtMod(atk)} ·
+          đã chuẩn bị {prepared} phép
+        </p>
+      )}
+
+      {casting && (
+        <p className="hint cast-armed">
+          🪄 Đang ra <strong>{casting.spell.name}</strong> — bấm token địch trên bản đồ. (Esc để hủy)
+        </p>
+      )}
+
+      {[...byLevel.keys()]
+        .sort((a, b) => a - b)
+        .map((lvl) => (
+          <div key={lvl} className="spell-group">
+            <span className="sg-label">{lvl === 0 ? 'Cantrip' : `Cấp ${lvl}`}</span>
+            {byLevel.get(lvl)!.map((sp) => (
+              <SpellRow
+                key={sp.id}
+                sp={sp}
+                canCast={caster !== 'none'}
+                onCast={() => beginCast(draft.id, sp)}
+                onChange={(p) => upd(sp.id, p)}
+                onDelete={() => set({ spells: spells.filter((x) => x.id !== sp.id) })}
+              />
+            ))}
+          </div>
+        ))}
+
+      <button
+        onClick={() =>
+          set({
+            spells: [
+              ...spells,
+              {
+                id: nanoIdish(),
+                name: 'Phép mới',
+                level: 1,
+                prepared: false,
+                castKind: 'save',
+                concentration: false,
+                save: { ability: 'wis' },
+                effect: { name: 'Phép mới' },
+              },
+            ],
+          })
+        }
+      >
+        + Thêm phép
+      </button>
+      {spells.length === 0 && <p className="empty">Chưa có phép nào.</p>}
+    </div>
+  );
+}
+
+function SpellRow({
+  sp,
+  canCast,
+  onCast,
+  onChange,
+  onDelete,
+}: {
+  sp: Spell;
+  canCast: boolean;
+  onCast: () => void;
+  onChange: (p: Partial<Spell>) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="spell-row">
+      <div className="sr-line">
+        {sp.level > 0 && (
+          <input
+            type="checkbox"
+            checked={sp.prepared}
+            title="Đã chuẩn bị"
+            onChange={(e) => onChange({ prepared: e.target.checked })}
+          />
+        )}
+        <input
+          className="sr-name"
+          value={sp.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+        />
+        <input
+          className="sr-lvl"
+          type="number"
+          min={0}
+          max={9}
+          value={sp.level}
+          title="Cấp phép (0 = cantrip)"
+          onChange={(e) => onChange({ level: Math.max(0, Math.min(9, Number(e.target.value))) })}
+        />
+        {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
+        {canCast && (
+          <button className="roll-btn strong" onClick={onCast} title="Ra phép (chọn mục tiêu)">
+            🪄
+          </button>
+        )}
+        <button className="link" onClick={() => setOpen(!open)}>
+          {open ? '▲' : '▾'}
+        </button>
+        <button className="link" onClick={onDelete}>
+          ✕
+        </button>
+      </div>
+      {open && (
+        <div className="sr-detail">
+          <label>
+            Kiểu
+            <select
+              value={sp.castKind}
+              onChange={(e) => onChange({ castKind: e.target.value as Spell['castKind'] })}
+            >
+              {(Object.keys(CAST_KIND_LABEL) as Spell['castKind'][]).map((k) => (
+                <option key={k} value={k}>
+                  {CAST_KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={sp.concentration ?? false}
+              onChange={(e) => onChange({ concentration: e.target.checked })}
+            />
+            Tập trung
+          </label>
+
+          {sp.castKind === 'rider' && (
+            <label>
+              Dmg cộng
+              <input
+                className="xd-dice"
+                placeholder="1d6"
+                value={sp.rider?.dice ?? ''}
+                onChange={(e) =>
+                  onChange({ rider: { dice: e.target.value, type: sp.rider?.type ?? 'force' } })
+                }
+              />
+              <DamageTypeSelect
+                value={sp.rider?.type}
+                onChange={(v) => onChange({ rider: { dice: sp.rider?.dice ?? '1d6', type: v ?? '' } })}
+              />
+            </label>
+          )}
+
+          {sp.castKind === 'attack' && (
+            <label className="grow">
+              Sát thương
+              <ExtraDamageEditor
+                parts={sp.damage}
+                onChange={(parts) => onChange({ damage: parts })}
+              />
+            </label>
+          )}
+
+          {sp.castKind === 'save' && (
+            <>
+              <label>
+                Cứu bằng
+                <select
+                  value={sp.save?.ability ?? 'wis'}
+                  onChange={(e) =>
+                    onChange({
+                      save: { ...(sp.save ?? { ability: 'wis' }), ability: e.target.value as Ability },
+                    })
+                  }
+                >
+                  {ABILITIES.map((a) => (
+                    <option key={a} value={a}>
+                      {ABILITY_LABEL[a]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                DC ép
+                <input
+                  className="sr-lvl"
+                  type="number"
+                  placeholder="tự"
+                  value={sp.save?.dcOverride ?? ''}
+                  onChange={(e) =>
+                    onChange({
+                      save: {
+                        ...(sp.save ?? { ability: 'wis' }),
+                        dcOverride: e.target.value ? Number(e.target.value) : undefined,
+                      },
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Cứu lại mỗi lượt
+                <select
+                  value={sp.save?.repeat ?? 'none'}
+                  onChange={(e) =>
+                    onChange({
+                      save: {
+                        ...(sp.save ?? { ability: 'wis' }),
+                        repeat: e.target.value as 'none' | 'start-of-turn' | 'end-of-turn',
+                      },
+                    })
+                  }
+                >
+                  <option value="none">không</option>
+                  <option value="end-of-turn">cuối lượt</option>
+                  <option value="start-of-turn">đầu lượt</option>
+                </select>
+              </label>
+            </>
+          )}
+
+          {(sp.castKind === 'save' || sp.castKind === 'utility') && (
+            <>
+              <label>
+                Hiệu ứng
+                <input
+                  value={sp.effect?.name ?? ''}
+                  placeholder="tên hiệu ứng"
+                  onChange={(e) =>
+                    onChange({ effect: { ...(sp.effect ?? { name: '' }), name: e.target.value } })
+                  }
+                />
+              </label>
+              <label>
+                Trạng thái
+                <select
+                  value={sp.effect?.condition ?? ''}
+                  onChange={(e) =>
+                    onChange({
+                      effect: {
+                        ...(sp.effect ?? { name: sp.name }),
+                        condition: (e.target.value || undefined) as ConditionType | undefined,
+                      },
+                    })
+                  }
+                >
+                  <option value="">— không —</option>
+                  {CONDITIONS.map((c) => (
+                    <option key={c} value={c}>
+                      {CONDITION_VI[c]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

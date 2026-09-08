@@ -6,8 +6,12 @@ import {
   applyLongRest,
   applyShortRest,
   carriedWeight,
+  casterTypeOf,
+  combineRollModes,
   computeArmorClass,
   concentrationDc,
+  conditionAttackMode,
+  conditionAutoCrit,
   coverAcBonus,
   currencyInGp,
   derivedActions,
@@ -16,6 +20,8 @@ import {
   mergeDefenses,
   resolveDamageParts,
   skillBonus,
+  spellAttackBonus,
+  spellSaveDc,
   statblockInitiativeMod,
   targetRiderParts,
   tokenSaveBonus,
@@ -45,6 +51,7 @@ function sheet(over: Partial<CharacterSheet> = {}): CharacterSheet {
     initiativeMisc: 0,
     actions: [],
     damageRiders: [],
+    spells: [],
     resources: [],
     spellSlots: [],
     feats: [],
@@ -277,6 +284,46 @@ describe('adamantine / concentration / riders', () => {
       { dice: '1d6', type: 'necrotic', label: 'Hex' },
     ]);
     expect(targetRiderParts(target, { sheetId: 'other' })).toEqual([]);
+  });
+});
+
+describe('spellcasting (5e 2024)', () => {
+  it('caster type is derived from class, then subclass, then the override', () => {
+    expect(casterTypeOf(sheet({ className: 'Wizard' }))).toBe('full');
+    expect(casterTypeOf(sheet({ className: 'Paladin' }))).toBe('half');
+    expect(casterTypeOf(sheet({ className: 'Warlock' }))).toBe('pact');
+    expect(casterTypeOf(sheet({ className: 'Fighter' }))).toBe('none');
+    expect(casterTypeOf(sheet({ className: 'Fighter', subclass: 'Eldritch Knight' }))).toBe('third');
+    expect(casterTypeOf(sheet({ className: 'Fighter', casterTypeOverride: 'full' }))).toBe('full');
+  });
+
+  it('spell save DC = 8 + prof + ability mod, spell attack = prof + mod', () => {
+    const wiz = sheet({
+      className: 'Wizard',
+      proficiencyBonus: 3,
+      abilities: { str: 8, dex: 14, con: 12, int: 18, wis: 10, cha: 10 },
+    });
+    expect(spellSaveDc(wiz)).toBe(8 + 3 + 4);
+    expect(spellAttackBonus(wiz)).toBe(3 + 4);
+    expect(spellSaveDc(sheet({ className: 'Fighter' }))).toBeNull();
+  });
+});
+
+describe('thin-auto conditions', () => {
+  it('target advantage / attacker disadvantage / cancel', () => {
+    expect(conditionAttackMode([], ['restrained']).mode).toBe('advantage');
+    expect(conditionAttackMode(['blinded'], []).mode).toBe('disadvantage');
+    expect(conditionAttackMode(['poisoned'], ['stunned']).mode).toBe('normal'); // adv+dis cancel
+    expect(conditionAttackMode([], []).mode).toBe('normal');
+  });
+  it('paralyzed / unconscious target auto-crits', () => {
+    expect(conditionAutoCrit(['paralyzed'])).toBe(true);
+    expect(conditionAutoCrit(['prone'])).toBe(false);
+  });
+  it('combineRollModes: advantage + disadvantage = normal', () => {
+    expect(combineRollModes('advantage', 'advantage')).toBe('advantage');
+    expect(combineRollModes('advantage', 'disadvantage')).toBe('normal');
+    expect(combineRollModes('normal', 'disadvantage')).toBe('disadvantage');
   });
 });
 

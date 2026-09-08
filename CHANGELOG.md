@@ -6,6 +6,50 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-08
+
+Release B of the effects work — the spellcasting layer and the point-click cast
+UI. Next up (commit C): multiclass + auto spell-slot progression on level-up.
+
+### Added
+
+- **Spells tab** on the character sheet. Known spells; level-1+ spells have a
+  **prepared** checkbox (cantrips are always available). Each spell has a cast
+  kind — *attack / save / rider / utility* — and kind-specific fields (damage
+  parts, save ability + DC override + "save ends" cadence, rider die, effect
+  condition).
+- **Caster type** is derived from class, then subclass, then a manual override
+  (`casterTypeOf`): full (Wizard/Cleric/Druid/Bard/Sorcerer), half
+  (Paladin/Ranger — 2024: slots from level 1), third (Eldritch Knight / Arcane
+  Trickster), pact (Warlock), or none. The **spell-slot section only appears
+  for a caster** — Vancian slots for full/half/third, Pact Magic for Warlock.
+- **Auto spell save DC & spell attack** (5e 2024): `8 + proficiency + ability
+  mod` / `proficiency + ability mod`, ability derived from class (override
+  available). Shown in the Spells tab.
+- **Point-click casting.** Click 🪄 on a spell → a banner arms the cast → click
+  an enemy token on the map. Rider spells place a concentration rider; save
+  spells send `spellSave` (server rolls the target's save vs the DC and, on a
+  failure, applies the effect — a "save ends" effect re-rolls at the chosen
+  turn boundary); attack spells roll the spell attack. `Esc` cancels.
+- **Thin-auto conditions.** The attack pipeline now folds in advantage /
+  disadvantage from the ~7 combat-critical conditions (`conditionAttackMode`,
+  combined with the manual roll mode the 5e way) and auto-crits melee hits on a
+  paralyzed / unconscious target. Other conditions stay advisory badges.
+- **Turn-boundary effect processing.** Ending a turn runs "save ends" re-saves
+  (server-rolled, silent) on the ending and starting token and clears expired
+  effects.
+
+### Changed
+
+- Protocol v4 gains `spellSave`. `attack` builds its notation from
+  `attackBonus` + `rollMode` client-side so conditions can fold in.
+- Shared: `CasterType`, `Spell`, `RollMode`, `casterTypeOf`,
+  `spellcastingAbilityOf`, `spellSaveDc`, `spellAttackBonus`,
+  `conditionAttackMode`, `conditionAutoCrit`, `combineRollModes`,
+  `tokenConditions` (+ tests, 54 total).
+- `CharacterSheet` gains `spells`, `subclass?`, `casterTypeOverride?`,
+  `spellcastingAbility?` (optional, backfilled by `normalizeSheet`).
+
 ## [0.13.0] - 2026-09-08
 
 Release A of the effects work (concentration engine + riders); Release B (spell
@@ -404,7 +448,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.10.0...v0.11.0
