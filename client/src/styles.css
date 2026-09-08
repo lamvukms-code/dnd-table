@@ -839,6 +839,30 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .be-item .be-cr { font-size: 10px; color: var(--muted); }
 .be-list-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .be-list-actions button { font-size: 11px; padding: 3px 6px; }
+.be-paste { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.be-paste textarea { font-family: ui-monospace, monospace; font-size: 10px; }
+
+/* reference panel (self-hosted 5etools mirror etc) */
+.reference-panel {
+  position: fixed;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+}
+.rp-resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+.rp-head { display: flex; gap: 4px; padding: 4px; border-bottom: 1px solid var(--line); }
+.rp-head input { flex: 1; font-size: 11px; }
+.rp-head button, .rp-head .rp-newtab {
+  font-size: 11px; padding: 2px 6px; text-decoration: none; color: inherit;
+}
+.rp-frame { flex: 1; border: 0; width: 100%; background: #fff; }
+.rp-empty { padding: 16px; font-size: 12px; }
 .be-editor { flex: 1; overflow: auto; max-height: 62vh; }
 
 .sb-editor { display: flex; flex-direction: column; gap: 8px; }

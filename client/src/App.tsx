@@ -7,6 +7,7 @@ import { InitiativeBar } from './components/InitiativeBar.js';
 import { SheetDock } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
+import { ReferencePanel } from './components/ReferencePanel.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -17,6 +18,7 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
+  const [refOpen, setRefOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
 
@@ -51,6 +53,13 @@ export function App() {
         >
           Nhân vật
         </button>
+        <button
+          className={refOpen ? 'on' : ''}
+          title="Bảng tra cứu (5etools mirror của bạn…)"
+          onClick={() => setRefOpen((v) => !v)}
+        >
+          Tra cứu
+        </button>
         <button className="gear" title="Cài đặt" onClick={() => setSettingsOpen(true)}>
           ⚙
         </button>
@@ -63,6 +72,7 @@ export function App() {
           <DiceWindow />
         </div>
         {dockOpen && <SheetDock />}
+        {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

@@ -4,6 +4,7 @@ import {
   abilityMod,
   d20Check,
   fmtMod,
+  parse5eToolsBestiary,
   type SheetAction,
   type Statblock,
   type TokenSize,
@@ -22,7 +23,28 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
   const [selId, setSelId] = useState<string | null>(bestiary[0]?.id ?? null);
   const [q, setQ] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  const [paste, setPaste] = useState('');
+  const [showPaste, setShowPaste] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  function import5eTools() {
+    let json: unknown;
+    try {
+      json = JSON.parse(paste);
+    } catch {
+      setNote('JSON không hợp lệ.');
+      return;
+    }
+    const { statblocks, errors } = parse5eToolsBestiary(json);
+    for (const sb of statblocks) send({ t: 'bestiaryUpsert', statblock: normalizeStatblock(sb) });
+    if (statblocks[0]) setSelId(statblocks[0].id);
+    setPaste('');
+    setShowPaste(false);
+    setNote(
+      `Đã nhập ${statblocks.length} quái từ 5etools JSON.` +
+        (errors.length ? ` (${errors.length} cảnh báo: ${errors.slice(0, 2).join('; ')})` : ''),
+    );
+  }
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -100,6 +122,7 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
             <div className="be-list-actions">
               <button onClick={create}>+ Mới</button>
               <button onClick={() => fileRef.current?.click()}>Nhập file</button>
+              <button onClick={() => setShowPaste((v) => !v)}>Dán 5etools JSON</button>
               <button onClick={exportFile} disabled={bestiary.length === 0}>
                 Xuất file
               </button>
@@ -115,6 +138,19 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
                 }}
               />
             </div>
+            {showPaste && (
+              <div className="be-paste">
+                <textarea
+                  rows={5}
+                  placeholder='Dán 1 creature, mảng, hay { "monster": [...] } theo định dạng 5etools'
+                  value={paste}
+                  onChange={(e) => setPaste(e.target.value)}
+                />
+                <button className="primary" disabled={!paste.trim()} onClick={import5eTools}>
+                  Chuyển thành statblock
+                </button>
+              </div>
+            )}
             {note && <p className="note">{note}</p>}
           </div>
 

@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-09-08
+
+### Added
+
+- **5etools-JSON monster import.** Bestiary → "Dán 5etools JSON": paste a
+  5etools creature object, an array, or a `{ "monster": [...] }` file and it
+  converts to the app's `Statblock` — AC, HP + formula, ability scores, saves,
+  skills, senses/passive, CR → proficiency bonus, `resist`/`immune`/`vulnerable`
+  → `Defenses`, and traits / actions / bonus actions / reactions / legendary
+  actions with their entry text de-tagged (`{@dice}`, `{@hit}`, `{@condition}`,
+  …). Attack and saving-throw actions are parsed into `attackBonus` / `damage` /
+  `save` where the 2014 or 2024 wording is recognisable. `_copy` entries are
+  skipped with a warning. Imports land in the DM's **git-ignored local
+  bestiary** — nothing WotC/3rd-party ships in the repo.
+- **Reference panel** ("Tra cứu" in the top bar). A resizable right-side panel
+  that embeds a URL you configure (your own self-hosted 5etools mirror, a rules
+  wiki, D&D Beyond…). The URL is per-browser (`localStorage`); the app hosts
+  nothing. Sites that block framing get an "↗ open in a tab" button.
+
+### Changed
+
+- Shared: `parse5eToolsBestiary`, `convert5eToolsMonster`, `stripTags`,
+  `flattenEntries`, `crToProficiency` (+ tests, 67 total).
+
 ## [0.17.0] - 2026-09-08
 
 ### Added
@@ -517,7 +541,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.14.0...v0.15.0
