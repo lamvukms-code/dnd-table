@@ -6,6 +6,16 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-09-08
+
+### Changed
+
+- Subclass-feature support verified for **Warlock Great Fool Patron** (levels 3,
+  6, 10 and 14), with per-feature use pools (Killing Joke = CHA-mod / short rest;
+  Jester's Japes and Mocking Banter = 1 / short rest; Send in the Clowns = 1 /
+  long rest). As before, the content is not in the repo — it lives in the DM's
+  git-ignored `client/src/data/subclasses.local.json`.
+
 ## [0.23.0] - 2026-09-08
 
 ### Changed
@@ -638,7 +648,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...v0.21.0
