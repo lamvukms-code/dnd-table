@@ -247,6 +247,14 @@ export const rogueLevel = (sheet: CharacterSheet): number => classLevelOf(sheet,
 export const barbarianLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'barbarian');
 export const monkLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'monk');
 export const warlockLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'warlock');
+export const druidLevel = (sheet: CharacterSheet): number => classLevelOf(sheet, 'druid');
+
+/** Druid Wild Shape uses (2024): 2, then 3 at level 6, 4 at level 17. 0 below level 2. */
+export function wildShapeMax(sheet: CharacterSheet): number {
+  const lvl = druidLevel(sheet);
+  if (lvl < 2) return 0;
+  return lvl >= 17 ? 4 : lvl >= 6 ? 3 : 2;
+}
 
 /** Monk Martial Arts damage die (1d6 → 1d8 at 5 → 1d10 at 11 → 1d12 at 17). '' if not a Monk. */
 export function martialArtsDie(sheet: CharacterSheet): string {
@@ -721,6 +729,11 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
     rageUsed: typeof sheet.rageUsed === 'number' ? Math.max(0, sheet.rageUsed - 1) : sheet.rageUsed,
     // 2024 Monk: all Focus Points return on a short (or long) rest.
     focusUsed: 0,
+    // 2024 Druid: regain one expended Wild Shape on a short rest.
+    wildShapeUsed:
+      typeof sheet.wildShapeUsed === 'number'
+        ? Math.max(0, sheet.wildShapeUsed - 1)
+        : sheet.wildShapeUsed,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
@@ -773,6 +786,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     rageUsed: 0,
     raging: false,
     focusUsed: 0,
+    wildShapeUsed: 0,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),

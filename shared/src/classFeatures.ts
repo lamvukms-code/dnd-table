@@ -1,10 +1,10 @@
 import type { CharacterSheet } from './types.js';
-import { barbarianLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
+import { barbarianLevel, druidLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
 
 /**
  * Base-class feature progression (D&D 5e 2024). Descriptions are short
  * paraphrases of the mechanics — the System Reference Document 5.2 covers the
- * Barbarian, Rogue, Monk and Warlock base classes under CC-BY-4.0
+ * Barbarian, Rogue, Monk, Warlock and Druid base classes under CC-BY-4.0
  * (© Wizards of the Coast). Subclasses are intentionally out of scope for now.
  *
  * "ASI" (ability score improvement) levels are omitted — they aren't a feature
@@ -26,7 +26,8 @@ export interface ClassFeatureDef {
     | 'martial-arts'
     | 'focus'
     | 'stunning-strike'
-    | 'pact-magic';
+    | 'pact-magic'
+    | 'wild-shape';
 }
 
 const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
@@ -427,15 +428,87 @@ const WARLOCK: Omit<ClassFeatureDef, 'class'>[] = [
   },
 ];
 
+const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'druid-druidic',
+    level: 1,
+    name: 'Druidic',
+    description: 'Biết mật ngữ Druidic; luôn có Speak with Animals như nghi lễ.',
+  },
+  {
+    id: 'druid-primal-order',
+    level: 1,
+    name: 'Primal Order',
+    description:
+      'Chọn: Magician (thêm 1 cantrip, cộng WIS mod vào kiểm tra Arcana/Nature) hoặc Warden (thành thạo giáp vừa, khiên, vũ khí Martial).',
+  },
+  {
+    id: 'druid-spellcasting',
+    level: 1,
+    name: 'Spellcasting',
+    description:
+      'Full caster, ability = WIS. Prepared spells (số lượng theo bảng). Quản lý ô phép ở tab Phép — tự tính theo cấp. Spell save DC & spell attack tự tính.',
+  },
+  {
+    id: 'druid-wild-shape',
+    level: 2,
+    name: 'Wild Shape',
+    description:
+      'Bonus Action: biến thành một Beast bạn từng thấy (giới hạn CR/loại theo cấp). Số lần dùng = 2 (3 từ cấp 6, 4 từ cấp 17); hồi 1 khi nghỉ ngắn, hồi hết khi nghỉ dài. Ở app: dùng stat block quái từ Bestiary cho hình dạng thú.',
+    automation: 'wild-shape',
+  },
+  {
+    id: 'druid-wild-companion',
+    level: 2,
+    name: 'Wild Companion',
+    description: 'Tốn 1 lần Wild Shape để đúc Find Familiar (dạng linh hồn, không cần vật liệu).',
+  },
+  { id: 'druid-subclass-3', level: 3, name: 'Druid Subclass', description: 'Chọn subclass (chưa hỗ trợ trong app).' },
+  {
+    id: 'druid-wild-resurgence',
+    level: 5,
+    name: 'Wild Resurgence',
+    description:
+      'Một lần mỗi lượt, nếu hết lần Wild Shape: tốn 1 ô phép để hồi 1 lần. Hoặc 1 lần mỗi nghỉ dài: tốn 1 lần Wild Shape để hồi 1 ô phép cấp 1.',
+  },
+  {
+    id: 'druid-elemental-fury',
+    level: 7,
+    name: 'Elemental Fury',
+    description:
+      'Chọn: Potent Spellcasting (cộng WIS mod vào sát thương cantrip Druid) hoặc Primal Strike (một lần mỗi lượt, đòn đánh / Wild Shape gây thêm 1d8 sát thương Cold/Fire/Lightning/Thunder).',
+  },
+  {
+    id: 'druid-improved-elemental-fury',
+    level: 15,
+    name: 'Improved Elemental Fury',
+    description: 'Potent Spellcasting: tầm cantrip gấp đôi. Primal Strike: sát thương thêm lên 2d8.',
+  },
+  {
+    id: 'druid-beast-spells',
+    level: 18,
+    name: 'Beast Spells',
+    description: 'Đúc phép Druid khi đang Wild Shape chỉ cần Somatic/Verbal (không cần Material).',
+  },
+  {
+    id: 'druid-archdruid',
+    level: 20,
+    name: 'Archdruid',
+    description:
+      'Wild Shape không giới hạn (1 lần miễn phí mỗi lượt). Bỏ qua V/S/M của phép Druid. Lão hóa chậm.',
+  },
+];
+
 export const CLASS_FEATURES: ClassFeatureDef[] = [
   ...ROGUE.map((f) => ({ ...f, class: 'rogue' })),
   ...BARBARIAN.map((f) => ({ ...f, class: 'barbarian' })),
   ...MONK.map((f) => ({ ...f, class: 'monk' })),
   ...WARLOCK.map((f) => ({ ...f, class: 'warlock' })),
+  ...DRUID.map((f) => ({ ...f, class: 'druid' })),
 ];
 
 /** Classes we have a feature table for. */
-export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock'];
+export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid'];
 
 /** The class features this sheet has earned, from CLASS_FEATURES, ordered by level. */
 export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
@@ -444,6 +517,7 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
     barbarian: barbarianLevel(sheet),
     monk: monkLevel(sheet),
     warlock: warlockLevel(sheet),
+    druid: druidLevel(sheet),
   };
   return CLASS_FEATURES.filter((f) => f.level <= (levels[f.class] ?? 0)).sort(
     (a, b) => a.level - b.level,

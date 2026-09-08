@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-09-08
+
+### Added
+
+- **Class features — Druid** (base class). Feature list 1–20; full WIS caster
+  (already wired). **Wild Shape** semi-automatic: uses tracker (max 2 → 3 at
+  level 6 → 4 at level 17; a short rest recovers one, a long rest all) with a
+  spend button. The Spells tab handles slots / DC / spell attack.
+
+### Changed
+
+- `CharacterSheet.wildShapeUsed?`. Shared: `druidLevel`, `wildShapeMax` (+ tests,
+  77 total). No protocol/schema change.
+
 ## [0.20.0] - 2026-09-08
 
 ### Added
@@ -591,7 +605,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.17.0...v0.18.0

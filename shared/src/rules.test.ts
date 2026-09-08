@@ -21,6 +21,7 @@ import {
   derivedActions,
   derivedDefenses,
   emptyCurrency,
+  druidLevel,
   martialArtsDie,
   mergeDefenses,
   monkFocusMax,
@@ -28,6 +29,7 @@ import {
   rageDamageBonus,
   rageMax,
   resolveDamageParts,
+  wildShapeMax,
   skillBonus,
   sneakAttackDice,
   spellAttackBonus,
@@ -441,6 +443,22 @@ describe('class features (Rogue / Barbarian)', () => {
   it('Warlock features derive; short rest clears Monk focus', () => {
     expect(derivedClassFeatures(sheet({ className: 'Warlock', level: 11 })).some((f) => f.id === 'warlock-mystic-arcanum-6')).toBe(true);
     expect(applyShortRest(sheet({ className: 'Monk', level: 6, focusUsed: 4 })).focusUsed).toBe(0);
+  });
+
+  it('Druid: Wild Shape uses 2/3/4, features derive, rests recover', () => {
+    expect(wildShapeMax(sheet({ className: 'Druid', level: 1 }))).toBe(0);
+    expect(wildShapeMax(sheet({ className: 'Druid', level: 2 }))).toBe(2);
+    expect(wildShapeMax(sheet({ className: 'Druid', level: 6 }))).toBe(3);
+    expect(wildShapeMax(sheet({ className: 'Druid', level: 17 }))).toBe(4);
+    expect(druidLevel(sheet({ classes: [{ name: 'Druid', level: 8 }] }))).toBe(8);
+    const feats = derivedClassFeatures(sheet({ className: 'Druid', level: 7 }));
+    expect(feats.some((f) => f.id === 'druid-wild-shape')).toBe(true);
+    expect(feats.some((f) => f.id === 'druid-elemental-fury')).toBe(true);
+    const s = sheet({ className: 'Druid', level: 6, wildShapeUsed: 3 });
+    expect(applyShortRest(s).wildShapeUsed).toBe(2);
+    expect(applyLongRest(s).wildShapeUsed).toBe(0);
+    // Druid is a full WIS caster (already wired since 0.14/0.15)
+    expect(spellSaveDc(sheet({ className: 'Druid', level: 5, proficiencyBonus: 3, abilities: { str: 8, dex: 12, con: 12, int: 10, wis: 18, cha: 10 } }))).toBe(8 + 3 + 4);
   });
 });
 

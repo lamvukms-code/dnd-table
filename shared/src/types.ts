@@ -186,6 +186,8 @@ export interface CharacterSheet {
   sneakAttackArmed?: boolean;
   /** Monk: Focus Points spent (max is derived from Monk level). */
   focusUsed?: number;
+  /** Druid: Wild Shape uses spent (max is derived from Druid level). */
+  wildShapeUsed?: number;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];

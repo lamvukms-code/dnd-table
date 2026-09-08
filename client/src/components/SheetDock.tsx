@@ -18,6 +18,7 @@ import {
   casterTypeOf,
   CONDITION_VI,
   CONDITIONS,
+  druidLevel,
   martialArtsDie,
   monkDc,
   monkFocusMax,
@@ -32,6 +33,7 @@ import {
   skillBonus,
   sneakAttackDice,
   warlockLevel,
+  wildShapeMax,
   spellAttackBonus,
   spellcastingAbilityOf,
   spellSaveDc,
@@ -1051,7 +1053,10 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const bl = barbarianLevel(draft);
   const ml = monkLevel(draft);
   const wl = warlockLevel(draft);
+  const dl = druidLevel(draft);
   const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
+  const wsMax = wildShapeMax(draft);
+  const wsUsed = Math.min(draft.wildShapeUsed ?? 0, wsMax);
 
   const sneakDice = sneakAttackDice(draft);
   const rMax = rageMax(draft);
@@ -1074,6 +1079,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
         {bl > 0 && <em> · Barbarian {bl}</em>}
         {ml > 0 && <em> · Monk {ml}</em>}
         {wl > 0 && <em> · Warlock {wl}</em>}
+        {dl > 0 && <em> · Druid {dl}</em>}
       </summary>
 
       {bl > 0 && (
@@ -1128,6 +1134,31 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           <span className="hint">
             Pact Magic: quản lý ô phép, spell save DC & spell attack ở tab <strong>Phép</strong> (tự
             theo cấp Warlock). Invocations / Mystic Arcanum: xem danh sách dưới.
+          </span>
+        </div>
+      )}
+
+      {dl > 0 && (
+        <div className="cf-auto">
+          {wsMax > 0 ? (
+            <>
+              <span className="cf-label">Wild Shape:</span>
+              <FocusPips max={wsMax} used={wsUsed} onChange={(u) => set({ wildShapeUsed: u })} />
+              <button
+                className="cf-btn"
+                disabled={wsUsed >= wsMax}
+                onClick={() => set({ wildShapeUsed: Math.min(wsMax, wsUsed + 1) })}
+                title="Dùng 1 lần Wild Shape (hồi 1 khi nghỉ ngắn, hết khi nghỉ dài)"
+              >
+                Wild Shape −1
+              </button>
+              <span className="hint">Dùng stat block quái từ Bestiary cho hình dạng thú.</span>
+            </>
+          ) : (
+            <span className="hint">Wild Shape từ cấp Druid 2.</span>
+          )}
+          <span className="hint">
+            Phép: tab <strong>Phép</strong> (full caster WIS — ô phép, DC, spell attack tự tính).
           </span>
         </div>
       )}
