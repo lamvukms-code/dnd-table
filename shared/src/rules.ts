@@ -4,6 +4,8 @@ import type {
   Currency,
   InventoryItem,
   SheetAction,
+  Statblock,
+  TokenStatblock,
 } from './types.js';
 import { COIN_TYPES, SKILLS } from './types.js';
 
@@ -123,6 +125,38 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
       f.uses && f.uses.recharge === 'short' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Stat blocks
+// ---------------------------------------------------------------------------
+
+export function statblockInitiativeMod(sb: Statblock): number {
+  return abilityMod(sb.abilities.dex);
+}
+
+/** The combat-relevant subset embedded on a token when a stat block is spawned. */
+export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
+  return {
+    name: sb.name,
+    meta: sb.meta || undefined,
+    abilities: { ...sb.abilities },
+    proficiencyBonus: sb.proficiencyBonus,
+    saveProficiencies: [...sb.saveProficiencies],
+    initiativeMod: statblockInitiativeMod(sb),
+    actions: sb.actions.map((a) => ({ ...a })),
+    traits: sb.traits.map((t) => ({ ...t })),
+    notes: sb.notes || undefined,
+    fromId: sb.id,
+  };
+}
+
+/** A save-throw bonus for an NPC token (proficiency added when proficient). */
+export function tokenSaveBonus(tsb: TokenStatblock, ability: Ability): number {
+  return (
+    abilityMod(tsb.abilities[ability]) +
+    (tsb.saveProficiencies.includes(ability) ? tsb.proficiencyBonus : 0)
+  );
 }
 
 /** Restore everything a long rest gives back (HP, slots, short/long resources). */

@@ -6,6 +6,7 @@ build/
 .env.*
 !.env.example
 server/data/room.json
+server/data/bestiary.json
 .DS_Store
 .vite/
 coverage/

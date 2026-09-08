@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.5.0
+- **Version:** 0.6.0
 - **Status:** Living document
 - **Last updated:** 2026-09-08
 - **Owner:** lamvukms (personal project)
@@ -176,16 +176,23 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 - **FR-20 (P0):** A grid map with configurable columns, rows, and grid
   visibility. DM-editable.
 - **FR-21 (P0):** An optional background image by URL, sized to cover the grid.
-- **FR-22 (P0):** DM adds and removes tokens. Each token has a label, grid
-  position, size (tiny–gargantuan), colour, optional image URL, optional current
-  / max HP, optional AC, and a hidden flag.
+- **FR-22 (P0):** **Anyone** can add a token (a "+ Token" button on the map).
+  Each token has a label, grid position, size (tiny–gargantuan), colour, optional
+  image URL, optional current / max HP, optional AC, a hidden flag, an optional
+  `controllerId`, and an optional embedded `statblock` (NPCs). A player's added
+  token gets them as `controllerId` and cannot be hidden; only the DM adds hidden
+  tokens or toggles `hidden`.
 - **FR-23 (P0):** Tokens are moved by dragging; on release the position snaps to
   the grid. The DM moves any token; a player moves only tokens where
   `controllerId` is theirs.
+- **FR-23a (P0):** The DM removes any token; a player removes only tokens they
+  control.
 - **FR-24 (P0):** Hidden tokens are invisible to players and shown dimmed to the
   DM.
 - **FR-25 (P0):** A token inspector lets the authorised user edit HP / AC / size
-  / colour / label; the DM can toggle hidden.
+  / colour / label; the DM can toggle hidden. When the token has a `statblock`,
+  the DM (and its controller) also see the stat block — traits and an action
+  list with a target picker and per-action attack / damage / roll buttons.
 - **FR-26 (P0):** A token with current+max HP shows a small HP bar.
 - **FR-27 (P1):** Upload a background or token image as a file (stored as a data
   URL or on the server) instead of a URL.
@@ -339,9 +346,34 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 
 - **FR-70 (P0):** Room state survives a server restart via `room.json`.
 - **FR-71 (P0):** Incompatible schema versions start a fresh room rather than
-  crashing.
+  crashing; migratable ones (v2+) upgrade in place.
 - **FR-72 (P1):** Named save slots / manual snapshots the DM can restore.
 - **FR-73 (P2):** Export the whole room as a downloadable file.
+
+### 3.9 Bestiary (NPC / monster stat blocks)
+
+- **FR-80 (P0):** The DM maintains a library of `Statblock`s (name, meta, CR,
+  size, AC, HP + optional `hpFormula`, speed, abilities, `proficiencyBonus`,
+  `saveProficiencies`, `skills`, `traits`, `actions`, colour, image, tags,
+  notes). Search by name / meta / tag; edit inline. DM-only.
+- **FR-81 (P0):** **Spawn** a stat block onto the map: creates a token with the
+  stat block's AC / HP (optionally rolled from `hpFormula`) / size / colour /
+  image and an embedded `TokenStatblock` (abilities, save profs, initiative mod,
+  actions, traits). Optionally spawn hidden.
+- **FR-82 (P0):** The token inspector renders the embedded stat block for the DM
+  and the token's controller — actions become attack / damage / roll buttons
+  with a target picker (same resolution as FR-40/46). `initRollAll` uses the
+  stat block's initiative modifier for un-linked NPC tokens.
+- **FR-83 (P0):** Import / export the bestiary as a JSON array (merged by `id` on
+  import). A `docs/bestiary-srd-starter.json` (SRD 5.1, CC-BY-4.0) ships for the
+  DM to import — nothing is auto-loaded.
+- **FR-84 (P0):** The bestiary is **persisted to its own file**
+  (`BESTIARY_FILE`, default `server/data/bestiary.json`) so it is
+  session/room-independent and can be pointed at a synced folder (OneDrive). It
+  is broadcast in `RoomState` for simplicity but only the DM sees the panel; it
+  is never written into `room.json`.
+- **FR-85 (P1):** Multi-select spawn; spawn N copies; drag-from-panel placement.
+- **FR-86 (P2):** A read-only shared bestiary players can browse (known monsters).
 
 ---
 
@@ -369,7 +401,8 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 See `shared/src/types.ts` for the authoritative definitions.
 
 - `RoomState { version, rev, name, participants[], map, tokens[], initiative,
-  sheets[], rollLog[], diceTray, dddice }`
+  sheets[], rollLog[], diceTray, dddice, bestiary: Statblock[] }` — `bestiary`
+  is broadcast but persisted separately (FR-84), not in `room.json`.
 - `DddiceConfig { enabled, roomSlug?, theme? }` — **no API keys**; keys are
   per-client in `localStorage` only.
 - `ExternalRoll { total, faces[], d20Natural?, source, rollUuid? }` — values
@@ -377,7 +410,13 @@ See `shared/src/types.ts` for the authoritative definitions.
 - `Participant { id, name, role, color, connected, lastSeen }`
 - `BattleMap { name, backgroundUrl?, gridSize, cols, rows, showGrid }`
 - `Token { id, label, x, y, size, color, imageUrl?, currentHp?, maxHp?,
-  armorClass?, hidden, controllerId? }`
+  armorClass?, hidden, controllerId?, statblock?: TokenStatblock }`
+- `Statblock { id, name, meta, cr, size, ac, acNote?, maxHp, hpFormula?, speed,
+  speedNote?, abilities, proficiencyBonus, saveProficiencies[], skills[], senses?,
+  languages?, traits[], actions[], color, imageUrl?, tags[], notes, source? }`
+- `TokenStatblock { name, meta?, abilities, proficiencyBonus, saveProficiencies[],
+  initiativeMod, actions[], traits[], notes?, fromId? }` — the combat-relevant
+  subset copied onto a spawned token.
 - `Initiative { entries[], round, turnIndex, running }`
 - `InitiativeEntry { id, name, initiative, tokenId?, isActive, hasGone }`
 - `CharacterSheet { id, ownerId, name, className, level, proficiencyBonus,
@@ -436,3 +475,7 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | Layout (0.5.0) | No top-level tabs. Battle map is the permanent stage; character sheet is a resizable dock beneath it; dice history/manual-roll is a floating bottom-left window; initiative is a top strip. Goal: manage a character without switching away from the map. |
 | 2026-09-08 | Sheet model | `attacks[]` generalised to `actions[]` (`SheetAction` with `actionType`). Added `resources`, `spellSlots`, `feats`, `features`. Rests are pure helpers. No spell *list* / compendium yet (FR-66). |
 | 2026-09-08 | Private rolls | Now filtered from players in the dice window (client-side). Full state is still broadcast — consistent with the trusted-LAN model; a server-side per-client filter is deferred. |
+| 2026-09-08 | Add token | Opened to everyone (was DM-only). Player tokens get `controllerId` = the player and can't be hidden. Removal: DM or controller. |
+| 2026-09-08 | Bestiary storage | Its own file (`BESTIARY_FILE`) so it is room/session-independent and OneDrive-syncable; broadcast in `RoomState` (DM-only UI) rather than a new event stream, matching the private-rolls trade-off. Excluded from `room.json`. |
+| 2026-09-08 | NPC stats | Embedded on the token as `TokenStatblock` (denormalised at spawn) rather than a hidden character sheet — no sheet-list clutter, and the map inspector is the single place NPC combat happens. |
+| 2026-09-08 | Bundled content | `docs/bestiary-srd-starter.json` uses SRD 5.1 under CC-BY-4.0 with attribution; it is import-only, never auto-loaded — the bundle itself ships no stat blocks. |

@@ -13,7 +13,13 @@ và quản lý character sheet — tất cả trên một trang.
   kiểm tra d20 có lợi thế / bất lợi, tự nhận biết chí mạng (nat 20) và hỏng
   (nat 1). Nhật ký roll đồng bộ real-time; DM roll riêng được.
 - **Battle map:** lưới tùy chỉnh, ảnh nền theo URL, token kéo-thả có HP/AC/cỡ,
-  token ẩn cho DM, thanh máu trên token.
+  token ẩn cho DM, thanh máu trên token. **Ai cũng thêm được token** (nút
+  "+ Token"); token của người chơi do chính họ điều khiển.
+- **Bestiary (DM):** thư viện statblock NPC/kẻ địch — AC, HP (+ công thức xúc
+  xắc), chỉ số, save, traits, danh sách đòn. Tìm kiếm, sửa, **Spawn lên map**
+  (token tự có AC/HP/đòn), nhập/xuất file JSON. Lưu ở **file riêng** để đồng bộ
+  qua OneDrive (xem `BESTIARY_FILE` bên dưới). Có sẵn
+  `docs/bestiary-srd-starter.json` (8 quái SRD 5.1) để nhập.
 - **Xúc xắc ảo trên map:** mỗi lần roll hiện dice ngay trên battle map (dice tray
   2D luôn có sẵn).
 - **Xúc xắc 3D dddice (tùy chọn):** bật trong Cài đặt để mọi nút roll — bảng xúc
@@ -109,6 +115,18 @@ npm run typecheck  # kiểm tra kiểu server + client
 | `PORT` | `8787` | Cổng HTTP/WebSocket. |
 | `HOST` | `0.0.0.0` | Địa chỉ lắng nghe. |
 | `ROOM_FILE` | `server/data/room.json` | Nơi lưu trạng thái phòng. |
+| `BESTIARY_FILE` | `server/data/bestiary.json` | Nơi lưu thư viện statblock. |
+
+Để đồng bộ bestiary qua OneDrive, đặt `BESTIARY_FILE` trỏ vào thư mục OneDrive,
+ví dụ (PowerShell):
+
+```bash
+$env:BESTIARY_FILE="$env:USERPROFILE\OneDrive\dnd-table\bestiary.json"; npm run dev
+```
+
+OneDrive tự đồng bộ file đó; mở app trên máy khác (cùng đường dẫn OneDrive) là có
+cùng thư viện. Nhập nhanh bộ mẫu: mở **Bestiary → Nhập file →
+`docs/bestiary-srd-starter.json`**.
 
 ## Giấy phép & nội dung
 

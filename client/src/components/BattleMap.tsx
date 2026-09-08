@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { Token, TokenSize } from '@dnd-table/shared';
+import { d20Check, fmtMod, type Token, type TokenSize } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 
@@ -18,6 +18,7 @@ export function BattleMap() {
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
+  const me = useStore((s) => s.me());
   const { map, tokens, diceTray } = room;
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -60,8 +61,23 @@ export function BattleMap() {
     drag.current = null;
   }
 
+  function addToken() {
+    send({
+      t: 'addToken',
+      token: {
+        label: isDm ? 'Token' : (me?.name ?? 'Token'),
+        x: Math.floor(map.cols / 2),
+        y: Math.floor(map.rows / 2),
+        color: me?.color,
+      },
+    });
+  }
+
   return (
     <div className="battlemap">
+      <button className="add-token-fab" onClick={addToken} title="Thêm token">
+        + Token
+      </button>
       {isDm && (
         <details className="map-toolbar-wrap">
           <summary>⚙ Bản đồ</summary>
@@ -153,16 +169,6 @@ function MapToolbar() {
 
   return (
     <div className="map-toolbar">
-      <button
-        onClick={() =>
-          send({
-            t: 'addToken',
-            token: { label: 'Token', x: 1, y: 1 },
-          })
-        }
-      >
-        + Token
-      </button>
       <label>
         Nền (URL)
         <input
@@ -207,12 +213,20 @@ function MapToolbar() {
 function TokenInspector({ token, onClose }: { token: Token; onClose: () => void }) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
+  const damageRoll = useStore((s) => s.damageRoll);
+  const rollDice = useStore((s) => s.rollDice);
   const isDm = useStore((s) => s.isDm());
+  const meId = useStore((s) => s.participantId);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const [atkName, setAtkName] = useState('Đòn đánh');
   const [atkBonus, setAtkBonus] = useState('5');
   const [dmg, setDmg] = useState('1d8+3');
   const [attackerId, setAttackerId] = useState('');
+  const [sbTargetId, setSbTargetId] = useState('');
+
+  const sb = token.statblock;
+  const canSeeStatblock = sb && (isDm || token.controllerId === meId);
+  const sbTargetName = tokens.find((t) => t.id === sbTargetId)?.label ?? '';
 
   function patch(p: Partial<Token>) {
     send({ t: 'updateToken', id: token.id, patch: p });
@@ -289,6 +303,92 @@ function TokenInspector({ token, onClose }: { token: Token; onClose: () => void 
           </label>
         )}
       </div>
+
+      {canSeeStatblock && sb && (
+        <div className="sb-inspect">
+          {sb.meta && <div className="sb-meta">{sb.meta}</div>}
+          <label className="sb-target">
+            {sb.name} tấn công →
+            <select value={sbTargetId} onChange={(e) => setSbTargetId(e.target.value)}>
+              <option value="">— mục tiêu —</option>
+              {tokens
+                .filter((t) => t.id !== token.id)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+            </select>
+          </label>
+          {sb.actions.map((a) => {
+            const isAttack = typeof a.attackBonus === 'number' && !!a.damage;
+            const base = `${sb.name} · ${a.name}`;
+            return (
+              <div key={a.id} className="sb-act">
+                <span className="sb-act-name" title={a.description}>
+                  {a.name}
+                </span>
+                <span className="sb-act-detail">
+                  {isAttack
+                    ? `${fmtMod(a.attackBonus!)} · ${a.damage}`
+                    : a.notation || a.description || ''}
+                </span>
+                {isAttack && sbTargetId && (
+                  <button
+                    className="roll-btn strong"
+                    onClick={() =>
+                      attackRoll({
+                        label: `${base} → ${sbTargetName}`,
+                        attackNotation: d20Check(a.attackBonus!),
+                        damageNotation: a.damage!,
+                        targetTokenId: sbTargetId,
+                      })
+                    }
+                  >
+                    ⚔
+                  </button>
+                )}
+                {isAttack && !sbTargetId && (
+                  <button
+                    className="roll-btn"
+                    onClick={() => rollDice(`${base} (đánh)`, d20Check(a.attackBonus!))}
+                  >
+                    đánh
+                  </button>
+                )}
+                {a.damage && (
+                  <button
+                    className="roll-btn"
+                    onClick={() =>
+                      sbTargetId
+                        ? damageRoll(`${base} → ${sbTargetName}`, a.damage!, sbTargetId)
+                        : rollDice(`${base} (dmg)`, a.damage!)
+                    }
+                  >
+                    dmg
+                  </button>
+                )}
+                {a.notation && !a.damage && (
+                  <button className="roll-btn" onClick={() => rollDice(base, a.notation!)}>
+                    tung
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {sb.traits.length > 0 && (
+            <details className="sb-traits-view">
+              <summary>Đặc điểm ({sb.traits.length})</summary>
+              {sb.traits.map((t, i) => (
+                <p key={i}>
+                  <strong>{t.name}.</strong> {t.description}
+                </p>
+              ))}
+            </details>
+          )}
+          {sb.notes && <p className="hint">{sb.notes}</p>}
+        </div>
+      )}
 
       <fieldset className="attack-box">
         <legend>Tấn công vào {token.label}</legend>

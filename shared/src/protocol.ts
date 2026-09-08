@@ -5,6 +5,7 @@ import type {
   ExternalRoll,
   InitiativeEntry,
   RoomState,
+  Statblock,
   Token,
 } from './types.js';
 
@@ -50,7 +51,12 @@ export type ClientAction =
   | { t: 'initReset' }
   | { t: 'initStart' }
   | { t: 'upsertSheet'; sheet: CharacterSheet }
-  | { t: 'removeSheet'; id: string };
+  | { t: 'removeSheet'; id: string }
+  // bestiary (DM only)
+  | { t: 'bestiaryUpsert'; statblock: Statblock }
+  | { t: 'bestiaryRemove'; id: string }
+  | { t: 'bestiaryReplaceAll'; entries: Statblock[] }
+  | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean };
 
 /** Events sent server -> client. */
 export type ServerEvent =

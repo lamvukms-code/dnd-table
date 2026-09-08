@@ -7,7 +7,7 @@ import type {
   Token,
 } from '@dnd-table/shared';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const ROLL_LOG_CAP = 200;
 export const DICE_TRAY_CAP = 12;
 
@@ -35,6 +35,7 @@ export function createRoomState(): RoomState {
     rollLog: [],
     diceTray: { entries: [] },
     dddice: { enabled: false, roomSlug: undefined, theme: 'dddice-standard' },
+    bestiary: [],
   };
 }
 
@@ -128,5 +129,6 @@ export function createToken(partial: Partial<Token>): Token {
     armorClass: partial.armorClass,
     hidden: partial.hidden ?? false,
     controllerId: partial.controllerId,
+    statblock: partial.statblock,
   };
 }

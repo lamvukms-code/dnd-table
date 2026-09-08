@@ -15,21 +15,26 @@ import {
   externalRollResult,
   resolveAttack,
   rollNotation,
+  tokenStatblockFrom,
   type ClientAction,
   type InitiativeEntry,
   type Participant,
   type RollLogEntry,
   type RollResult,
   type RoomState,
+  type Statblock,
 } from '@dnd-table/shared';
 
 export class Room {
   state: RoomState;
   private file: string;
+  private bestiaryFile: string;
 
-  constructor(file: string) {
+  constructor(file: string, bestiaryFile: string) {
     this.file = file;
+    this.bestiaryFile = bestiaryFile;
     this.state = this.load();
+    this.state.bestiary = this.loadBestiary();
   }
 
   private load(): RoomState {
@@ -50,12 +55,34 @@ export class Room {
     return createRoomState();
   }
 
+  private loadBestiary(): Statblock[] {
+    try {
+      if (existsSync(this.bestiaryFile)) {
+        const raw = JSON.parse(readFileSync(this.bestiaryFile, 'utf8'));
+        if (Array.isArray(raw)) return raw as Statblock[];
+        if (Array.isArray(raw?.bestiary)) return raw.bestiary as Statblock[];
+      }
+    } catch (err) {
+      console.error('Failed to load bestiary file:', err);
+    }
+    return [];
+  }
+
   save(): void {
     try {
       mkdirSync(dirname(this.file), { recursive: true });
-      writeFileSync(this.file, JSON.stringify(this.state, null, 2));
+      // room.json never carries the bestiary — that lives in its own file.
+      const { bestiary, ...room } = this.state;
+      void bestiary;
+      writeFileSync(this.file, JSON.stringify(room, null, 2));
     } catch (err) {
       console.error('Failed to persist room:', err);
+    }
+    try {
+      mkdirSync(dirname(this.bestiaryFile), { recursive: true });
+      writeFileSync(this.bestiaryFile, JSON.stringify(this.state.bestiary, null, 2));
+    } catch (err) {
+      console.error('Failed to persist bestiary:', err);
     }
   }
 
@@ -257,8 +284,14 @@ export class Room {
       }
 
       case 'addToken': {
-        if (!isDm) return 'Chỉ DM được thêm token';
-        this.state.tokens.push(createToken(action.token));
+        // Anyone can add a token; a player becomes its controller so they can
+        // move it, and it stays visible (only the DM can hide tokens).
+        const token = createToken({
+          ...action.token,
+          hidden: isDm ? action.token.hidden ?? false : false,
+          controllerId: isDm ? action.token.controllerId : actor.id,
+        });
+        this.state.tokens.push(token);
         this.touch();
         break;
       }
@@ -268,13 +301,18 @@ export class Room {
         if (!token) return 'Token không tồn tại';
         const canMove = isDm || token.controllerId === actor.id;
         if (!canMove) return 'Bạn không điều khiển token này';
-        Object.assign(token, action.patch);
+        const patch = { ...action.patch };
+        if (!isDm) delete patch.hidden;
+        Object.assign(token, patch);
         this.touch();
         break;
       }
 
       case 'removeToken': {
-        if (!isDm) return 'Chỉ DM được xóa token';
+        const target = this.state.tokens.find((tk) => tk.id === action.id);
+        if (target && !isDm && target.controllerId !== actor.id) {
+          return 'Bạn chỉ xóa được token của mình';
+        }
         this.state.tokens = this.state.tokens.filter((tk) => tk.id !== action.id);
         this.state.initiative.entries = this.state.initiative.entries.filter(
           (e) => e.tokenId !== action.id,
@@ -295,9 +333,10 @@ export class Room {
         const entries: InitiativeEntry[] = [];
         for (const token of this.state.tokens) {
           const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-          const dexMod = sheet ? abilityMod(sheet.abilities.dex) : 0;
-          const misc = sheet?.initiativeMisc ?? 0;
-          const roll = rollNotation(`1d20+${dexMod + misc}`);
+          let mod = 0;
+          if (sheet) mod = abilityMod(sheet.abilities.dex) + (sheet.initiativeMisc ?? 0);
+          else if (token.statblock) mod = token.statblock.initiativeMod;
+          const roll = rollNotation(`1d20${mod >= 0 ? '+' : ''}${mod}`);
           entries.push({
             id: nanoid(8),
             name: token.label,
@@ -370,6 +409,62 @@ export class Room {
         break;
       }
 
+      case 'bestiaryUpsert': {
+        if (!isDm) return 'Chỉ DM được sửa bestiary';
+        const existing = this.state.bestiary.find((s) => s.id === action.statblock.id);
+        this.state.bestiary = existing
+          ? this.state.bestiary.map((s) => (s.id === action.statblock.id ? action.statblock : s))
+          : [...this.state.bestiary, action.statblock];
+        this.touch();
+        break;
+      }
+
+      case 'bestiaryRemove': {
+        if (!isDm) return 'Chỉ DM được sửa bestiary';
+        this.state.bestiary = this.state.bestiary.filter((s) => s.id !== action.id);
+        this.touch();
+        break;
+      }
+
+      case 'bestiaryReplaceAll': {
+        if (!isDm) return 'Chỉ DM được sửa bestiary';
+        if (!Array.isArray(action.entries)) return 'Dữ liệu bestiary không hợp lệ';
+        this.state.bestiary = action.entries;
+        this.touch();
+        break;
+      }
+
+      case 'spawnStatblock': {
+        if (!isDm) return 'Chỉ DM được spawn NPC';
+        const sb = this.state.bestiary.find((s) => s.id === action.id);
+        if (!sb) return 'Không tìm thấy statblock';
+        let hp = sb.maxHp;
+        if (action.rollHp && sb.hpFormula) {
+          try {
+            hp = Math.max(1, rollNotation(sb.hpFormula).total);
+          } catch {
+            hp = sb.maxHp;
+          }
+        }
+        this.state.tokens.push(
+          createToken({
+            label: sb.name,
+            x: action.x,
+            y: action.y,
+            size: sb.size,
+            color: sb.color,
+            imageUrl: sb.imageUrl,
+            armorClass: sb.ac,
+            currentHp: hp,
+            maxHp: hp,
+            hidden: action.hidden ?? false,
+            statblock: tokenStatblockFrom(sb),
+          }),
+        );
+        this.touch();
+        break;
+      }
+
       default: {
         const _exhaustive: never = action;
         return `Unknown action: ${JSON.stringify(_exhaustive)}`;
@@ -389,8 +484,10 @@ function migrateRoom(raw: RoomState): RoomState | null {
 
   // v2 -> v3: character-sheet inventory / currency / AC override.
   // v3 -> v4: action economy, class resources, spell slots, feats, features.
-  if (s.version === 2 || s.version === 3) {
+  // v4 -> v5: bestiary (loaded from its own file) + token stat blocks.
+  if (s.version >= 2 && s.version <= 4) {
     s.sheets = (s.sheets ?? []).map((sheet) => normalizeSheet(sheet));
+    s.bestiary = [];
     s.version = SCHEMA_VERSION;
   }
 

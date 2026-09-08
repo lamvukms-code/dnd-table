@@ -17,9 +17,12 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
 const DATA_FILE = process.env.ROOM_FILE ?? join(__dirname, '..', 'data', 'room.json');
+// Point BESTIARY_FILE at a OneDrive folder to sync your monster library.
+const BESTIARY_FILE =
+  process.env.BESTIARY_FILE ?? join(__dirname, '..', 'data', 'bestiary.json');
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
-const room = new Room(DATA_FILE);
+const room = new Room(DATA_FILE, BESTIARY_FILE);
 const app = express();
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));
@@ -176,6 +179,7 @@ function pickColor(i: number): string {
 httpServer.listen(PORT, HOST, () => {
   console.log(`dnd-table server on http://${HOST}:${PORT}  (ws: /ws)`);
   console.log(`room file: ${DATA_FILE}`);
+  console.log(`bestiary file: ${BESTIARY_FILE} (${room.state.bestiary.length} statblocks)`);
 });
 
 process.on('SIGINT', () => {

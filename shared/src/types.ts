@@ -147,6 +147,53 @@ export interface CharacterSheet {
 
 export type TokenSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
 
+export interface StatblockTrait {
+  name: string;
+  description: string;
+}
+
+/** A reusable NPC / monster stat block in the DM's bestiary. */
+export interface Statblock {
+  id: string;
+  name: string;
+  meta: string; // "Small humanoid (goblinoid), neutral evil"
+  cr: string; // challenge rating, e.g. "1/4"
+  size: TokenSize;
+  ac: number;
+  acNote?: string;
+  maxHp: number;
+  hpFormula?: string; // "2d6"
+  speed: number; // walking, ft
+  speedNote?: string;
+  abilities: Record<Ability, number>;
+  proficiencyBonus: number;
+  saveProficiencies: Ability[];
+  skills: { skill: string; bonus: number }[];
+  senses?: string;
+  languages?: string;
+  traits: StatblockTrait[];
+  actions: SheetAction[];
+  color: string;
+  imageUrl?: string;
+  tags: string[];
+  notes: string;
+  source?: string; // attribution
+}
+
+/** Combat-relevant subset embedded on a spawned token. */
+export interface TokenStatblock {
+  name: string;
+  meta?: string;
+  abilities: Record<Ability, number>;
+  proficiencyBonus: number;
+  saveProficiencies: Ability[];
+  initiativeMod: number;
+  actions: SheetAction[];
+  traits: StatblockTrait[];
+  notes?: string;
+  fromId?: string; // bestiary entry it was spawned from
+}
+
 export interface Token {
   id: string;
   label: string;
@@ -161,6 +208,7 @@ export interface Token {
   armorClass?: number;
   hidden: boolean; // DM-only visibility
   controllerId?: string; // participant allowed to move it besides DM
+  statblock?: TokenStatblock; // NPC/monster stats (from the bestiary)
 }
 
 export interface BattleMap {
@@ -263,4 +311,10 @@ export interface RoomState {
   rollLog: RollLogEntry[]; // capped, newest last
   diceTray: DiceTray;
   dddice: DddiceConfig;
+  /**
+   * DM's NPC/monster stat block library. Persisted to a SEPARATE file
+   * (BESTIARY_FILE, default server/data/bestiary.json — point it at OneDrive to
+   * sync), not into room.json. Broadcast to everyone but only shown to the DM.
+   */
+  bestiary: Statblock[];
 }

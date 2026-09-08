@@ -6,6 +6,7 @@ import { DiceWindow } from './components/DiceWindow.js';
 import { InitiativeBar } from './components/InitiativeBar.js';
 import { SheetDock } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
+import { BestiaryPanel } from './components/BestiaryPanel.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -15,7 +16,9 @@ export function App() {
   const me = useStore((s) => s.me());
   const [toast, setToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bestiaryOpen, setBestiaryOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
+  const isDm = me?.role === 'dm';
 
   useEffect(() => {
     if (!error) return;
@@ -36,6 +39,11 @@ export function App() {
           {me.name} · {me.role === 'dm' ? 'DM' : 'Người chơi'}
           {status !== 'open' ? ' · mất kết nối…' : ''}
         </span>
+        {isDm && (
+          <button title="Bestiary" onClick={() => setBestiaryOpen(true)}>
+            Bestiary
+          </button>
+        )}
         <button
           className={dockOpen ? 'on' : ''}
           title="Ẩn/hiện character sheet"
@@ -58,6 +66,7 @@ export function App() {
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {bestiaryOpen && isDm && <BestiaryPanel onClose={() => setBestiaryOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

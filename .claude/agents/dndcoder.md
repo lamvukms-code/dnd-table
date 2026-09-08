@@ -38,6 +38,12 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
   `createGuestKey()`, `createRoom()`. dddice API keys live only in `localStorage`
   (`getLocalKey` / `setLocalKey`) — **never** put them in `RoomState`, a server
   message, or a log. Only `DddiceConfig { enabled, roomSlug, theme }` is shared.
+- The **bestiary** (`Statblock[]`) is DM-only NPC/monster data. It lives in
+  `RoomState.bestiary` for broadcast but is persisted to its **own file**
+  (`BESTIARY_FILE`, default `server/data/bestiary.json`) — `Room.save()` writes
+  `room.json` *without* it and `bestiary.json` *with* it. Spawning copies a
+  `TokenStatblock` onto the token; the map inspector is where NPC combat runs.
+  `docs/bestiary-srd-starter.json` (SRD 5.1, CC-BY-4.0) is import-only.
 - `docs/SRS.md` — the software requirements specification. Keep it current.
 - `CHANGELOG.md` — Keep a Changelog format, updated every release.
 

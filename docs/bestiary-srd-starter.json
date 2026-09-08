@@ -1,0 +1,449 @@
+[
+  {
+    "cr": "1/4",
+    "size": "small",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [
+      {
+        "skill": "stealth",
+        "bonus": 6
+      }
+    ],
+    "traits": [
+      {
+        "name": "Nimble Escape",
+        "description": "Disengage hoặc Hide bằng bonus action mỗi lượt."
+      }
+    ],
+    "actions": [
+      {
+        "id": "srd-001",
+        "name": "Scimitar",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "1d6+2",
+        "damageType": "chém"
+      },
+      {
+        "id": "srd-002",
+        "name": "Shortbow",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "1d6+2",
+        "damageType": "xuyên",
+        "description": "tầm 80/320 ft"
+      }
+    ],
+    "tags": [
+      "srd",
+      "goblinoid"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Goblin",
+    "meta": "Small humanoid (goblinoid), neutral evil",
+    "ac": 15,
+    "acNote": "leather armor, shield",
+    "maxHp": 7,
+    "hpFormula": "2d6",
+    "abilities": {
+      "str": 8,
+      "dex": 14,
+      "con": 10,
+      "int": 10,
+      "wis": 8,
+      "cha": 8
+    },
+    "senses": "darkvision 60 ft, passive Perception 9",
+    "languages": "Common, Goblin",
+    "color": "#5a8f3d",
+    "id": "srd-003"
+  },
+  {
+    "cr": "1/2",
+    "size": "medium",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [
+      {
+        "skill": "intimidation",
+        "bonus": 2
+      }
+    ],
+    "traits": [
+      {
+        "name": "Aggressive",
+        "description": "Bonus action: di chuyển tối đa tốc độ về phía kẻ thù nhìn thấy."
+      }
+    ],
+    "actions": [
+      {
+        "id": "srd-004",
+        "name": "Greataxe",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 5,
+        "damage": "1d12+3",
+        "damageType": "chém"
+      },
+      {
+        "id": "srd-005",
+        "name": "Javelin",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 5,
+        "damage": "1d6+3",
+        "damageType": "xuyên",
+        "description": "tầm 30/120 ft"
+      }
+    ],
+    "tags": [
+      "srd",
+      "orc"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Orc",
+    "meta": "Medium humanoid (orc), chaotic evil",
+    "ac": 13,
+    "acNote": "hide armor",
+    "maxHp": 15,
+    "hpFormula": "2d8+6",
+    "abilities": {
+      "str": 16,
+      "dex": 12,
+      "con": 16,
+      "int": 7,
+      "wis": 11,
+      "cha": 10
+    },
+    "senses": "darkvision 60 ft, passive Perception 10",
+    "languages": "Common, Orc",
+    "color": "#6b8e23",
+    "id": "srd-006"
+  },
+  {
+    "cr": "1/4",
+    "size": "medium",
+    "speed": 40,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [
+      {
+        "skill": "perception",
+        "bonus": 3
+      },
+      {
+        "skill": "stealth",
+        "bonus": 4
+      }
+    ],
+    "traits": [
+      {
+        "name": "Keen Hearing and Smell",
+        "description": "Lợi thế Perception dựa vào nghe hoặc ngửi."
+      },
+      {
+        "name": "Pack Tactics",
+        "description": "Lợi thế đánh nếu có đồng minh trong 5 ft của mục tiêu."
+      }
+    ],
+    "actions": [
+      {
+        "id": "srd-007",
+        "name": "Bite",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "2d4+2",
+        "damageType": "xuyên",
+        "description": "Nếu trúng: DC 11 STR save hoặc ngã (prone)."
+      }
+    ],
+    "tags": [
+      "srd",
+      "beast"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Wolf",
+    "meta": "Medium beast, unaligned",
+    "ac": 13,
+    "acNote": "natural armor",
+    "maxHp": 11,
+    "hpFormula": "2d8+2",
+    "abilities": {
+      "str": 12,
+      "dex": 15,
+      "con": 12,
+      "int": 3,
+      "wis": 12,
+      "cha": 6
+    },
+    "senses": "passive Perception 13",
+    "color": "#7f8c8d",
+    "id": "srd-008"
+  },
+  {
+    "cr": "1/8",
+    "size": "small",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [],
+    "traits": [
+      {
+        "name": "Keen Smell",
+        "description": "Lợi thế Perception dựa vào ngửi."
+      },
+      {
+        "name": "Pack Tactics",
+        "description": "Lợi thế đánh nếu có đồng minh trong 5 ft của mục tiêu."
+      }
+    ],
+    "actions": [
+      {
+        "id": "srd-009",
+        "name": "Bite",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "1d4+2",
+        "damageType": "xuyên"
+      }
+    ],
+    "tags": [
+      "srd",
+      "beast"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Giant Rat",
+    "meta": "Small beast, unaligned",
+    "ac": 12,
+    "maxHp": 7,
+    "hpFormula": "2d6",
+    "abilities": {
+      "str": 7,
+      "dex": 15,
+      "con": 11,
+      "int": 2,
+      "wis": 10,
+      "cha": 4
+    },
+    "senses": "darkvision 60 ft, passive Perception 10",
+    "color": "#95a5a6",
+    "id": "srd-00a"
+  },
+  {
+    "cr": "1/4",
+    "size": "medium",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [],
+    "traits": [],
+    "actions": [
+      {
+        "id": "srd-00b",
+        "name": "Shortsword",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "1d6+2",
+        "damageType": "xuyên"
+      },
+      {
+        "id": "srd-00c",
+        "name": "Shortbow",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 4,
+        "damage": "1d6+2",
+        "damageType": "xuyên",
+        "description": "tầm 80/320 ft"
+      }
+    ],
+    "tags": [
+      "srd",
+      "undead"
+    ],
+    "notes": "Yếu điểm: bludgeoning. Miễn: poison; poisoned, exhaustion.",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Skeleton",
+    "meta": "Medium undead, lawful evil",
+    "ac": 13,
+    "acNote": "armor scraps",
+    "maxHp": 13,
+    "hpFormula": "2d8+4",
+    "abilities": {
+      "str": 10,
+      "dex": 14,
+      "con": 15,
+      "int": 6,
+      "wis": 8,
+      "cha": 5
+    },
+    "senses": "darkvision 60 ft, passive Perception 9",
+    "color": "#bdc3c7",
+    "id": "srd-00d"
+  },
+  {
+    "cr": "1/4",
+    "size": "medium",
+    "speed": 20,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [
+      "wis"
+    ],
+    "skills": [],
+    "traits": [
+      {
+        "name": "Undead Fortitude",
+        "description": "Khi bị hạ về 0 HP (trừ radiant / chí mạng): CON save DC 5 + sát thương, thành công thì còn 1 HP."
+      }
+    ],
+    "actions": [
+      {
+        "id": "srd-00e",
+        "name": "Slam",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 3,
+        "damage": "1d6+1",
+        "damageType": "đập"
+      }
+    ],
+    "tags": [
+      "srd",
+      "undead"
+    ],
+    "notes": "Miễn: poison; poisoned.",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Zombie",
+    "meta": "Medium undead, neutral evil",
+    "ac": 8,
+    "maxHp": 22,
+    "hpFormula": "3d8+9",
+    "abilities": {
+      "str": 13,
+      "dex": 6,
+      "con": 16,
+      "int": 3,
+      "wis": 6,
+      "cha": 5
+    },
+    "senses": "darkvision 60 ft, passive Perception 8",
+    "color": "#7b8a5a",
+    "id": "srd-00f"
+  },
+  {
+    "cr": "1/8",
+    "size": "medium",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [],
+    "traits": [],
+    "actions": [
+      {
+        "id": "srd-00g",
+        "name": "Scimitar",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 3,
+        "damage": "1d6+1",
+        "damageType": "chém"
+      },
+      {
+        "id": "srd-00h",
+        "name": "Light Crossbow",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 3,
+        "damage": "1d8+1",
+        "damageType": "xuyên",
+        "description": "tầm 80/320 ft"
+      }
+    ],
+    "tags": [
+      "srd",
+      "humanoid"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Bandit",
+    "meta": "Medium humanoid, any non-lawful alignment",
+    "ac": 12,
+    "acNote": "leather armor",
+    "maxHp": 11,
+    "hpFormula": "2d8+2",
+    "abilities": {
+      "str": 11,
+      "dex": 12,
+      "con": 12,
+      "int": 10,
+      "wis": 10,
+      "cha": 10
+    },
+    "senses": "passive Perception 10",
+    "languages": "any one language",
+    "color": "#c0392b",
+    "id": "srd-00i"
+  },
+  {
+    "cr": "1/8",
+    "size": "medium",
+    "speed": 30,
+    "proficiencyBonus": 2,
+    "saveProficiencies": [],
+    "skills": [
+      {
+        "skill": "perception",
+        "bonus": 2
+      }
+    ],
+    "traits": [],
+    "actions": [
+      {
+        "id": "srd-00j",
+        "name": "Spear",
+        "actionType": "action",
+        "source": "manual",
+        "attackBonus": 3,
+        "damage": "1d6+1",
+        "damageType": "xuyên",
+        "description": "hoặc 1d8+1 khi cầm 2 tay đánh gần; tầm ném 20/60 ft"
+      }
+    ],
+    "tags": [
+      "srd",
+      "humanoid"
+    ],
+    "notes": "",
+    "source": "System Reference Document 5.1, © Wizards of the Coast LLC, licensed under CC-BY-4.0",
+    "name": "Guard",
+    "meta": "Medium humanoid, any alignment",
+    "ac": 16,
+    "acNote": "chain shirt, shield",
+    "maxHp": 11,
+    "hpFormula": "2d8+2",
+    "abilities": {
+      "str": 13,
+      "dex": 12,
+      "con": 12,
+      "int": 10,
+      "wis": 11,
+      "cha": 10
+    },
+    "senses": "passive Perception 12",
+    "languages": "any one language",
+    "color": "#2c3e50",
+    "id": "srd-00k"
+  }
+]

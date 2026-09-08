@@ -6,6 +6,35 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-08
+
+### Added
+
+- **Anyone can add a token** — a "+ Token" button on the map for every
+  participant. A player's token gets them as `controllerId` (so they can move and
+  remove it) and is always visible; only the DM can hide tokens or add hidden
+  ones.
+- **Bestiary** — the DM's NPC / monster stat block library (topbar → Bestiary,
+  DM only). Each `Statblock` has AC, HP (+ dice formula), speed, abilities, save
+  proficiencies, traits, and an action list. Search by name / type / tag,
+  edit inline, **⤵ Spawn lên map** (optionally roll HP, spawn hidden), import /
+  export as JSON.
+- **Spawned NPC tokens carry their stats.** AC / HP / size / colour come from the
+  stat block; a `TokenStatblock` (abilities, save profs, initiative mod, actions,
+  traits) rides on the token. The token inspector shows the stat block with a
+  target picker and per-action attack / damage / roll buttons (DM and the token's
+  controller only). `initRollAll` uses the stat block's initiative modifier.
+- **`docs/bestiary-srd-starter.json`** — 8 SRD 5.1 creatures (Goblin, Orc, Wolf,
+  Giant Rat, Skeleton, Zombie, Bandit, Guard; CC-BY-4.0, attributed) to import.
+- Shared: `tokenStatblockFrom`, `statblockInitiativeMod`, `tokenSaveBonus`.
+
+### Changed
+
+- Room schema **v5**; v2–v4 rooms migrate in place.
+- **The bestiary is persisted to its own file** (`BESTIARY_FILE`, default
+  `server/data/bestiary.json`) — **point it at a OneDrive folder to sync your
+  library across sessions and machines.** It is never written into `room.json`.
+
 ## [0.5.2] - 2026-09-08
 
 ### Changed
@@ -184,7 +213,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.4.0...v0.5.0
