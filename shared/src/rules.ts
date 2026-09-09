@@ -422,6 +422,16 @@ export function monkUnarmedAction(sheet: CharacterSheet): SheetAction | null {
   };
 }
 
+/**
+ * 5e 2024 Unarmed Strike Grapple / Shove save DC: 8 + Proficiency Bonus + STR
+ * modifier (a Monk may use DEX instead — we take the better of the two).
+ */
+export function grappleDc(sheet: CharacterSheet): number {
+  const str = abilityMod(sheet.abilities.str);
+  const best = monkLevel(sheet) > 0 ? Math.max(str, abilityMod(sheet.abilities.dex)) : str;
+  return 8 + sheet.proficiencyBonus + best;
+}
+
 /** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
 export function sneakAttackDice(sheet: CharacterSheet): number {
   const lvl = rogueLevel(sheet);

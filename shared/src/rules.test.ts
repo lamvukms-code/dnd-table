@@ -28,6 +28,7 @@ import {
   attackKindOf,
   attunementCount,
   clampToRange,
+  grappleDc,
   gridFeet,
   monkFocusMax,
   parseRangeFeet,
@@ -677,6 +678,17 @@ describe('currency & weight', () => {
       currency: { pp: 0, gp: 100, ep: 0, sp: 0, cp: 0 },
     });
     expect(carriedWeight(s)).toBe(6 + 2); // 6 lb items + 100 coins / 50
+  });
+
+  it('grappleDc = 8 + PB + STR mod (better of STR/DEX for a Monk)', () => {
+    const s = sheet({ abilities: { str: 16, dex: 12, con: 10, int: 10, wis: 10, cha: 10 }, proficiencyBonus: 3 });
+    expect(grappleDc(s)).toBe(8 + 3 + 3);
+    const monk = sheet({
+      classes: [{ name: 'Monk', level: 5 }],
+      abilities: { str: 10, dex: 18, con: 10, int: 10, wis: 10, cha: 10 },
+      proficiencyBonus: 3,
+    });
+    expect(grappleDc(monk)).toBe(8 + 3 + 4); // uses DEX +4
   });
 
   it('gridFeet is Chebyshev × 5; clampToRange caps distance', () => {

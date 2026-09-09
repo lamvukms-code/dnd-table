@@ -114,6 +114,15 @@ interface StoreState {
   resetTokenMove: (id: string) => void;
   /** Grant the token an extra Speed of movement this turn (Dash). */
   tokenDash: (id: string) => void;
+  /** 2024 Unarmed Strike Grapple: server rolls the target's save, applies Grappled. */
+  grapple: (p: {
+    targetTokenId: string;
+    dc: number;
+    label: string;
+    sourceSheetId?: string;
+    sourceTokenId?: string;
+    release?: boolean;
+  }) => void;
   me: () => Participant | undefined;
   isDm: () => boolean;
   dddiceActive: () => boolean;
@@ -216,6 +225,7 @@ export const useStore = create<StoreState>((set, get) => {
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
     resetTokenMove: (id) => rawSend({ t: 'resetTokenMove', id }),
     tokenDash: (id) => rawSend({ t: 'tokenDash', id }),
+    grapple: (p) => rawSend({ t: 'grapple', ...p }),
 
     damageRoll: async (label, damageParts, targetTokenId, attacker) => {
       let external: number[] | undefined;

@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.31.0
+- **Version:** 0.32.0
 - **Status:** Living document
 - **Last updated:** 2026-09-09
 - **Owner:** lamvukms (personal project)
@@ -411,6 +411,12 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   range circle around the caster's token (`parseRangeFeet(spell.range)`) and puts
   the range in the cast banner. `SheetAction.range` / `InventoryItem.rangeText`
   drive a "· tầm N" note on action rows (derived weapons default to "5 ft").
+- **FR-58 (P0, 0.32.0):** **Grappling (2024).** A **🤼 vật lộn** toggle next to
+  the unarmed-strike action (with a target). The server rolls the target's save
+  **silently** using the better of its STR / DEX modifier vs. `grappleDc(sheet)`
+  = `8 + STR mod + PB` (Monk may use DEX); a failure grants the **Grappled**
+  condition from the grappler (Speed 0 via the FR-56 tracker) with an escape
+  note. `grapple` action with a `release` flag toggles it off (**✋ thả**).
 
 ### 3.7 Character sheets
 

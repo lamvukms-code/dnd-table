@@ -25,6 +25,7 @@ import {
   CONDITIONS,
   derivedSubclassFeatures,
   druidLevel,
+  grappleDc,
   martialArtsDie,
   monkDc,
   pendingRollBonus,
@@ -336,6 +337,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
   const applyEffect = useStore((s) => s.applyEffect);
   const removeEffect = useStore((s) => s.removeEffect);
+  const grapple = useStore((s) => s.grapple);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const allSheets = useStore((s) => s.room?.sheets ?? []);
   const initiative = useStore((s) => s.room?.initiative);
@@ -681,6 +683,27 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   onFired={() =>
                     draft.sneakAttackArmed && commit({ ...draft, sneakAttackArmed: false })
                   }
+                  grapple={
+                    (a.id === 'unarmed' || a.id === 'monk-unarmed') && targetId
+                      ? {
+                          dc: grappleDc(draft),
+                          grappling: (
+                            tokens.find((t) => t.id === targetId)?.effects ?? []
+                          ).some(
+                            (e) => e.sourceSheetId === draft.id && e.condition === 'grappled',
+                          ),
+                          onToggle: (release: boolean) =>
+                            grapple({
+                              targetTokenId: targetId,
+                              dc: grappleDc(draft),
+                              label: `${draft.name} · Vật lộn`,
+                              sourceSheetId: draft.id,
+                              sourceTokenId: draft.tokenId || undefined,
+                              release,
+                            }),
+                        }
+                      : undefined
+                  }
                   onDelete={
                     a.source === 'weapon'
                       ? undefined
@@ -727,6 +750,7 @@ function ActionRow({
   attackRoll,
   damageRoll,
   onFired,
+  grapple,
   onDelete,
 }: {
   action: SheetAction;
@@ -754,6 +778,7 @@ function ActionRow({
     attacker?: { sheetId?: string; tokenId?: string },
   ) => Promise<void>;
   onFired?: () => void;
+  grapple?: { dc: number; grappling: boolean; onToggle: (release: boolean) => void };
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
@@ -819,6 +844,19 @@ function ActionRow({
       {action.notation && !action.damage && (
         <button className="roll-btn" onClick={() => rollDice(base, action.notation!)}>
           tung
+        </button>
+      )}
+      {grapple && (
+        <button
+          className={`roll-btn grapple ${grapple.grappling ? 'on' : ''}`}
+          title={
+            grapple.grappling
+              ? `Thả ${targetName}`
+              : `Vật lộn ${targetName} (mục tiêu cứu STR/DEX vs DC ${grapple.dc})`
+          }
+          onClick={() => grapple.onToggle(grapple.grappling)}
+        >
+          {grapple.grappling ? '✋ thả' : `🤼 vật lộn DC${grapple.dc}`}
         </button>
       )}
       {onDelete && (

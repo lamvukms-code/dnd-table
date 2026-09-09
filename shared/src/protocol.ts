@@ -52,6 +52,18 @@ export type ClientAction =
   | { t: 'applyEffect'; targetTokenId: string; effect: ActiveEffect }
   | { t: 'removeEffect'; tokenId: string; effectId: string }
   | { t: 'clearConcentration'; tokenId: string }
+  // 2024 Unarmed Strike Grapple: server rolls the target's STR/DEX save (its
+  // better modifier) vs `dc`; on a failure it gains the Grappled condition from
+  // the grappler. `release: true` removes the grapple instead.
+  | {
+      t: 'grapple';
+      targetTokenId: string;
+      dc: number;
+      label: string;
+      sourceSheetId?: string;
+      sourceTokenId?: string;
+      release?: boolean;
+    }
   // cast a save spell: the server rolls the target's save and, on a failure,
   // applies `effectOnFail` (a concentration effect ties to the caster's token).
   | {

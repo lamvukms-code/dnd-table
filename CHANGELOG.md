@@ -6,6 +6,19 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-09-09
+
+### Added
+
+- **Grappling (2024 rules).** A **🤼 vật lộn** toggle next to the unarmed-strike
+  row (needs a target). The server rolls the target's save **silently**, using
+  the *better* of its STR / DEX modifier vs. DC `8 + grappler STR mod + PB`
+  (`grappleDc`; a Monk may use DEX). On a failure the target gains the
+  **Grappled** condition from the grappler (Speed 0 — the movement tracker
+  enforces it), with an escape note (action + STR/DEX check vs. the same DC).
+  The button flips to **✋ thả** to release. New `grapple` protocol action with
+  a `release` flag.
+
 ## [0.31.0] - 2026-09-09
 
 ### Added
@@ -797,7 +810,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.28.0...v0.29.0

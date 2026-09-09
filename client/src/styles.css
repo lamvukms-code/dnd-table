@@ -348,6 +348,8 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .roll-btn.sm.prof { background: color-mix(in srgb, var(--accent-2) 22%, var(--panel-2)); }
 .roll-btn.wide { width: 100%; text-align: left; }
 .roll-btn.strong { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.roll-btn.grapple { border-color: #c88; color: #e9b; }
+.roll-btn.grapple.on { background: #7a3a4a; color: #fdd; border-color: #c88; }
 .ac-badge {
   display: flex;
   flex-direction: column;

@@ -901,6 +901,79 @@ export class Room {
         break;
       }
 
+      case 'grapple': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        const ownsSource =
+          (action.sourceSheetId &&
+            this.state.sheets.some(
+              (s) => s.id === action.sourceSheetId && s.ownerId === actor.id,
+            )) ||
+          (action.sourceTokenId &&
+            this.state.tokens.find((t) => t.id === action.sourceTokenId)?.controllerId ===
+              actor.id);
+        if (!isDm && !ownsSource) return 'Bạn chỉ vật lộn từ nhân vật của mình';
+
+        const isMine = (e: ActiveEffect) =>
+          (action.sourceSheetId && e.sourceSheetId === action.sourceSheetId) ||
+          (action.sourceTokenId && e.sourceTokenId === action.sourceTokenId);
+
+        if (action.release) {
+          const had = (target.effects ?? []).some(
+            (e) => (e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name)) && isMine(e),
+          );
+          target.effects = (target.effects ?? []).filter(
+            (e) => !((e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name)) && isMine(e)),
+          );
+          if (had) {
+            this.pushRoll({
+              id: nanoid(8),
+              ts: Date.now(),
+              actorId: actor.id,
+              actorName: actor.name,
+              label: `${action.label} — thả ${target.label}`,
+              result: externalRollResult('', { total: 0, faces: [] }),
+            });
+          }
+          this.touch();
+          break;
+        }
+
+        // Target chooses the better of its STR / DEX save.
+        const strB = this.tokenSaveBonus(target, 'str');
+        const dexB = this.tokenSaveBonus(target, 'dex');
+        const ability: Ability = dexB > strB ? 'dex' : 'str';
+        const { d20, total, pass, bonus } = this.rollTokenSave(target, ability, action.dc);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${action.label} → ${target.label}: ${ability.toUpperCase()} cứu ${total} vs DC ${action.dc} — ${
+            pass ? 'THOÁT' : 'BỊ GHÌ'
+          }`,
+          result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {
+            total,
+            faces: [d20],
+          }),
+        });
+        if (!pass && !(target.effects ?? []).some((e) => e.condition === 'grappled' && isMine(e))) {
+          target.effects = [
+            ...(target.effects ?? []),
+            {
+              id: nanoid(8),
+              name: 'Bị ghì (Grapple)',
+              sourceSheetId: action.sourceSheetId,
+              sourceTokenId: action.sourceTokenId,
+              condition: 'grappled',
+              note: `Tốc độ 0. Thoát: action + kiểm tra STR (Athletics) hoặc DEX (Acrobatics) vs DC ${action.dc}`,
+            },
+          ];
+        }
+        this.touch();
+        break;
+      }
+
       case 'spellSave': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
