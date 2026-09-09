@@ -37,6 +37,8 @@ export interface CantripDef {
   concentration?: boolean;
   /** Effect placed on the target (advisory badge unless the condition is wired). */
   effect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
+  /** One-shot d20 bonus die placed on the target (Guidance +1d4 to an ability check). */
+  rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
   range?: string;
   /** Short Vietnamese paraphrase of the SRD mechanic + how the app handles it. */
   guidance: string;
@@ -127,8 +129,8 @@ const COMBAT: CantripDef[] = [
 /** Utility / non-combat cantrips — added with guidance text, no auto rolls. */
 const UTILITY: CantripDef[] = [
   C('guidance', 'Guidance', 'Divination', ['cleric', 'druid'],
-    'Tập trung, tới 1 phút. Chạm 1 đồng minh: một lần, nó cộng 1d4 vào một kiểm tra chỉ số (ability check) tự chọn. Tự cộng khi tung.',
-    { concentration: true, range: 'Chạm' }),
+    'Tập trung, tới 1 phút. Ra phép lên 1 token đồng minh: lần kiểm tra chỉ số (ability check / skill) kế tiếp của họ TỰ ĐỘNG +1d4, xong thì hết. Người chơi không cần cộng tay.',
+    { concentration: true, range: 'Chạm', rollBonus: { dice: '1d4', scope: 'check' } }),
   C('resistance', 'Resistance', 'Abjuration', ['cleric', 'druid'],
     'Tập trung, tới 1 phút. Chạm 1 đồng minh: một lần, nó cộng 1d4 vào một saving throw. Tự cộng khi tung save.',
     { concentration: true, range: 'Chạm' }),
@@ -217,7 +219,11 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
     actionType: def.actionType ?? 'action',
     damage: wired ? damage : undefined,
     save: def.castKind === 'save' && def.save ? { ability: def.save } : undefined,
-    effect: def.effect ? { ...def.effect } : undefined,
+    effect: def.rollBonus
+      ? { name: `${def.name} (+${def.rollBonus.dice})`, note: def.guidance, rollBonus: def.rollBonus }
+      : def.effect
+        ? { ...def.effect }
+        : undefined,
     range: def.range,
     notes: def.guidance,
   };

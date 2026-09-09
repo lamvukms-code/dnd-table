@@ -9,6 +9,7 @@ import {
   mergeDefenses,
   rollNotation,
   spellAttackBonus,
+  spellAttackParts,
   spellSaveDc,
   tokenConditions,
   type ActiveEffect,
@@ -383,10 +384,10 @@ export const useStore = create<StoreState>((set, get) => {
       }
       if (spell.castKind === 'attack') {
         await get().attackRoll({
-          label,
+          label: `${label} (phép)`,
           attackBonus: atkBonus,
           rollMode: 'normal',
-          damageParts: spell.damage ?? [],
+          damageParts: spellAttackParts(sheet, spell.damage),
           targetTokenId,
           attackerSheetId: sheetId,
           attackerTokenId: sheet.tokenId,
@@ -405,6 +406,7 @@ export const useStore = create<StoreState>((set, get) => {
             concentration: spell.concentration,
             condition: spell.effect.condition,
             note: spell.effect.note,
+            rollBonus: spell.effect.rollBonus,
           },
         });
       }

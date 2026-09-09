@@ -56,6 +56,9 @@ export interface DamageRider {
   dice: string;
   type: string;
   enabled: boolean;
+  /** Which attacks it rides. 'weapon' (default) = weapon / manual attack rows;
+   *  'spell' = spell attacks only; 'any' = both. */
+  scope?: 'weapon' | 'spell' | 'any';
 }
 
 /** An entry in the action economy: an attack, a utility roll, or just a note. */
@@ -304,6 +307,9 @@ export interface ActiveEffect {
   concentration?: boolean; // drops when the source loses concentration
   condition?: ConditionType; // advisory badge; a few are wired into rolls (Release B)
   rider?: { dice: string; type: string }; // + damage when source hits this token
+  /** One-shot bonus die the target adds to its next d20 of this kind, then it clears
+   *  (Guidance = 'check', Resistance = 'save'). Consumed client-side on the roll. */
+  rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
   save?: {
     ability: Ability;
     dc: number;
@@ -355,7 +361,14 @@ export interface Spell {
   /** 'rider' spells (Hex, Hunter's Mark): + damage when the caster hits the target. */
   rider?: { dice: string; type: string };
   /** The effect placed on the target (condition / note); for save spells, on a failed save. */
-  effect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
+  effect?: {
+    name: string;
+    condition?: ConditionType;
+    note?: string;
+    expiresInRounds?: number;
+    /** One-shot d20 bonus die granted to the target (Guidance +1d4 to a check). */
+    rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
+  };
   range?: string;
   notes?: string;
 }

@@ -652,6 +652,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .riders { display: flex; flex-direction: column; gap: 4px; }
 .rider-row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .rider-row .rider-name { width: 130px; }
+.rider-row .rider-scope { font-size: 11px; }
 .rider-details > summary, .action-editor .ae-row-wrap + button { font-size: 11px; }
 .ae-row-wrap, .sb-action-wrap {
   border-left: 2px solid var(--line);

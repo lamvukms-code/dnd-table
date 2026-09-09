@@ -6,7 +6,26 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
-## [0.26.0] - 2026-09-09
+## [0.27.0] - 2026-09-09
+
+### Added
+
+- **Weapon-attack vs. spell-attack tag on damage riders.** `DamageRider.scope`
+  = `weapon` (default — the action-economy rows), `spell` (spell attacks only),
+  or `any` (both), pickable per rider in the editor. Weapon rows now skip
+  spell-only riders; **spell attacks now pick up `spell` / `any` riders**
+  (`spellRiderParts` / `spellAttackParts`), which they never did before.
+- **Guidance is semi-automatic.** Cast it (🪄) on an ally token: their next
+  ability check / skill roll from the sheet automatically gets **+1d4**, shown in
+  the roll label, and the effect clears itself (one-shot, like the spell). No
+  manual dice. Backed by `ActiveEffect.rollBonus` + `pendingRollBonus(token,
+  'check')`; consumed in the Cơ bản and Kỹ năng tabs. Saving throws are
+  unaffected (Guidance is checks only).
+
+### Changed
+
+- Point-and-click spell attacks are labelled "(phép)" and fold in the caster's
+  spell-scoped riders.
 
 ### Added
 
@@ -683,6 +702,7 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
   and the `dndcoder` build/version-management agent.
 
 [Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...HEAD
+[0.27.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.23.0...v0.24.0

@@ -119,6 +119,16 @@ export function DamageRidersEditor({
             onChange={(e) => upd(r.id, { dice: e.target.value })}
           />
           <DamageTypeSelect value={r.type} onChange={(v) => upd(r.id, { type: v ?? '' })} />
+          <select
+            className="rider-scope"
+            value={r.scope ?? 'weapon'}
+            title="Đòn nào được cộng: vũ khí, phép, hay cả hai"
+            onChange={(e) => upd(r.id, { scope: e.target.value as DamageRider['scope'] })}
+          >
+            <option value="weapon">đòn vũ khí</option>
+            <option value="spell">đòn phép</option>
+            <option value="any">cả hai</option>
+          </select>
           <button className="link" onClick={() => onChange(riders.filter((x) => x.id !== r.id))}>
             ✕
           </button>

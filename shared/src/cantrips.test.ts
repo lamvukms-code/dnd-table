@@ -79,10 +79,16 @@ describe('spellFromCantrip', () => {
   });
 
   it('utility cantrips carry guidance but no damage', () => {
-    const sp = spellFromCantrip(findCantrip('Guidance')!, sheet(), 'x3');
+    const sp = spellFromCantrip(findCantrip('Mage Hand')!, sheet(), 'x3');
     expect(sp.castKind).toBe('utility');
     expect(sp.damage).toBeUndefined();
+  });
+
+  it('Guidance is semi-auto: a check roll-bonus effect on its target', () => {
+    const sp = spellFromCantrip(findCantrip('Guidance')!, sheet(), 'x4');
+    expect(sp.castKind).toBe('utility');
     expect(sp.concentration).toBe(true);
+    expect(sp.effect?.rollBonus).toEqual({ dice: '1d4', scope: 'check' });
   });
 });
 

@@ -133,6 +133,8 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   // a rider off where it shouldn't apply, or use the action's own extra damage.)
   for (const r of sheet.damageRiders ?? []) {
     if (!r.enabled || !isAttack) continue;
+    // A weapon / manual attack row rides 'weapon' (default) and 'any' riders, not 'spell'.
+    if ((r.scope ?? 'weapon') === 'spell') continue;
     parts.push({ dice: r.dice, type: r.type, label: r.name });
   }
 
@@ -177,6 +179,33 @@ export function mergeDefenses(a: Defenses | undefined, b: Defenses | undefined):
     damageReduction: Math.max(a.damageReduction, b.damageReduction),
     critImmune: a.critImmune || b.critImmune,
   };
+}
+
+/**
+ * Standing riders that ride a SPELL attack (scope 'spell' or 'any'). Weapon-only
+ * riders (the default) are excluded — that's the weapon/spell attack tag.
+ */
+export function spellRiderParts(sheet: CharacterSheet): DamagePart[] {
+  return (sheet.damageRiders ?? [])
+    .filter((r) => r.enabled && (r.scope === 'spell' || r.scope === 'any'))
+    .map((r) => ({ dice: r.dice, type: r.type, label: r.name }));
+}
+
+/** The primary damage parts of a spell attack: its own damage + applicable spell riders. */
+export function spellAttackParts(sheet: CharacterSheet, spellDamage: DamagePart[] | undefined): DamagePart[] {
+  return [...(spellDamage ?? []).map((p) => ({ ...p })), ...spellRiderParts(sheet)];
+}
+
+/**
+ * A one-shot d20 bonus die sitting on a token for a roll of `scope` (Guidance =
+ * 'check'). Returns the effect id + die so the caller can add it then clear it.
+ */
+export function pendingRollBonus(
+  token: Pick<Token, 'effects'> | undefined,
+  scope: 'check' | 'save' | 'attack',
+): { id: string; name: string; dice: string } | undefined {
+  const e = (token?.effects ?? []).find((x) => x.rollBonus?.scope === scope);
+  return e && e.rollBonus ? { id: e.id, name: e.name, dice: e.rollBonus.dice } : undefined;
 }
 
 /** Extra damage parts a target's own effects add when `attacker` hits it (Hex, Hunter's Mark). */

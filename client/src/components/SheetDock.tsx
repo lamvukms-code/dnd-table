@@ -25,6 +25,7 @@ import {
   druidLevel,
   martialArtsDie,
   monkDc,
+  pendingRollBonus,
   monkFocusMax,
   monkLevel,
   proficiencyByLevel,
@@ -367,8 +368,17 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const actions = allActions(draft);
   const modeTag =
     rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
-  const roll = (label: string, mod: number) =>
-    rollDice(`${draft.name} · ${label}${modeTag}`, d20Check(mod, rollMode));
+  const roll = (label: string, mod: number, kind: 'check' | 'save' | 'other' = 'other') => {
+    let notation = d20Check(mod, rollMode);
+    let extra = '';
+    const gb = kind === 'check' ? pendingRollBonus(linkedToken ?? undefined, 'check') : undefined;
+    if (gb) {
+      notation = `${notation}+${gb.dice}`;
+      extra = ` +${gb.dice} (${gb.name})`;
+    }
+    rollDice(`${draft.name} · ${label}${modeTag}${extra}`, notation);
+    if (gb && draft.tokenId) removeEffect(draft.tokenId, gb.id);
+  };
 
   function set<K extends keyof CharacterSheet>(k: K, v: CharacterSheet[K]) {
     commit({ ...draft, [k]: v });
@@ -484,13 +494,13 @@ function BasicTab({ draft, commit }: EditorCtx) {
                     <div className="ab-rolls">
                       <button
                         className="roll-btn sm"
-                        onClick={() => roll(`${ab.toUpperCase()} check`, mod)}
+                        onClick={() => roll(`${ab.toUpperCase()} check`, mod, 'check')}
                       >
                         check
                       </button>
                       <button
                         className={`roll-btn sm ${prof ? 'prof' : ''}`}
-                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab))}
+                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab), 'save')}
                       >
                         save {fmtMod(saveBonus(draft, ab))}
                       </button>
@@ -690,7 +700,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
             Nguồn sát thương thêm — rider ({draft.damageRiders.filter((r) => r.enabled).length})
           </summary>
           <p className="hint">
-            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa cho đòn vũ khí).
+            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa). Chọn “đòn vũ
+            khí / đòn phép / cả hai” để giới hạn loại đòn được cộng.
           </p>
           <DamageRidersEditor
             riders={draft.damageRiders}
@@ -1279,9 +1290,23 @@ function Pips({ max, used, onChange }: { max: number; used: number; onChange: (u
 
 function SkillsTab({ draft, commit }: EditorCtx) {
   const rollDice = useStore((s) => s.rollDice);
+  const removeEffect = useStore((s) => s.removeEffect);
+  const myToken = useStore((s) => s.room?.tokens ?? []).find((t) => t.id === draft.tokenId);
   const [rollMode, setRollMode] = useState<RollMode>('normal');
   const modeTag =
     rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
+
+  function rollSkill(sk: string, bonus: number) {
+    const gb = pendingRollBonus(myToken, 'check');
+    let notation = d20Check(bonus, rollMode);
+    let extra = '';
+    if (gb) {
+      notation = `${notation}+${gb.dice}`;
+      extra = ` +${gb.dice} (${gb.name})`;
+    }
+    rollDice(`${draft.name} · ${SKILL_LABEL_VI[sk] ?? sk}${modeTag}${extra}`, notation);
+    if (gb && draft.tokenId) removeEffect(draft.tokenId, gb.id);
+  }
 
   function toggle(list: 'skillProficiencies' | 'skillExpertise', sk: string, on: boolean) {
     let prof = new Set(draft.skillProficiencies);
@@ -1345,15 +1370,7 @@ function SkillsTab({ draft, commit }: EditorCtx) {
                   {SKILL_LABEL_VI[sk] ?? sk} <span className="st-en">{sk}</span>
                 </td>
                 <td>
-                  <button
-                    className="roll-btn sm"
-                    onClick={() =>
-                      rollDice(
-                        `${draft.name} · ${SKILL_LABEL_VI[sk] ?? sk}${modeTag}`,
-                        d20Check(bonus, rollMode),
-                      )
-                    }
-                  >
+                  <button className="roll-btn sm" onClick={() => rollSkill(sk, bonus)}>
                     {fmtMod(bonus)}
                   </button>
                 </td>

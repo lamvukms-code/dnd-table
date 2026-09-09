@@ -26,6 +26,9 @@ import {
   mergeDefenses,
   monkFocusMax,
   monkUnarmedAction,
+  pendingRollBonus,
+  spellAttackParts,
+  spellRiderParts,
   rageDamageBonus,
   rageMax,
   resolveDamageParts,
@@ -238,6 +241,36 @@ describe('multi-source damage', () => {
       '1d10 necrotic',
       '1d4 fire', // ring (enabled)
     ]);
+  });
+
+  it('rider scope: weapon rows skip spell-only riders; spell attacks skip weapon riders', () => {
+    const s = sheet({
+      damageRiders: [
+        { id: 'w', name: 'Wpn', dice: '1d4', type: 'fire', enabled: true }, // default 'weapon'
+        { id: 'sp', name: 'Spl', dice: '1d6', type: 'psychic', enabled: true, scope: 'spell' as const },
+        { id: 'any', name: 'Any', dice: '1d8', type: 'force', enabled: true, scope: 'any' as const },
+      ],
+    });
+    const wpn = {
+      id: 'w', name: 'Sword', actionType: 'action' as const,
+      attackBonus: 4, damage: '1d8', damageType: 'slashing', source: 'weapon' as const,
+    };
+    expect(actionDamageParts(s, wpn).map((p) => p.label)).toEqual([undefined, 'Wpn', 'Any']);
+    expect(spellRiderParts(s).map((p) => p.label)).toEqual(['Spl', 'Any']);
+    expect(spellAttackParts(s, [{ dice: '2d10', type: 'fire' }]).map((p) => p.dice)).toEqual([
+      '2d10', '1d6', '1d8',
+    ]);
+  });
+
+  it('pendingRollBonus finds a one-shot check die on a token', () => {
+    const tok = {
+      effects: [
+        { id: 'e1', name: 'Guidance (+1d4)', rollBonus: { dice: '1d4', scope: 'check' as const } },
+      ],
+    };
+    expect(pendingRollBonus(tok, 'check')).toEqual({ id: 'e1', name: 'Guidance (+1d4)', dice: '1d4' });
+    expect(pendingRollBonus(tok, 'save')).toBeUndefined();
+    expect(pendingRollBonus(undefined, 'check')).toBeUndefined();
   });
 
   it('riders do not attach to non-attack actions', () => {
