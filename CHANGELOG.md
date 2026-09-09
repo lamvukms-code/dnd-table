@@ -6,7 +6,36 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
-## [0.27.0] - 2026-09-09
+## [0.28.0] - 2026-09-09
+
+### Added
+
+- **Level-1 combat spells, semi-automatic** — a "+ Phép cấp 1 SRD" picker in the
+  Spell tab (mechanics paraphrased from SRD 5.2 / 2024, no spell text):
+  - **Healing** (`castKind: 'heal'`): Healing Word, Cure Wounds — the caster's
+    spellcasting modifier is added automatically; the new `heal` action adds HP
+    to the target token, clamped to its max, logged.
+  - **Attack**: Guiding Bolt, Chromatic Orb, Witch Bolt, Ray of Sickness.
+  - **Auto-hit** (`castKind: 'damage'`): Magic Missile — no attack roll, damage
+    applied straight to the target.
+  - **Save with half-on-hit** (`Spell.save.halfOnSave`): Burning Hands,
+    Thunderwave — the server rolls the save silently and applies full damage on a
+    failure, **half on a success** (level 1+, unlike cantrips). Sleep, Bane,
+    Faerie Fire wire their conditions/notes.
+  - Bless / Shield / Mage Armor are added with guidance text only (persistent
+    buffs aren't auto-applied yet).
+- **Basic unarmed strike for everyone** — `unarmedAction` (5e 2024: 1 + STR mod
+  bludgeoning, proficient). `allActions` always offers it; Monks keep their
+  stronger Martial Arts version instead.
+
+### Changed
+
+- **Damage-rider mechanism reworked around the weapon/spell tag.** `SheetAction`
+  gained `attackKind` ('weapon' default / 'spell'); a single `riderParts(sheet,
+  kind)` decides rider scoping for both weapon rows and spell attacks
+  (`actionDamageParts` and `spellAttackParts` both route through it). Spell-tagged
+  attack rows no longer pick up weapon-only riders, Rage or Sneak Attack.
+  `derivedActions` / `monkUnarmedAction` are tagged `attackKind: 'weapon'`.
 
 ### Added
 
@@ -702,6 +731,7 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
   and the `dndcoder` build/version-management agent.
 
 [Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...HEAD
+[0.28.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.24.0...v0.25.0

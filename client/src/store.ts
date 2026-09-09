@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import {
+  abilityMod,
   combineRollModes,
   conditionAttackMode,
   coverAcBonus,
@@ -10,6 +11,7 @@ import {
   rollNotation,
   spellAttackBonus,
   spellAttackParts,
+  spellcastingAbilityOf,
   spellSaveDc,
   tokenConditions,
   type ActiveEffect,
@@ -81,6 +83,13 @@ interface StoreState {
     damageParts: DamagePart[],
     targetTokenId: string,
     attacker?: { sheetId?: string; tokenId?: string },
+  ) => Promise<void>;
+  /** Roll a healing formula and add the (clamped) total to a target token's HP. */
+  healRoll: (
+    label: string,
+    notation: string,
+    targetTokenId: string,
+    sourceSheetId?: string,
   ) => Promise<void>;
   /** Put a spell/feature effect on a target token (condition, rider, save). */
   applyEffect: (targetTokenId: string, effect: ActiveEffect) => void;
@@ -222,6 +231,18 @@ export const useStore = create<StoreState>((set, get) => {
       });
     },
 
+    healRoll: async (label, notation, targetTokenId, sourceSheetId) => {
+      const ext = await externalRoll(notation);
+      rawSend({
+        t: 'heal',
+        label,
+        notation,
+        targetTokenId,
+        external: ext ? ext.total : undefined,
+        sourceSheetId,
+      });
+    },
+
     rollInitiativeForMe: async (name, mod, tokenId, mode = 'normal') => {
       const external = await externalRoll(d20Check(mod, mode));
       rawSend({ t: 'rollInitiative', name, mod, tokenId, external: external ?? undefined });
@@ -338,6 +359,24 @@ export const useStore = create<StoreState>((set, get) => {
       const label = `${sheet.name} · ${spell.name}`;
       const atkBonus = spellAttackBonus(sheet) ?? 0;
       const dc = spell.save?.dcOverride ?? spellSaveDc(sheet) ?? 10;
+      const castAbil = spellcastingAbilityOf(sheet);
+      const castMod = castAbil ? abilityMod(sheet.abilities[castAbil]) : 0;
+
+      if (spell.castKind === 'heal' && spell.heal) {
+        const mod = castMod >= 0 ? `+${castMod}` : `${castMod}`;
+        await get().healRoll(`${label} (hồi máu)`, `${spell.heal}${castMod ? mod : ''}`, targetTokenId, sheetId);
+        return;
+      }
+      if (spell.castKind === 'damage') {
+        // Auto-hit damage spell (Magic Missile): no attack roll.
+        await get().damageRoll(
+          `${label} (phép)`,
+          spellAttackParts(sheet, spell.damage),
+          targetTokenId,
+          { sheetId, tokenId: sheet.tokenId },
+        );
+        return;
+      }
 
       if (spell.castKind === 'rider' && spell.rider) {
         rawSend({
@@ -362,6 +401,7 @@ export const useStore = create<StoreState>((set, get) => {
           label,
           sourceSheetId: sheetId,
           damageOnFail: spell.damage && spell.damage.length ? spell.damage : undefined,
+          damageHalfOnSave: spell.save.halfOnSave,
           effectOnFail: spell.effect
             ? {
                 id: '',

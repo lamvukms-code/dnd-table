@@ -74,6 +74,9 @@ export interface SheetAction {
   notation?: string; // a generic roll (healing / utility), e.g. "2d4+2"
   description?: string;
   source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
+  /** For attacks: whether it's a physical strike or a spell attack. Drives which
+   *  standing riders + weapon features (Rage, Sneak Attack) apply. Default 'weapon'. */
+  attackKind?: 'weapon' | 'spell';
 }
 
 /** Limited-use class resource: Ki, Rage, Bardic Inspiration, Sorcery Points… */
@@ -334,7 +337,7 @@ export type RollMode = 'normal' | 'advantage' | 'disadvantage';
 export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
 
 /** How a spell is used when cast at a target. */
-export type SpellCastKind = 'attack' | 'save' | 'rider' | 'utility';
+export type SpellCastKind = 'attack' | 'save' | 'rider' | 'utility' | 'heal' | 'damage';
 
 /** One class of a (possibly multiclassed) character. */
 export interface ClassEntry {
@@ -354,10 +357,18 @@ export interface Spell {
   prepared: boolean;
   castKind: SpellCastKind;
   actionType?: ActionType;
-  /** 'save' spells: the save the target rolls. DC defaults to the sheet's spell save DC. */
-  save?: { ability: Ability; dcOverride?: number; repeat?: 'none' | 'start-of-turn' | 'end-of-turn' };
-  /** 'attack' spells: damage parts on a hit. */
+  /** 'save' spells: the save the target rolls. DC defaults to the sheet's spell save DC.
+   *  `halfOnSave` = the target still takes half damage on a success (level 1+ AoE). */
+  save?: {
+    ability: Ability;
+    dcOverride?: number;
+    repeat?: 'none' | 'start-of-turn' | 'end-of-turn';
+    halfOnSave?: boolean;
+  };
+  /** 'attack' / 'save' / 'damage' spells: damage parts (on a hit / failed save / always). */
   damage?: DamagePart[];
+  /** 'heal' spells: healing dice; the spellcasting ability modifier is added automatically. */
+  heal?: string;
   /** 'rider' spells (Hex, Hunter's Mark): + damage when the caster hits the target. */
   rider?: { dice: string; type: string };
   /** The effect placed on the target (condition / note); for save spells, on a failed save. */

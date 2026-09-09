@@ -24,11 +24,14 @@ import {
   druidLevel,
   martialArtsDie,
   mergeDefenses,
+  attackKindOf,
   monkFocusMax,
   monkUnarmedAction,
   pendingRollBonus,
+  riderParts,
   spellAttackParts,
   spellRiderParts,
+  unarmedAction,
   rageDamageBonus,
   rageMax,
   resolveDamageParts,
@@ -184,8 +187,10 @@ describe('derivedActions', () => {
       ],
       inventory: [item({ id: 'w', type: 'weapon', equipped: true, damage: '1d6', proficient: true })],
     });
-    expect(allActions(s)).toHaveLength(2);
+    // derived weapon + always-available unarmed strike + the manual action
+    expect(allActions(s)).toHaveLength(3);
     expect(allActions(s)[0].source).toBe('weapon');
+    expect(allActions(s).some((a) => a.id === 'unarmed')).toBe(true);
   });
 });
 
@@ -260,6 +265,41 @@ describe('multi-source damage', () => {
     expect(spellAttackParts(s, [{ dice: '2d10', type: 'fire' }]).map((p) => p.dice)).toEqual([
       '2d10', '1d6', '1d8',
     ]);
+  });
+
+  it('spell-tagged attack rows skip weapon riders + Rage/Sneak', () => {
+    const s = sheet({
+      className: 'Rogue',
+      classes: [{ name: 'Rogue', level: 6 }],
+      raging: false,
+      sneakAttackArmed: true,
+      damageRiders: [
+        { id: 'w', name: 'Wpn', dice: '1d4', type: 'fire', enabled: true },
+        { id: 'sp', name: 'Spl', dice: '1d6', type: 'force', enabled: true, scope: 'spell' as const },
+      ],
+    });
+    const spellAtk = {
+      id: 'x', name: 'Chromatic Orb', actionType: 'action' as const,
+      attackBonus: 6, damage: '3d8', damageType: 'fire', attackKind: 'spell' as const,
+    };
+    const labels = actionDamageParts(s, spellAtk).map((p) => p.label);
+    expect(labels).toEqual([undefined, 'Spl']); // primary + spell rider; no Wpn, no Sneak Attack
+    expect(attackKindOf(spellAtk)).toBe('spell');
+    expect(attackKindOf({ id: 'y', name: 'Club', actionType: 'action' })).toBe('weapon');
+    expect(riderParts(s, 'weapon').map((p) => p.label)).toEqual(['Wpn']);
+  });
+
+  it('unarmedAction: 1 + STR mod bludgeoning; allActions always offers one', () => {
+    const s = sheet({ abilities: { ...sheet().abilities, str: 16 } });
+    const u = unarmedAction(s);
+    expect(u.damage).toBe('4'); // 1 + 3
+    expect(u.damageType).toBe('bludgeoning');
+    expect(u.attackBonus).toBe(3 + s.proficiencyBonus);
+    expect(allActions(s).some((a) => a.id === 'unarmed')).toBe(true);
+    // a Monk gets the Martial Arts version instead
+    const monk = sheet({ classes: [{ name: 'Monk', level: 1 }] });
+    expect(allActions(monk).some((a) => a.id === 'monk-unarmed')).toBe(true);
+    expect(allActions(monk).some((a) => a.id === 'unarmed')).toBe(false);
   });
 
   it('pendingRollBonus finds a one-shot check die on a token', () => {

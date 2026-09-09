@@ -426,6 +426,41 @@ export class Room {
         break;
       }
 
+      case 'heal': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        let result: RollResult;
+        if (typeof action.external === 'number') {
+          result = externalRollResult(action.notation, { total: action.external, faces: [] });
+        } else {
+          try {
+            result = rollNotation(action.notation);
+          } catch (err) {
+            return (err as Error).message;
+          }
+        }
+        const heal = Math.max(0, result.total);
+        let restored = 0;
+        if (typeof target.currentHp === 'number' && typeof target.maxHp === 'number') {
+          const before = target.currentHp;
+          target.currentHp = Math.min(target.maxHp, target.currentHp + heal);
+          restored = target.currentHp - before;
+        } else if (typeof target.currentHp === 'number') {
+          target.currentHp += heal;
+          restored = heal;
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${action.label} → ${target.label}: +${restored} HP`,
+          result,
+        });
+        this.touch();
+        break;
+      }
+
       case 'roll': {
         let result: RollResult;
         if (action.external) {
@@ -814,17 +849,21 @@ export class Room {
             faces: [d20],
           }),
         });
-        if (!pass && action.damageOnFail?.length) {
+        // Damage: full on a failed save, half on a success if `damageHalfOnSave`
+        // (level 1+ AoE); 2024 cantrips deal nothing on a success.
+        const takesDamage = action.damageOnFail?.length && (!pass ? true : !!action.damageHalfOnSave);
+        if (takesDamage) {
           let rd;
           try {
-            rd = this.rollDamageParts(action.damageOnFail, false, undefined);
+            rd = this.rollDamageParts(action.damageOnFail!, false, undefined);
           } catch (err) {
             return (err as Error).message;
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
+          const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           let applied = 0;
           if (typeof target.currentHp === 'number') {
-            applied = Math.min(target.currentHp, out.totalFinal);
+            applied = Math.min(target.currentHp, dealt);
             target.currentHp -= applied;
           }
           this.pushRoll({
@@ -832,18 +871,18 @@ export class Room {
             ts: Date.now(),
             actorId: actor.id,
             actorName: actor.name,
-            label: `${action.label} — sát thương`,
+            label: `${action.label} — sát thương${pass ? ' (nửa, save thành công)' : ''}`,
             result: rd.combined,
             damage: {
               targetTokenId: target.id,
               targetName: target.label,
               amount: applied,
               raw: out.totalRaw,
-              damageType: damagePartsSummary(action.damageOnFail),
+              damageType: damagePartsSummary(action.damageOnFail!),
               notes: damageBreakdownNotes(out),
             },
           });
-          this.maybeBreakConcentration(target, out.totalFinal);
+          this.maybeBreakConcentration(target, dealt);
         }
         if (!pass && action.effectOnFail) {
           const effect: ActiveEffect = { ...action.effectOnFail, id: nanoid(8) };

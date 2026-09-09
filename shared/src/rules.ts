@@ -110,13 +110,62 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         damageType: it.damageType || '',
         extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
         source: 'weapon' as const,
+        attackKind: 'weapon' as const,
       };
     });
 }
 
 /**
+ * The basic unarmed strike everyone has (5e 2024: 1 + STR modifier bludgeoning,
+ * proficient). Monks get the stronger Martial Arts version instead
+ * (`monkUnarmedAction`), so this is only added for non-Monks.
+ */
+export function unarmedAction(sheet: CharacterSheet): SheetAction {
+  const strMod = abilityMod(sheet.abilities.str);
+  return {
+    id: 'unarmed',
+    name: 'Đòn không vũ khí',
+    actionType: 'action',
+    attackBonus: strMod + sheet.proficiencyBonus,
+    damage: String(Math.max(1, 1 + strMod)),
+    damageType: 'bludgeoning',
+    source: 'weapon',
+    attackKind: 'weapon',
+    description: '5e 2024: 1 + STR mod đập. Có thể thay bằng Grapple / Shove.',
+  };
+}
+
+/**
+ * The kind of attack a `SheetAction` is: a physical/weapon strike or a spell
+ * attack. Drives which standing riders and class features (Rage, Sneak Attack)
+ * apply. Explicit `action.attackKind` wins; equipped weapons are 'weapon';
+ * everything else (manual rows) defaults to 'weapon' too.
+ */
+export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
+  return action.attackKind ?? 'weapon';
+}
+
+/**
+ * Standing damage riders (magic ring, class feature…) that apply to an attack of
+ * `kind`. A rider's `scope` is 'weapon' (default), 'spell', or 'any'. This is the
+ * single place rider scoping is decided — `actionDamageParts` and
+ * `spellAttackParts` both go through it.
+ */
+export function riderParts(sheet: CharacterSheet, kind: 'weapon' | 'spell'): DamagePart[] {
+  return (sheet.damageRiders ?? [])
+    .filter((r) => {
+      if (!r.enabled) return false;
+      const sc = r.scope ?? 'weapon';
+      return sc === 'any' || sc === kind;
+    })
+    .map((r) => ({ dice: r.dice, type: r.type, label: r.name }));
+}
+
+/**
  * Every damage component of an action: its primary damage, its own extra
- * damage parts, and any applicable standing rider (magic ring, feature…).
+ * damage parts, applicable standing riders, and (for weapon attacks) Rage /
+ * Sneak Attack. Spell-attack rows skip weapon-only riders and the weapon
+ * features — see `attackKindOf`.
  */
 export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): DamagePart[] {
   const parts: DamagePart[] = [];
@@ -124,29 +173,24 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
 
   const isAttack = typeof action.attackBonus === 'number';
-  const isWeapon = isAttack && (action.source === 'weapon' || action.source === 'manual' || !action.source);
+  if (!isAttack) return parts;
+
+  const kind = attackKindOf(action);
   const primaryType = action.damageType || parts[0]?.type || '';
 
-  // A "weapon" rider (e.g. a magic ring) rides every weapon attack — both the
-  // equipped-weapon actions and manual attack entries a player types by hand.
-  // "all" riders ride any attack. (Spell attacks aren't distinguished yet — turn
-  // a rider off where it shouldn't apply, or use the action's own extra damage.)
-  for (const r of sheet.damageRiders ?? []) {
-    if (!r.enabled || !isAttack) continue;
-    // A weapon / manual attack row rides 'weapon' (default) and 'any' riders, not 'spell'.
-    if ((r.scope ?? 'weapon') === 'spell') continue;
-    parts.push({ dice: r.dice, type: r.type, label: r.name });
-  }
+  for (const p of riderParts(sheet, kind)) parts.push(p);
 
-  // Barbarian: rage damage on a weapon attack while raging.
-  if (sheet.raging && isWeapon) {
-    const bonus = rageDamageBonus(sheet);
-    if (bonus > 0) parts.push({ dice: String(bonus), type: primaryType, label: 'Rage' });
-  }
-  // Rogue: Sneak Attack armed for this attack (the sheet disarms it after the roll).
-  if (sheet.sneakAttackArmed && isWeapon) {
-    const dice = sneakAttackDice(sheet);
-    if (dice > 0) parts.push({ dice: `${dice}d6`, type: primaryType, label: 'Sneak Attack' });
+  if (kind === 'weapon') {
+    // Barbarian: rage damage on a weapon attack while raging.
+    if (sheet.raging) {
+      const bonus = rageDamageBonus(sheet);
+      if (bonus > 0) parts.push({ dice: String(bonus), type: primaryType, label: 'Rage' });
+    }
+    // Rogue: Sneak Attack armed for this attack (the sheet disarms it after the roll).
+    if (sheet.sneakAttackArmed) {
+      const dice = sneakAttackDice(sheet);
+      if (dice > 0) parts.push({ dice: `${dice}d6`, type: primaryType, label: 'Sneak Attack' });
+    }
   }
   return parts;
 }
@@ -181,14 +225,9 @@ export function mergeDefenses(a: Defenses | undefined, b: Defenses | undefined):
   };
 }
 
-/**
- * Standing riders that ride a SPELL attack (scope 'spell' or 'any'). Weapon-only
- * riders (the default) are excluded — that's the weapon/spell attack tag.
- */
+/** Standing riders that ride a SPELL attack (scope 'spell' or 'any'). */
 export function spellRiderParts(sheet: CharacterSheet): DamagePart[] {
-  return (sheet.damageRiders ?? [])
-    .filter((r) => r.enabled && (r.scope === 'spell' || r.scope === 'any'))
-    .map((r) => ({ dice: r.dice, type: r.type, label: r.name }));
+  return riderParts(sheet, 'spell');
 }
 
 /** The primary damage parts of a spell attack: its own damage + applicable spell riders. */
@@ -315,6 +354,7 @@ export function monkUnarmedAction(sheet: CharacterSheet): SheetAction | null {
     damage: dmg,
     damageType: 'bludgeoning',
     source: 'weapon',
+    attackKind: 'weapon',
   };
 }
 
@@ -671,12 +711,15 @@ export function resolveDamageParts(
   return { totalRaw, totalFinal, parts };
 }
 
-/** Equipped-weapon actions + a Monk's unarmed strike + the sheet's own actions. */
+/**
+ * Equipped-weapon actions + an unarmed strike (Monk's Martial Arts version if a
+ * Monk, else the basic 1 + STR one everyone always has) + the sheet's own actions.
+ */
 export function allActions(sheet: CharacterSheet): SheetAction[] {
-  const monk = monkUnarmedAction(sheet);
+  const unarmed = monkUnarmedAction(sheet) ?? unarmedAction(sheet);
   return [
     ...derivedActions(sheet),
-    ...(monk ? [monk] : []),
+    unarmed,
     ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
   ];
 }

@@ -61,10 +61,21 @@ export type ClientAction =
       dc: number;
       label: string;
       effectOnFail?: ActiveEffect;
-      // damage dealt only if the target fails the save (2024 cantrips: none on a success)
+      // damage dealt if the target fails the save (2024 cantrips: none on a success)
       damageOnFail?: DamagePart[];
+      // level 1+ AoE: the target still takes half of `damageOnFail` on a success
+      damageHalfOnSave?: boolean;
       sourceSheetId?: string;
       sourceTokenId?: string;
+    }
+  // heal a target token (adds HP, clamped to its max)
+  | {
+      t: 'heal';
+      label: string;
+      targetTokenId: string;
+      notation: string;
+      external?: number;
+      sourceSheetId?: string;
     }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }

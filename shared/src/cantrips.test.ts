@@ -4,10 +4,12 @@ import {
   cantripTier,
   cantripsForSheet,
   findCantrip,
+  l1SpellsForSheet,
   rescaleCantripSpell,
   scaleCantripDie,
   spellFromCantrip,
   SRD_CANTRIPS,
+  SRD_L1_SPELLS,
 } from './cantrips.js';
 import type { CharacterSheet } from './types.js';
 
@@ -117,4 +119,40 @@ it('every cantrip has unique id and non-empty guidance', () => {
   const ids = new Set(SRD_CANTRIPS.map((c) => c.id));
   expect(ids.size).toBe(SRD_CANTRIPS.length);
   expect(SRD_CANTRIPS.every((c) => c.guidance.length > 10)).toBe(true);
+});
+
+describe('level-1 spells', () => {
+  it('Healing Word builds a heal spell (mod added at cast time, not here)', () => {
+    const sp = spellFromCantrip(findCantrip('Healing Word')!, sheet({ className: 'Cleric', level: 5 }), 'h');
+    expect(sp.level).toBe(1);
+    expect(sp.castKind).toBe('heal');
+    expect(sp.heal).toBe('2d4');
+    expect(sp.actionType).toBe('bonus');
+    expect(sp.damage).toBeUndefined();
+  });
+
+  it('Magic Missile is auto-hit damage with fixed dice', () => {
+    const sp = spellFromCantrip(findCantrip('Magic Missile')!, sheet(), 'm');
+    expect(sp.castKind).toBe('damage');
+    expect(sp.damage).toEqual([{ dice: '3d4+3', type: 'force', label: 'Magic Missile' }]);
+  });
+
+  it('Burning Hands is a half-on-save AoE with fixed damage', () => {
+    const sp = spellFromCantrip(findCantrip('Burning Hands')!, sheet(), 'b');
+    expect(sp.save).toEqual({ ability: 'dex', halfOnSave: true });
+    expect(sp.damage).toEqual([{ dice: '3d6', type: 'fire', label: 'Burning Hands' }]);
+  });
+
+  it('l1SpellsForSheet splits by class list', () => {
+    const { own, others } = l1SpellsForSheet(sheet({ className: 'Cleric', level: 3 }));
+    expect(own.some((c) => c.name === 'Healing Word')).toBe(true);
+    expect(own.some((c) => c.name === 'Burning Hands')).toBe(false);
+    expect(others.some((c) => c.name === 'Burning Hands')).toBe(true);
+  });
+
+  it('every L1 spell has a unique id and guidance', () => {
+    const ids = new Set(SRD_L1_SPELLS.map((c) => c.id));
+    expect(ids.size).toBe(SRD_L1_SPELLS.length);
+    expect(SRD_L1_SPELLS.every((c) => c.level === 1 && c.guidance.length > 10)).toBe(true);
+  });
 });

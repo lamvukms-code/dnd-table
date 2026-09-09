@@ -15,6 +15,7 @@ import {
   fmtMod,
   initiativeBonus,
   cantripsForSheet,
+  l1SpellsForSheet,
   casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
@@ -1447,6 +1448,8 @@ const CASTER_LABEL: Record<CasterType, string> = {
 const CAST_KIND_LABEL: Record<Spell['castKind'], string> = {
   attack: 'Đòn đánh phép',
   save: 'Bắt cứu nguy (save)',
+  heal: 'Hồi máu (heal)',
+  damage: 'Sát thương thẳng (tự trúng)',
   rider: 'Cộng dmg (rider)',
   utility: 'Tiện ích / hiệu ứng',
 };
@@ -1604,7 +1607,20 @@ function SpellsTab({ draft, commit }: EditorCtx) {
           </div>
         ))}
 
-      <CantripPicker draft={draft} spells={spells} onAdd={(sp) => set({ spells: [...spells, sp] })} />
+      <SpellDefPicker
+        draft={draft}
+        spells={spells}
+        onAdd={(sp) => set({ spells: [...spells, sp] })}
+        list={cantripsForSheet(draft)}
+        label="+ Cantrip SRD (5e 2024)"
+      />
+      <SpellDefPicker
+        draft={draft}
+        spells={spells}
+        onAdd={(sp) => set({ spells: [...spells, sp] })}
+        list={l1SpellsForSheet(draft)}
+        label="+ Phép cấp 1 SRD (combat + hồi máu)"
+      />
 
       <button
         onClick={() =>
@@ -1632,30 +1648,46 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   );
 }
 
-function CantripPicker({
+const SPELL_DEF_HINT = (c: {
+  castKind: Spell['castKind'];
+  damageDie?: string;
+  fixedDamage?: string;
+  heal?: string;
+  damageType?: string;
+}) => {
+  const dmg = c.fixedDamage ?? c.damageDie;
+  if (c.castKind === 'heal') return c.heal ? ` (hồi ${c.heal}+mod)` : '';
+  return dmg ? ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})` : '';
+};
+
+function SpellDefPicker({
   draft,
   spells,
   onAdd,
+  list,
+  label,
 }: {
   draft: CharacterSheet;
   spells: Spell[];
   onAdd: (sp: Spell) => void;
+  list: ReturnType<typeof cantripsForSheet>;
+  label: string;
 }) {
-  const { own, others } = cantripsForSheet(draft);
+  const { own, others } = list;
   const have = new Set(spells.map((s) => s.name.toLowerCase()));
-  const opt = (list: typeof own) =>
-    list
+  const opt = (defs: typeof own) =>
+    defs
       .filter((c) => !have.has(c.name.toLowerCase()))
       .map((c) => (
         <option key={c.id} value={c.id}>
           {c.combat ? '⚔ ' : '• '}
           {c.name}
-          {c.damageDie ? ` (${c.damageDie}${c.damageType ? ' ' + c.damageType : ''})` : ''}
+          {SPELL_DEF_HINT(c)}
         </option>
       ));
   return (
     <label className="cantrip-picker">
-      + Cantrip SRD (5e 2024)
+      {label}
       <select
         value=""
         onChange={(e) => {
@@ -1663,11 +1695,11 @@ function CantripPicker({
           if (def) onAdd(spellFromCantrip(def, draft, nanoIdish()));
         }}
       >
-        <option value="">— chọn cantrip —</option>
+        <option value="">— chọn —</option>
         <optgroup label="Theo nghề — combat (bán tự động)">{opt(own.filter((c) => c.combat))}</optgroup>
         <optgroup label="Theo nghề — tiện ích">{opt(own.filter((c) => !c.combat))}</optgroup>
-        <optgroup label="Cantrip khác — combat">{opt(others.filter((c) => c.combat))}</optgroup>
-        <optgroup label="Cantrip khác — tiện ích">{opt(others.filter((c) => !c.combat))}</optgroup>
+        <optgroup label="Khác — combat">{opt(others.filter((c) => c.combat))}</optgroup>
+        <optgroup label="Khác — tiện ích">{opt(others.filter((c) => !c.combat))}</optgroup>
       </select>
     </label>
   );
@@ -1778,9 +1810,25 @@ function SpellRow({
             </label>
           )}
 
-          {(sp.castKind === 'attack' || sp.castKind === 'save') && (
+          {sp.castKind === 'heal' && (
+            <label>
+              Hồi máu (cộng mod tự động)
+              <input
+                className="xd-dice"
+                placeholder="2d4"
+                value={sp.heal ?? ''}
+                onChange={(e) => onChange({ heal: e.target.value || undefined })}
+              />
+            </label>
+          )}
+
+          {(sp.castKind === 'attack' || sp.castKind === 'save' || sp.castKind === 'damage') && (
             <label className="grow">
-              {sp.castKind === 'save' ? 'Sát thương khi fail save' : 'Sát thương'}
+              {sp.castKind === 'save'
+                ? 'Sát thương khi fail save'
+                : sp.castKind === 'damage'
+                  ? 'Sát thương (tự trúng)'
+                  : 'Sát thương'}
               <ExtraDamageEditor
                 parts={sp.damage}
                 onChange={(parts) => onChange({ damage: parts })}
@@ -1841,6 +1889,18 @@ function SpellRow({
                   <option value="end-of-turn">cuối lượt</option>
                   <option value="start-of-turn">đầu lượt</option>
                 </select>
+              </label>
+              <label className="chk">
+                <input
+                  type="checkbox"
+                  checked={sp.save?.halfOnSave ?? false}
+                  onChange={(e) =>
+                    onChange({
+                      save: { ...(sp.save ?? { ability: 'wis' }), halfOnSave: e.target.checked || undefined },
+                    })
+                  }
+                />
+                Nửa dmg khi save thành công
               </label>
             </>
           )}

@@ -23,17 +23,25 @@ export interface CantripDef {
   id: string;
   name: string;
   school: string;
-  /** Lowercase class names whose spell list includes this cantrip (2024). */
+  /** Lowercase class names whose spell list includes this spell (2024). */
   classes: string[];
-  /** true => the app wires damage / save automatically. */
+  /** Spell level: 0 = cantrip (scales with character level), 1+ = leveled. */
+  level?: number;
+  /** true => the app wires damage / save / heal automatically. */
   combat: boolean;
-  castKind: SpellCastKind; // 'attack' | 'save' | 'utility'
+  castKind: SpellCastKind; // 'attack' | 'save' | 'heal' | 'damage' | 'rider' | 'utility'
   actionType?: 'action' | 'bonus';
-  /** One die, e.g. '1d10'. Scaled by count at character levels 5 / 11 / 17. */
+  /** Cantrips: one die ('1d10'), scaled by count at character levels 5 / 11 / 17. */
   damageDie?: string;
+  /** Leveled spells: the fixed base damage ('3d6'); upcast is done by hand. */
+  fixedDamage?: string;
   damageType?: string;
+  /** Healing dice for `castKind: 'heal'` ('2d4'); casting-ability mod added automatically. */
+  heal?: string;
   /** Saving throw the target rolls (for `castKind: 'save'`). */
   save?: Ability;
+  /** Leveled AoE: the target still takes half damage on a successful save. */
+  halfOnSave?: boolean;
   concentration?: boolean;
   /** Effect placed on the target (advisory badge unless the condition is wired). */
   effect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
@@ -174,51 +182,147 @@ const UTILITY: CantripDef[] = [
 
 export const SRD_CANTRIPS: CantripDef[] = [...COMBAT, ...UTILITY];
 
+const S1 = (
+  id: string,
+  name: string,
+  school: string,
+  classes: string[],
+  guidance: string,
+  extra: Partial<CantripDef> = {},
+): CantripDef => ({ id, name, school, classes, level: 1, combat: false, castKind: 'utility', guidance, ...extra });
+
+/**
+ * Level-1 spells used in combat (SRD 5.2 / 2024 mechanics paraphrased). Healing
+ * spells add the caster's spellcasting modifier automatically; damage is the
+ * base (level-1) amount — upcasting with a higher slot is done by hand.
+ */
+const L1: CantripDef[] = [
+  // --- healing ---
+  S1('healing-word', 'Healing Word', 'Abjuration', ['bard', 'cleric', 'druid'],
+    'Bonus action, tầm 60ft. Hồi 2d4 + chỉ số ra phép cho 1 mục tiêu (không phải Undead/Construct). Nâng ô: +2d4 mỗi cấp — sửa ô hồi máu tay.',
+    { combat: true, castKind: 'heal', heal: '2d4', actionType: 'bonus', range: '60ft' }),
+  S1('cure-wounds', 'Cure Wounds', 'Abjuration', ['bard', 'cleric', 'druid', 'paladin', 'ranger'],
+    'Chạm 1 mục tiêu: hồi 2d6 + chỉ số ra phép (không phải Undead/Construct). Nâng ô: +2d6 mỗi cấp.',
+    { combat: true, castKind: 'heal', heal: '2d6', range: 'Chạm' }),
+  // --- attack roll ---
+  S1('guiding-bolt', 'Guiding Bolt', 'Evocation', ['cleric'],
+    'Đòn đánh phép tầm 120ft. Trúng: 4d6 thánh, và đòn tấn công kế nhắm mục tiêu (trước cuối lượt sau của bạn) có lợi thế. Nâng ô: +1d6.',
+    { combat: true, castKind: 'attack', fixedDamage: '4d6', damageType: 'radiant', range: '120ft',
+      effect: { name: 'Guiding Bolt (đòn kế có lợi thế)', note: 'Đòn tấn công kế nhắm mục tiêu này có lợi thế', expiresInRounds: 1 } }),
+  S1('chromatic-orb', 'Chromatic Orb', 'Evocation', ['sorcerer', 'wizard'],
+    'Đòn đánh phép tầm 90ft, 3d8 — chọn loại: axit/băng/lửa/sét/độc/âm thanh (sửa loại dmg trong ô). Nâng ô: +1d8.',
+    { combat: true, castKind: 'attack', fixedDamage: '3d8', damageType: 'fire', range: '90ft' }),
+  S1('witch-bolt', 'Witch Bolt', 'Evocation', ['sorcerer', 'wizard'],
+    'Đòn đánh phép tầm 30ft, 2d12 sét, tập trung. Mỗi lượt sau dùng action gây lại 1d12 (miễn còn trong tầm 30ft). Nâng ô: +1d12 đòn đầu.',
+    { combat: true, castKind: 'attack', fixedDamage: '2d12', damageType: 'lightning', range: '30ft', concentration: true }),
+  S1('ray-of-sickness', 'Ray of Sickness', 'Necromancy', ['sorcerer', 'wizard'],
+    'Đòn đánh phép tầm 60ft. Trúng: 2d8 độc; mục tiêu chịu save CON (DM/hệ thống qua panel Hiệu ứng), thất bại → Trúng độc tới cuối lượt sau của bạn. Nâng ô: +1d8.',
+    { combat: true, castKind: 'attack', fixedDamage: '2d8', damageType: 'poison', range: '60ft',
+      effect: { name: 'Ray of Sickness (save CON hoặc Trúng độc)', condition: 'poisoned', note: 'Nếu fail save CON: Trúng độc tới cuối lượt sau của caster', expiresInRounds: 1 } }),
+  // --- auto-hit ---
+  S1('magic-missile', 'Magic Missile', 'Evocation', ['sorcerer', 'wizard'],
+    'Tự trúng (không tung đòn), tầm 120ft: 3 tia, mỗi tia 1d4+1 lực = 3d4+3. Nâng ô: +1 tia (+1d4+1). Chia tia cho nhiều mục tiêu thì ra phép lại.',
+    { combat: true, castKind: 'damage', fixedDamage: '3d4+3', damageType: 'force', range: '120ft' }),
+  // --- saving throw ---
+  S1('burning-hands', 'Burning Hands', 'Evocation', ['sorcerer', 'wizard'],
+    'Nón 15ft, save DEX, 3d6 lửa; save thành công vẫn ăn nửa. App xử 1 mục tiêu/lần. Nâng ô: +1d6.',
+    { combat: true, castKind: 'save', save: 'dex', fixedDamage: '3d6', damageType: 'fire', halfOnSave: true, range: 'Nón 15ft' }),
+  S1('thunderwave', 'Thunderwave', 'Evocation', ['bard', 'druid', 'sorcerer', 'wizard'],
+    'Khối 15ft, save CON, 2d8 âm thanh; thất bại còn bị đẩy lùi 10ft; save thành công ăn nửa, không bị đẩy. Nâng ô: +1d8.',
+    { combat: true, castKind: 'save', save: 'con', fixedDamage: '2d8', damageType: 'thunder', halfOnSave: true, range: 'Khối 15ft',
+      effect: { name: 'Thunderwave (đẩy lùi 10ft)', note: 'Bị đẩy lùi 10ft khi fail save', expiresInRounds: 1 } }),
+  S1('sleep', 'Sleep', 'Enchantment', ['bard', 'sorcerer', 'wizard'],
+    '2024: khối 5ft tầm 90ft, save WIS. Thất bại → Bất lực (Incapacitated) tới cuối lượt sau của bạn; cứu lại cuối mỗi lượt của nó. Không sát thương.',
+    { combat: true, castKind: 'save', save: 'wis', range: '90ft',
+      effect: { name: 'Sleep (Bất lực)', condition: 'incapacitated', note: 'Cứu WIS lại cuối mỗi lượt của nó', expiresInRounds: 1 } }),
+  S1('faerie-fire', 'Faerie Fire', 'Evocation', ['bard', 'druid'],
+    'Khối 20ft tầm 60ft, save DEX, tập trung 1 phút. Thất bại → phát sáng: đòn tấn công nhắm nó có lợi thế, không thể Tàng hình. App xử 1 mục tiêu/lần.',
+    { combat: true, castKind: 'save', save: 'dex', concentration: true, range: '60ft',
+      effect: { name: 'Faerie Fire (phát sáng)', note: 'Đòn tấn công nhắm mục tiêu có lợi thế; mất Tàng hình', expiresInRounds: 10 } }),
+  // --- buffs / utility (advisory) ---
+  S1('bless', 'Bless', 'Enchantment', ['cleric', 'paladin'],
+    'Tập trung 1 phút. 3 đồng minh trong 30ft: mỗi đòn tấn công & saving throw +1d4. App: nhắc thủ công — cộng 1d4 khi tung (chưa auto vì kéo dài, không phải 1 lần).',
+    { concentration: true, range: '30ft' }),
+  S1('bane', 'Bane', 'Enchantment', ['bard', 'cleric'],
+    'Tập trung 1 phút. 3 kẻ địch save CHA, thất bại → mỗi đòn tấn công & save của chúng −1d4. App: nhắc thủ công (DM trừ 1d4).',
+    { combat: true, castKind: 'save', save: 'cha', concentration: true, range: '30ft',
+      effect: { name: 'Bane (−1d4 đòn đánh & save)', note: 'Trừ 1d4 vào mọi đòn tấn công và saving throw', expiresInRounds: 10 } }),
+  S1('shield-spell', 'Shield', 'Abjuration', ['sorcerer', 'wizard'],
+    'Reaction khi bị đánh trúng / dính Magic Missile: +5 AC tới đầu lượt sau, và miễn Magic Missile. App: chỉnh "AC ghi đè" tạm hoặc ghi chú.',
+    { range: 'Bản thân' }),
+  S1('mage-armor', 'Mage Armor', 'Abjuration', ['sorcerer', 'wizard'],
+    'Chạm 1 mục tiêu không mặc giáp: AC = 13 + DEX mod, 8 giờ. App: đặt "AC ghi đè".',
+    { range: 'Chạm' }),
+];
+
+export const SRD_L1_SPELLS: CantripDef[] = L1;
+export const SRD_SPELLS: CantripDef[] = [...SRD_CANTRIPS, ...SRD_L1_SPELLS];
+
 function norm(s: string | undefined): string {
   return (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
 }
 
-/** Look up a cantrip definition by (loose) name. */
+/** Look up a spell definition (cantrip or level-1) by (loose) name. */
 export function findCantrip(name: string): CantripDef | undefined {
   const n = norm(name);
-  return SRD_CANTRIPS.find((c) => norm(c.name) === n);
+  return SRD_SPELLS.find((c) => norm(c.name) === n);
 }
 
-/**
- * The cantrips split by whether the sheet's class list grants them. `others` is
- * every remaining SRD cantrip (still addable — e.g. via a feat or subclass).
- */
-export function cantripsForSheet(sheet: CharacterSheet): { own: CantripDef[]; others: CantripDef[] } {
+/** Split a spell-def list by whether the sheet's class list grants each entry. */
+export function spellDefsForSheet(
+  sheet: CharacterSheet,
+  list: CantripDef[],
+): { own: CantripDef[]; others: CantripDef[] } {
   const names = sheetClasses(sheet)
     .map((c) => (c.name ?? '').toLowerCase().trim())
     .filter(Boolean);
   const own: CantripDef[] = [];
   const others: CantripDef[] = [];
-  for (const def of SRD_CANTRIPS) {
+  for (const def of list) {
     const match = def.classes.some((cl) => names.some((n) => n.includes(cl) || cl.includes(n)));
     (match ? own : others).push(def);
   }
   return { own, others };
 }
 
-/** Build a ready-to-add spell from a cantrip, damage scaled to the sheet's level. */
+/** Cantrips split by the sheet's class list (`others` = still addable via feat/subclass). */
+export function cantripsForSheet(sheet: CharacterSheet) {
+  return spellDefsForSheet(sheet, SRD_CANTRIPS);
+}
+/** Level-1 SRD spells split by the sheet's class list. */
+export function l1SpellsForSheet(sheet: CharacterSheet) {
+  return spellDefsForSheet(sheet, SRD_L1_SPELLS);
+}
+
+/** The base damage parts for a spell def, scaled for cantrips / fixed for leveled. */
+function defDamageParts(def: CantripDef, sheet: CharacterSheet): DamagePart[] | undefined {
+  if (def.fixedDamage) return [{ dice: def.fixedDamage, type: def.damageType ?? '', label: def.name }];
+  if (def.damageDie) {
+    return [{ dice: scaleCantripDie(def.damageDie, totalLevelOf(sheet)), type: def.damageType ?? '', label: def.name }];
+  }
+  return undefined;
+}
+
+/** Build a ready-to-add spell from a def, damage scaled/fixed for the sheet. */
 export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: string): Spell {
-  const scaled = def.damageDie ? scaleCantripDie(def.damageDie, totalLevelOf(sheet)) : undefined;
-  const damage: DamagePart[] | undefined = scaled
-    ? [{ dice: scaled, type: def.damageType ?? '', label: def.name }]
-    : undefined;
-  const wired = def.castKind === 'attack' || def.castKind === 'save';
+  const damage = defDamageParts(def, sheet);
+  const wired =
+    def.castKind === 'attack' || def.castKind === 'save' || def.castKind === 'damage';
   return {
     id,
     name: def.name,
-    level: 0,
+    level: def.level ?? 0,
     school: def.school,
     prepared: true,
     concentration: def.concentration ?? false,
     castKind: def.castKind,
     actionType: def.actionType ?? 'action',
     damage: wired ? damage : undefined,
-    save: def.castKind === 'save' && def.save ? { ability: def.save } : undefined,
+    heal: def.castKind === 'heal' ? def.heal : undefined,
+    save:
+      def.castKind === 'save' && def.save
+        ? { ability: def.save, halfOnSave: def.halfOnSave || undefined }
+        : undefined,
     effect: def.rollBonus
       ? { name: `${def.name} (+${def.rollBonus.dice})`, note: def.guidance, rollBonus: def.rollBonus }
       : def.effect
