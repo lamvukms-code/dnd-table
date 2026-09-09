@@ -84,6 +84,59 @@ export function carryCapacity(sheet: CharacterSheet): number {
 /** Attunement slots a character has (5e: 3). */
 export const ATTUNEMENT_SLOTS = 3;
 
+/** Feet represented by one grid cell (5e standard). */
+export const FEET_PER_CELL = 5;
+
+/** Distance in feet between two grid positions (5e: every square is 5 ft — Chebyshev). */
+export function gridFeet(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.round(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y))) * FEET_PER_CELL;
+}
+
+/**
+ * A point on the segment from `anchor` toward `target`, no farther than
+ * `maxFeet` from the anchor (used to clamp a token's move to its speed).
+ */
+export function clampToRange(
+  anchor: { x: number; y: number },
+  target: { x: number; y: number },
+  maxFeet: number,
+): { x: number; y: number } {
+  const feet = gridFeet(anchor, target);
+  if (feet <= maxFeet) return { x: target.x, y: target.y };
+  const cells = maxFeet / FEET_PER_CELL;
+  const cheb = Math.max(Math.abs(target.x - anchor.x), Math.abs(target.y - anchor.y));
+  const t = cheb === 0 ? 0 : cells / cheb;
+  return { x: anchor.x + (target.x - anchor.x) * t, y: anchor.y + (target.y - anchor.y) * t };
+}
+
+/** Whether a token currently has the Grappled condition (from an effect). */
+export function tokenIsGrappled(token: Pick<Token, 'effects'> | undefined): boolean {
+  return (token?.effects ?? []).some(
+    (e) => e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name),
+  );
+}
+
+/** Resolve a token's walking speed (ft): linked sheet, else stat-block, else 30; 0 if grappled. */
+export function walkSpeed(
+  sheetSpeed: number | undefined,
+  statblockSpeed: number | undefined,
+  grappled: boolean,
+): number {
+  if (grappled) return 0;
+  return sheetSpeed ?? statblockSpeed ?? 30;
+}
+
+/** Parse a range / reach string ("120 ft", "20/60 ft", "Nón 15ft", "Chạm") to feet. */
+export function parseRangeFeet(text: string | undefined): number {
+  if (!text) return 0;
+  const t = text.toLowerCase();
+  if (/chạm|touch|bản thân|self/.test(t)) return 5;
+  const m = t.match(/(\d+)\s*(?:\/\s*\d+)?\s*(?:ft|feet|foot|')/);
+  if (m) return Number(m[1]);
+  const n = t.match(/(\d+)/);
+  return n ? Number(n[1]) : 0;
+}
+
 /** How many inventory items the character is currently attuned to. */
 export function attunementCount(sheet: CharacterSheet): number {
   return sheet.inventory.reduce((n, it) => n + (it.attuned ? 1 : 0), 0);
@@ -117,6 +170,7 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         damage,
         damageType: it.damageType || '',
         extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
+        range: it.rangeText || '5 ft',
         source: 'weapon' as const,
         attackKind: 'weapon' as const,
       };
@@ -137,6 +191,7 @@ export function unarmedAction(sheet: CharacterSheet): SheetAction {
     attackBonus: strMod + sheet.proficiencyBonus,
     damage: String(Math.max(1, 1 + strMod)),
     damageType: 'bludgeoning',
+    range: '5 ft',
     source: 'weapon',
     attackKind: 'weapon',
     description: '5e 2024: 1 + STR mod đập. Có thể thay bằng Grapple / Shove.',
@@ -361,6 +416,7 @@ export function monkUnarmedAction(sheet: CharacterSheet): SheetAction | null {
     attackBonus: toHit,
     damage: dmg,
     damageType: 'bludgeoning',
+    range: '5 ft',
     source: 'weapon',
     attackKind: 'weapon',
   };
@@ -838,6 +894,7 @@ export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
     saveProficiencies: [...sb.saveProficiencies],
     skills: sb.skills.map((s) => ({ ...s })),
     initiativeMod: statblockInitiativeMod(sb),
+    speed: sb.speed,
     actions: sb.actions.map((a) => ({ ...a })),
     traits: sb.traits.map((t) => ({ ...t })),
     defenses: sb.defenses ? { ...sb.defenses } : undefined,

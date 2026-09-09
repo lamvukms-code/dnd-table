@@ -149,5 +149,7 @@ export function createToken(partial: Partial<Token>): Token {
     cover: partial.cover ?? 'none',
     effects: partial.effects ?? [],
     concentration: partial.concentration ?? null,
+    turnAnchor: partial.turnAnchor ?? null,
+    extraMove: partial.extraMove ?? 0,
   };
 }

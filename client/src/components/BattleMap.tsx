@@ -5,11 +5,17 @@ import {
   CONDITION_VI,
   CONDITIONS,
   d20Check,
+  FEET_PER_CELL,
   fmtMod,
+  gridFeet,
+  parseRangeFeet,
   RIDER_PRESETS,
   statblockDamageParts,
+  tokenIsGrappled,
   tokenSaveBonus,
+  walkSpeed,
   type ActiveEffect,
+  type CharacterSheet,
   type ConditionType,
   type CoverLevel,
   type Token,
@@ -22,6 +28,12 @@ import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
 
 const CELL = 56; // display px per grid cell
+
+/** A token's walking speed for the client move tracker. */
+function tokenWalkSpeed(token: Token, sheets: CharacterSheet[]): number {
+  const sheet = sheets.find((s) => s.tokenId === token.id);
+  return walkSpeed(sheet?.speed, token.statblock?.speed, tokenIsGrappled(token));
+}
 const SIZE_CELLS: Record<TokenSize, number> = {
   tiny: 0.5,
   small: 1,
@@ -41,6 +53,34 @@ export function BattleMap() {
   const cancelCast = useStore((s) => s.cancelCast);
   const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
   const { map, tokens, diceTray } = room;
+  const sheets = room.sheets;
+
+  // --- movement tracker (active combatant) ---
+  const activeEntry = room.initiative.running
+    ? room.initiative.entries.find((e) => e.isActive)
+    : undefined;
+  const activeToken = activeEntry?.tokenId
+    ? tokens.find((t) => t.id === activeEntry.tokenId)
+    : undefined;
+  const moveInfo = activeToken
+    ? (() => {
+        const anchor = activeToken.turnAnchor ?? { x: activeToken.x, y: activeToken.y };
+        const budget = tokenWalkSpeed(activeToken, sheets) + (activeToken.extraMove ?? 0);
+        const used = gridFeet(anchor, { x: activeToken.x, y: activeToken.y });
+        return { anchor, budget, used, cells: budget / FEET_PER_CELL };
+      })()
+    : null;
+
+  // --- spell range ring (while a cast is armed) ---
+  const castRing = castingSpell
+    ? (() => {
+        const casterTokenId = sheets.find((s) => s.id === castingSpell.sheetId)?.tokenId;
+        const tk = casterTokenId ? tokens.find((t) => t.id === casterTokenId) : undefined;
+        const feet = parseRangeFeet(castingSpell.spell.range);
+        if (!tk || !feet) return null;
+        return { tk, feet, radiusPx: (feet / FEET_PER_CELL) * CELL };
+      })()
+    : null;
 
   useEffect(() => {
     if (!castingSpell) return;
@@ -192,7 +232,9 @@ export function BattleMap() {
 
       {castingSpell && (
         <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
-          🪄 Ra <strong>{castingSpell.spell.name}</strong> — bấm token mục tiêu (Esc / bấm đây để hủy)
+          🪄 Ra <strong>{castingSpell.spell.name}</strong>
+          {castingSpell.spell.range ? ` · tầm ${castingSpell.spell.range}` : ''} — bấm token mục
+          tiêu (Esc / bấm đây để hủy)
         </div>
       )}
 
@@ -271,6 +313,40 @@ export function BattleMap() {
             <div
               className="snap-ghost"
               style={{ left: ghost.x * CELL, top: ghost.y * CELL, width: CELL, height: CELL }}
+            />
+          )}
+
+          {moveInfo && activeToken && (
+            <>
+              <div
+                className={`move-range ${moveInfo.used > moveInfo.budget ? 'over' : ''}`}
+                style={{
+                  left: (moveInfo.anchor.x - moveInfo.cells) * CELL,
+                  top: (moveInfo.anchor.y - moveInfo.cells) * CELL,
+                  width: (SIZE_CELLS[activeToken.size] + moveInfo.cells * 2) * CELL,
+                  height: (SIZE_CELLS[activeToken.size] + moveInfo.cells * 2) * CELL,
+                }}
+              />
+              <div
+                className="move-badge"
+                style={{ left: activeToken.x * CELL, top: activeToken.y * CELL - 20 }}
+              >
+                {moveInfo.used}/{moveInfo.budget} ft
+              </div>
+            </>
+          )}
+
+          {castRing && (
+            <div
+              className="cast-range"
+              style={{
+                left:
+                  (castRing.tk.x + SIZE_CELLS[castRing.tk.size] / 2) * CELL - castRing.radiusPx,
+                top:
+                  (castRing.tk.y + SIZE_CELLS[castRing.tk.size] / 2) * CELL - castRing.radiusPx,
+                width: castRing.radiusPx * 2,
+                height: castRing.radiusPx * 2,
+              }}
             />
           )}
 
@@ -671,10 +747,13 @@ function TokenInspector({
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
   const rollDice = useStore((s) => s.rollDice);
+  const resetTokenMove = useStore((s) => s.resetTokenMove);
+  const tokenDash = useStore((s) => s.tokenDash);
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const sheets = useStore((s) => s.room?.sheets ?? []);
+  const initiative = useStore((s) => s.room?.initiative);
   const mySheets = sheets.filter((s) => isDm || s.ownerId === meId);
   const linkedSheet = sheets.find((s) => s.tokenId === token.id) ?? null;
   const [atkName, setAtkName] = useState('Đòn đánh');
@@ -691,6 +770,16 @@ function TokenInspector({
   const sb = token.statblock;
   const canSeeStatblock = sb && (isDm || token.controllerId === meId);
   const sbTargetName = tokens.find((t) => t.id === sbTargetId)?.label ?? '';
+
+  const canControl = isDm || token.controllerId === meId;
+  const isActiveTurn =
+    !!initiative?.running &&
+    initiative.entries.find((e) => e.isActive)?.tokenId === token.id;
+  const speed = tokenWalkSpeed(token, sheets);
+  const moveBudget = speed + (token.extraMove ?? 0);
+  const moveUsed = token.turnAnchor
+    ? gridFeet(token.turnAnchor, { x: token.x, y: token.y })
+    : 0;
 
   function patch(p: Partial<Token>) {
     send({ t: 'updateToken', id: token.id, patch: p });
@@ -746,6 +835,29 @@ function TokenInspector({
           </select>
         </label>
       )}
+      {canControl && (
+        <div className={`insp-move ${moveUsed > moveBudget ? 'over' : ''}`}>
+          <span title="Đã di chuyển trong lượt này / tốc độ">
+            🏃 {isActiveTurn ? `${moveUsed}/${moveBudget} ft` : `Tốc độ ${speed} ft`}
+            {tokenIsGrappled(token) ? ' · bị ghì (0)' : ''}
+          </span>
+          {isActiveTurn && (
+            <>
+              <button className="link" onClick={() => tokenDash(token.id)} title="Dùng action Dash">
+                ⚡ Dash
+              </button>
+              <button
+                className="link"
+                onClick={() => resetTokenMove(token.id)}
+                title="Trả token về vị trí đầu lượt"
+              >
+                ↺ Reset
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="insp-grid">
         <label>
           HP

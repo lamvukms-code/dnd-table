@@ -177,6 +177,14 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                       onChange={(v) => setItem(it.id, { damageType: v ?? '' })}
                     />
                   </label>
+                  <label>
+                    Tầm
+                    <input
+                      placeholder="5 ft / 20/60 ft"
+                      value={it.rangeText ?? ''}
+                      onChange={(e) => setItem(it.id, { rangeText: e.target.value || undefined })}
+                    />
+                  </label>
                   <label className="chk">
                     <input
                       type="checkbox"

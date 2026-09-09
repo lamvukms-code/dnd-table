@@ -110,6 +110,10 @@ interface StoreState {
   /** DM: silently roll initiative for a group of tokens straight onto the bar. */
   rollInitiativeGroup: (tokenIds: string[]) => void;
   setRole: (participantId: string, role: 'dm' | 'player') => void;
+  /** Snap a token back to where it was at the start of its turn. */
+  resetTokenMove: (id: string) => void;
+  /** Grant the token an extra Speed of movement this turn (Dash). */
+  tokenDash: (id: string) => void;
   me: () => Participant | undefined;
   isDm: () => boolean;
   dddiceActive: () => boolean;
@@ -210,6 +214,8 @@ export const useStore = create<StoreState>((set, get) => {
     send: (action) => rawSend(action),
 
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
+    resetTokenMove: (id) => rawSend({ t: 'resetTokenMove', id }),
+    tokenDash: (id) => rawSend({ t: 'tokenDash', id }),
 
     damageRoll: async (label, damageParts, targetTokenId, attacker) => {
       let external: number[] | undefined;

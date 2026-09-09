@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-09-09
+
+### Added
+
+- **Movement tracker.** When initiative is running, the active token shows a
+  green reach square from where it started its turn and a "used/budget ft"
+  badge. On a player's turn the server **clamps** their token's move to its
+  Speed (`walkSpeed` — linked sheet, else stat block, else 30; Grappled → 0);
+  off-turn moves in combat are blocked. The token inspector has **⚡ Dash**
+  (grant one more Speed of movement this turn) and **↺ Reset** (snap the token
+  back to its turn-start position). New `Token.turnAnchor` / `Token.extraMove`,
+  actions `tokenDash` / `resetTokenMove`, `TokenStatblock.speed`.
+- **Range display.** Arming a spell cast (🪄) draws a dashed range circle around
+  the caster's token and shows the range in the cast banner (`parseRangeFeet`).
+  Weapon / action rows show their reach ("· tầm 5 ft"); weapons get a `rangeText`
+  field, `SheetAction` a `range` field, editable in the Equipment / action editors.
+
 ## [0.30.0] - 2026-09-09
 
 ### Added
@@ -780,7 +797,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.27.0...v0.28.0

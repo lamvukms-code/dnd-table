@@ -12,6 +12,7 @@ import {
   SCHEMA_VERSION,
 } from './factory.js';
 import {
+  clampToRange,
   concentrationDc,
   conditionAutoCrit,
   coverAcBonus,
@@ -20,6 +21,8 @@ import {
   homebrewCritDamage,
   mergeDefenses,
   resolveAttack,
+  tokenIsGrappled,
+  walkSpeed,
   resolveDamageParts,
   rollNotation,
   targetRiderParts,
@@ -65,6 +68,8 @@ export class Room {
             scene.tokens.forEach((t) => {
               t.effects ??= [];
               t.concentration ??= null;
+              t.turnAnchor ??= null;
+              t.extraMove ??= 0;
             });
           }
           return migrated;
@@ -311,6 +316,44 @@ export class Room {
       keep.push(e);
     }
     token.effects = keep;
+  }
+
+  /** A token's walking speed (ft): linked sheet, else stat block, else 30. Grappled → 0. */
+  private tokenSpeed(token: Token): number {
+    const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
+    return walkSpeed(sheet?.speed, token.statblock?.speed, tokenIsGrappled(token));
+  }
+
+  /** After an initiative change: anchor the active token's position for the move tracker. */
+  private syncTurnAnchors(): void {
+    const active = this.state.initiative.entries.find((e) => e.isActive);
+    for (const scene of this.state.scenes) {
+      for (const t of scene.tokens) {
+        if (this.state.initiative.running && active?.tokenId === t.id) {
+          if (!t.turnAnchor) t.turnAnchor = { x: t.x, y: t.y };
+        } else if (t.turnAnchor) {
+          t.turnAnchor = null;
+          t.extraMove = 0;
+        }
+      }
+    }
+  }
+
+  /** Whether `actor` may move `token` right now, and (for players in combat) how far. */
+  private moveGate(
+    actor: Participant,
+    token: Token,
+    next: { x: number; y: number },
+  ): { ok: true; pos: { x: number; y: number } } | { ok: false; msg: string } {
+    if (actor.role === 'dm') return { ok: true, pos: next };
+    if (!this.state.initiative.running) return { ok: true, pos: next };
+    const active = this.state.initiative.entries.find((e) => e.isActive);
+    if (!active || active.tokenId !== token.id) {
+      return { ok: false, msg: 'Chưa tới lượt token này — không di chuyển được' };
+    }
+    const anchor = token.turnAnchor ?? { x: token.x, y: token.y };
+    const budget = this.tokenSpeed(token) + (token.extraMove ?? 0);
+    return { ok: true, pos: clampToRange(anchor, next, budget) };
   }
 
   /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
@@ -728,7 +771,46 @@ export class Room {
         if (!canMove) return 'Bạn không điều khiển token này';
         const patch = { ...action.patch };
         if (!isDm) delete patch.hidden;
+        // Movement tracker: on their turn a player can only move up to Speed
+        // (+ Dash); off-turn moves in combat are blocked. The server clamps.
+        const movingPos = typeof patch.x === 'number' || typeof patch.y === 'number';
+        if (movingPos && !isDm) {
+          const next = { x: patch.x ?? token.x, y: patch.y ?? token.y };
+          const gate = this.moveGate(actor, token, next);
+          if (!gate.ok) return gate.msg;
+          patch.x = gate.pos.x;
+          patch.y = gate.pos.y;
+        }
         Object.assign(token, patch);
+        this.touch();
+        break;
+      }
+
+      case 'resetTokenMove': {
+        const token = this.state.tokens.find((tk) => tk.id === action.id);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        if (token.turnAnchor) {
+          token.x = token.turnAnchor.x;
+          token.y = token.turnAnchor.y;
+          this.touch();
+        }
+        break;
+      }
+
+      case 'tokenDash': {
+        const token = this.state.tokens.find((tk) => tk.id === action.id);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        token.extraMove = (token.extraMove ?? 0) + this.tokenSpeed(token);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${token.label}: Dash (+${this.tokenSpeed(token)} ft di chuyển lượt này)`,
+          result: externalRollResult('', { total: 0, faces: [] }),
+        });
         this.touch();
         break;
       }
@@ -925,6 +1007,7 @@ export class Room {
         this.state.initiative.turnIndex = 0;
         this.state.initiative.running = entries.length > 0;
         markActive(this.state.initiative);
+        this.syncTurnAnchors();
         this.touch();
         break;
       }
@@ -968,6 +1051,7 @@ export class Room {
         this.state.initiative.round = 1;
         this.state.initiative.turnIndex = 0;
         markActive(this.state.initiative);
+        this.syncTurnAnchors();
         this.touch();
         break;
       }
@@ -983,6 +1067,7 @@ export class Room {
         if (ending) this.processTurnEffects(ending, 'end-of-turn');
         const starting = startingId && this.state.tokens.find((t) => t.id === startingId);
         if (starting) this.processTurnEffects(starting, 'start-of-turn');
+        this.syncTurnAnchors();
         this.touch();
         break;
       }
@@ -990,6 +1075,7 @@ export class Room {
       case 'initPrev': {
         if (!isDm) return 'Chỉ DM được lùi lượt';
         advanceTurn(this.state.initiative, -1);
+        this.syncTurnAnchors();
         this.touch();
         break;
       }
@@ -997,6 +1083,7 @@ export class Room {
       case 'initReset': {
         if (!isDm) return 'Chỉ DM được reset initiative';
         this.state.initiative = { entries: [], round: 1, turnIndex: 0, running: false };
+        this.syncTurnAnchors();
         this.touch();
         break;
       }

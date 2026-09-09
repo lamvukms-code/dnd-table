@@ -765,6 +765,46 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
   pointer-events: none;
   z-index: 1;
 }
+.move-range {
+  position: absolute;
+  border: 2px solid rgba(90, 200, 120, 0.7);
+  background: rgba(90, 200, 120, 0.1);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+.move-range.over { border-color: rgba(230, 120, 120, 0.8); background: rgba(230, 120, 120, 0.12); }
+.move-badge {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(20, 30, 25, 0.85);
+  color: #cfe;
+  padding: 0 4px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+}
+.cast-range {
+  position: absolute;
+  border: 2px dashed rgba(160, 108, 213, 0.7);
+  background: rgba(160, 108, 213, 0.08);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+}
+.insp-move {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+  padding: 3px 0;
+  color: var(--muted);
+}
+.insp-move.over { color: #e88; }
+.ar-range, .sd-detail .ar-range { color: var(--muted); font-style: italic; }
+.ae-range { width: 60px; }
 .scene-bar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }
 .scene-chip {
   display: inline-flex; align-items: center; gap: 2px;

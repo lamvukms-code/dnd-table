@@ -90,6 +90,9 @@ export type ClientAction =
   | { t: 'copyToken'; id: string; x: number; y: number }
   | { t: 'updateToken'; id: string; patch: Partial<Token> }
   | { t: 'removeToken'; id: string }
+  // movement tracker: snap a token back to its turn-start position / grant Dash
+  | { t: 'resetTokenMove'; id: string }
+  | { t: 'tokenDash'; id: string }
   | { t: 'initSet'; entries: InitiativeEntry[] }
   | { t: 'initRollAll' }
   | { t: 'initNext' }

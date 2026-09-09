@@ -72,6 +72,8 @@ export interface SheetAction {
   extraDamage?: DamagePart[]; // additional damage sources on this action
   save?: { ability: Ability; dc: number }; // present -> it forces a saving throw
   notation?: string; // a generic roll (healing / utility), e.g. "2d4+2"
+  /** Reach / range text for display, e.g. "5 ft", "20/60 ft", "120 ft". */
+  range?: string;
   description?: string;
   source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
   /** For attacks: whether it's a physical strike or a spell attack. Drives which
@@ -132,6 +134,8 @@ export interface InventoryItem {
   damage?: string; // base damage dice only, e.g. "1d8"
   damageType?: string;
   weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
+  /** Reach / range text for the attack, e.g. "5 ft" (melee), "20/60 ft" (thrown). */
+  rangeText?: string;
   /** Adamantine armour: while equipped, the wearer's token can't be crit. */
   grantsCritImmune?: boolean;
   /** Magic item the character is currently attuned to (max 3 — `ATTUNEMENT_SLOTS`). */
@@ -429,6 +433,7 @@ export interface TokenStatblock {
   saveProficiencies: Ability[];
   skills: { skill: string; bonus: number }[];
   initiativeMod: number;
+  speed?: number; // walking speed, ft
   actions: SheetAction[];
   traits: StatblockTrait[];
   defenses?: Defenses;
@@ -455,6 +460,10 @@ export interface Token {
   cover?: CoverLevel; // battlefield cover — benefit auto-applied
   effects?: ActiveEffect[]; // spell conditions, riders, recurring saves
   concentration?: Concentration | null; // the spell this token is concentrating on
+  /** Movement tracker: position at the start of this token's current turn. */
+  turnAnchor?: { x: number; y: number } | null;
+  /** Extra movement feet this turn (Dash). Reset when the turn changes. */
+  extraMove?: number;
 }
 
 export interface BattleMap {

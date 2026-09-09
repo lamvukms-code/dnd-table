@@ -775,6 +775,7 @@ function ActionRow({
           : action.save
             ? `DC ${action.save.dc} ${action.save.ability.toUpperCase()}`
             : action.notation || action.description || ''}
+        {action.range ? <em className="ar-range"> · tầm {action.range}</em> : null}
       </span>
       {isAttack && targetId && (
         <button
@@ -872,6 +873,12 @@ function ActionEditor({ draft, commit }: EditorCtx) {
             placeholder="roll khác"
             value={a.notation ?? ''}
             onChange={(e) => upd(a.id, { notation: e.target.value || undefined })}
+          />
+          <input
+            className="ae-range"
+            placeholder="tầm"
+            value={a.range ?? ''}
+            onChange={(e) => upd(a.id, { range: e.target.value || undefined })}
           />
           <FormulaHint notation={a.damage || a.notation || ''} />
           <button className="link" onClick={() => commit({ ...draft, actions: draft.actions.filter((x) => x.id !== a.id) })}>

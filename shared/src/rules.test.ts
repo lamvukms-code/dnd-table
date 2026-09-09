@@ -27,7 +27,12 @@ import {
   ATTUNEMENT_SLOTS,
   attackKindOf,
   attunementCount,
+  clampToRange,
+  gridFeet,
   monkFocusMax,
+  parseRangeFeet,
+  tokenIsGrappled,
+  walkSpeed,
   monkUnarmedAction,
   pendingRollBonus,
   riderParts,
@@ -672,6 +677,39 @@ describe('currency & weight', () => {
       currency: { pp: 0, gp: 100, ep: 0, sp: 0, cp: 0 },
     });
     expect(carriedWeight(s)).toBe(6 + 2); // 6 lb items + 100 coins / 50
+  });
+
+  it('gridFeet is Chebyshev × 5; clampToRange caps distance', () => {
+    expect(gridFeet({ x: 0, y: 0 }, { x: 3, y: 1 })).toBe(15);
+    expect(gridFeet({ x: 2, y: 2 }, { x: 2, y: 2 })).toBe(0);
+    // move 6 cells (30 ft) but budget 15 ft → clamp to 3 cells along the line
+    const c = clampToRange({ x: 0, y: 0 }, { x: 6, y: 0 }, 15);
+    expect(c).toEqual({ x: 3, y: 0 });
+    // within budget → unchanged
+    expect(clampToRange({ x: 0, y: 0 }, { x: 2, y: 1 }, 30)).toEqual({ x: 2, y: 1 });
+  });
+
+  it('parseRangeFeet reads common range strings', () => {
+    expect(parseRangeFeet('120 ft')).toBe(120);
+    expect(parseRangeFeet('20/60 ft')).toBe(20);
+    expect(parseRangeFeet('Nón 15ft')).toBe(15);
+    expect(parseRangeFeet('Chạm')).toBe(5);
+    expect(parseRangeFeet('Bản thân')).toBe(5);
+    expect(parseRangeFeet(undefined)).toBe(0);
+  });
+
+  it('walkSpeed: sheet > statblock > 30; grappled = 0', () => {
+    expect(walkSpeed(25, undefined, false)).toBe(25);
+    expect(walkSpeed(undefined, 40, false)).toBe(40);
+    expect(walkSpeed(undefined, undefined, false)).toBe(30);
+    expect(walkSpeed(30, undefined, true)).toBe(0);
+  });
+
+  it('tokenIsGrappled detects the grappled condition or a grapple-named effect', () => {
+    expect(tokenIsGrappled({ effects: [{ id: 'e', name: 'x', condition: 'grappled' }] })).toBe(true);
+    expect(tokenIsGrappled({ effects: [{ id: 'e', name: 'Bị ghì (Grapple)' }] })).toBe(true);
+    expect(tokenIsGrappled({ effects: [{ id: 'e', name: 'Blessed' }] })).toBe(false);
+    expect(tokenIsGrappled(undefined)).toBe(false);
   });
 
   it('attunementCount counts attuned items; slots = 3', () => {

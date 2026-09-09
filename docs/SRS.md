@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.30.0
+- **Version:** 0.31.0
 - **Status:** Living document
 - **Last updated:** 2026-09-09
 - **Owner:** lamvukms (personal project)
@@ -397,6 +397,20 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   turn).
 - **FR-54 (P1):** Tie-breaking by DEX; drag-to-reorder.
 - **FR-55 (P1):** Condition / status tags with a duration counter per entry.
+- **FR-56 (P0, 0.31.0):** **Movement tracker.** On a running initiative the active
+  token records a `turnAnchor` (its position when the turn began). The map draws
+  a green reach square (side = `2 × Speed/5 + tokenSize` cells) and a
+  "used/budget ft" badge. `walkSpeed` = linked sheet speed, else stat-block
+  speed, else 30; Grappled → 0. **The server clamps** a player's `updateToken`
+  move to `walkSpeed + extraMove` from the anchor (`clampToRange`, Chebyshev
+  feet); off-turn moves in combat are rejected. `tokenDash` adds one Speed to
+  `extraMove`; `resetTokenMove` snaps the token back to the anchor. DM movement
+  is never gated. Anchors are re-synced (`syncTurnAnchors`) on every initiative
+  transition.
+- **FR-57 (P0, 0.31.0):** **Range display.** Arming a spell cast draws a dashed
+  range circle around the caster's token (`parseRangeFeet(spell.range)`) and puts
+  the range in the cast banner. `SheetAction.range` / `InventoryItem.rangeText`
+  drive a "· tầm N" note on action rows (derived weapons default to "5 ft").
 
 ### 3.7 Character sheets
 
