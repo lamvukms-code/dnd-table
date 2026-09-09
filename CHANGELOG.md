@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-09-09
+
+### Added
+
+- **Cantrip database (SRD 5e 2024)** — `shared/src/cantrips.ts` with paraphrased
+  mechanics (SRD 5.2, CC-BY-4.0; no spell text reproduced) and a short Vietnamese
+  guidance line per cantrip.
+- **Semi-automatic combat cantrips.** The Spell tab has a "**+ Cantrip SRD**"
+  picker, grouped by the sheet's class spell list vs. the rest and by
+  combat / utility. Picking a combat cantrip fills in the cast kind, the damage
+  dice **scaled to the character's level** (1 / 2 / 3 / 4 dice at levels
+  1 / 5 / 11 / 17), and — for save cantrips — the saving throw, so the existing
+  point-and-click cast flow just works: Fire Bolt / Eldritch Blast / Ray of
+  Frost / Shocking Grasp / Chill Touch / Produce Flame / Thorn Whip (attack),
+  Sacred Flame / Toll the Dead / Poison Spray / Acid Splash / Vicious Mockery /
+  Mind Sliver / Starry Wisp / Word of Radiance (save).
+- **Save cantrips deal damage on a failed save** — the server rolls the target's
+  save silently and, on a failure, rolls and applies the cantrip damage
+  (`spellSave` gained `damageOnFail`); 2024 cantrips deal nothing on a success.
+- A **⟳ rescale** button on cantrip rows re-rolls the damage dice count to the
+  character's current level.
+- Utility cantrips (Guidance, Mage Hand, Light, Shillelagh, …) are added with
+  their guidance text and an editable notes field; no automatic rolls.
+
 ## [0.25.0] - 2026-09-08
 
 ### Changed
@@ -659,6 +683,7 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
   and the `dndcoder` build/version-management agent.
 
 [Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...HEAD
+[0.26.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.22.0...v0.23.0

@@ -814,6 +814,37 @@ export class Room {
             faces: [d20],
           }),
         });
+        if (!pass && action.damageOnFail?.length) {
+          let rd;
+          try {
+            rd = this.rollDamageParts(action.damageOnFail, false, undefined);
+          } catch (err) {
+            return (err as Error).message;
+          }
+          const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
+          let applied = 0;
+          if (typeof target.currentHp === 'number') {
+            applied = Math.min(target.currentHp, out.totalFinal);
+            target.currentHp -= applied;
+          }
+          this.pushRoll({
+            id: nanoid(8),
+            ts: Date.now(),
+            actorId: actor.id,
+            actorName: actor.name,
+            label: `${action.label} — sát thương`,
+            result: rd.combined,
+            damage: {
+              targetTokenId: target.id,
+              targetName: target.label,
+              amount: applied,
+              raw: out.totalRaw,
+              damageType: damagePartsSummary(action.damageOnFail),
+              notes: damageBreakdownNotes(out),
+            },
+          });
+          this.maybeBreakConcentration(target, out.totalFinal);
+        }
         if (!pass && action.effectOnFail) {
           const effect: ActiveEffect = { ...action.effectOnFail, id: nanoid(8) };
           if (effect.concentration) {

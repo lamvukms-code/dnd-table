@@ -360,6 +360,7 @@ export const useStore = create<StoreState>((set, get) => {
           dc,
           label,
           sourceSheetId: sheetId,
+          damageOnFail: spell.damage && spell.damage.length ? spell.damage : undefined,
           effectOnFail: spell.effect
             ? {
                 id: '',

@@ -14,9 +14,12 @@ import {
   emptyCurrency,
   fmtMod,
   initiativeBonus,
+  cantripsForSheet,
   casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
+  rescaleCantripSpell,
+  spellFromCantrip,
   CONDITIONS,
   derivedSubclassFeatures,
   druidLevel,
@@ -1573,11 +1576,18 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 canCast={caster !== 'none'}
                 onCast={() => beginCast(draft.id, sp)}
                 onChange={(p) => upd(sp.id, p)}
+                onRescale={
+                  sp.level === 0 && rescaleCantripSpell(sp, draft)
+                    ? () => upd(sp.id, rescaleCantripSpell(sp, draft)!)
+                    : undefined
+                }
                 onDelete={() => set({ spells: spells.filter((x) => x.id !== sp.id) })}
               />
             ))}
           </div>
         ))}
+
+      <CantripPicker draft={draft} spells={spells} onAdd={(sp) => set({ spells: [...spells, sp] })} />
 
       <button
         onClick={() =>
@@ -1605,17 +1615,60 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   );
 }
 
+function CantripPicker({
+  draft,
+  spells,
+  onAdd,
+}: {
+  draft: CharacterSheet;
+  spells: Spell[];
+  onAdd: (sp: Spell) => void;
+}) {
+  const { own, others } = cantripsForSheet(draft);
+  const have = new Set(spells.map((s) => s.name.toLowerCase()));
+  const opt = (list: typeof own) =>
+    list
+      .filter((c) => !have.has(c.name.toLowerCase()))
+      .map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.combat ? '⚔ ' : '• '}
+          {c.name}
+          {c.damageDie ? ` (${c.damageDie}${c.damageType ? ' ' + c.damageType : ''})` : ''}
+        </option>
+      ));
+  return (
+    <label className="cantrip-picker">
+      + Cantrip SRD (5e 2024)
+      <select
+        value=""
+        onChange={(e) => {
+          const def = [...own, ...others].find((c) => c.id === e.target.value);
+          if (def) onAdd(spellFromCantrip(def, draft, nanoIdish()));
+        }}
+      >
+        <option value="">— chọn cantrip —</option>
+        <optgroup label="Theo nghề — combat (bán tự động)">{opt(own.filter((c) => c.combat))}</optgroup>
+        <optgroup label="Theo nghề — tiện ích">{opt(own.filter((c) => !c.combat))}</optgroup>
+        <optgroup label="Cantrip khác — combat">{opt(others.filter((c) => c.combat))}</optgroup>
+        <optgroup label="Cantrip khác — tiện ích">{opt(others.filter((c) => !c.combat))}</optgroup>
+      </select>
+    </label>
+  );
+}
+
 function SpellRow({
   sp,
   canCast,
   onCast,
   onChange,
+  onRescale,
   onDelete,
 }: {
   sp: Spell;
   canCast: boolean;
   onCast: () => void;
   onChange: (p: Partial<Spell>) => void;
+  onRescale?: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1645,6 +1698,15 @@ function SpellRow({
           onChange={(e) => onChange({ level: Math.max(0, Math.min(9, Number(e.target.value))) })}
         />
         {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
+        {onRescale && (
+          <button
+            className="link"
+            title="Cập nhật số dice sát thương theo cấp hiện tại"
+            onClick={onRescale}
+          >
+            ⟳
+          </button>
+        )}
         {canCast && (
           <button className="roll-btn strong" onClick={onCast} title="Ra phép (chọn mục tiêu)">
             🪄
@@ -1699,9 +1761,9 @@ function SpellRow({
             </label>
           )}
 
-          {sp.castKind === 'attack' && (
+          {(sp.castKind === 'attack' || sp.castKind === 'save') && (
             <label className="grow">
-              Sát thương
+              {sp.castKind === 'save' ? 'Sát thương khi fail save' : 'Sát thương'}
               <ExtraDamageEditor
                 parts={sp.damage}
                 onChange={(parts) => onChange({ damage: parts })}
@@ -1801,6 +1863,17 @@ function SpellRow({
               </label>
             </>
           )}
+
+          <label className="grow">
+            Ghi chú / hướng dẫn
+            <textarea
+              className="sr-notes"
+              rows={2}
+              value={sp.notes ?? ''}
+              placeholder="cách hoạt động, tầm, hiệu ứng phụ…"
+              onChange={(e) => onChange({ notes: e.target.value || undefined })}
+            />
+          </label>
         </div>
       )}
     </div>

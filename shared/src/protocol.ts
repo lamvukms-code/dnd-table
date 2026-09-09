@@ -61,6 +61,8 @@ export type ClientAction =
       dc: number;
       label: string;
       effectOnFail?: ActiveEffect;
+      // damage dealt only if the target fails the save (2024 cantrips: none on a success)
+      damageOnFail?: DamagePart[];
       sourceSheetId?: string;
       sourceTokenId?: string;
     }
