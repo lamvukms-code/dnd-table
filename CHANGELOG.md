@@ -6,6 +6,16 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-09
+
+### Added
+
+- **Attunement counter.** `InventoryItem.attuned` + `attunementCount(sheet)` /
+  `ATTUNEMENT_SLOTS` (3). The Equipment tab shows a "⚡ Điều hợp N/3" badge and a
+  per-item "⚡ Điều hợp" checkbox; once 3 items are attuned the checkbox on the
+  rest is disabled ("hết slot"), so a character can't exceed the 5e limit.
+  Attuned items are marked "· ⚡" in the item list.
+
 ## [0.29.0] - 2026-09-09
 
 ### Added
@@ -770,7 +780,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.26.0...v0.27.0

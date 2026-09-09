@@ -24,7 +24,9 @@ import {
   druidLevel,
   martialArtsDie,
   mergeDefenses,
+  ATTUNEMENT_SLOTS,
   attackKindOf,
+  attunementCount,
   monkFocusMax,
   monkUnarmedAction,
   pendingRollBonus,
@@ -670,5 +672,19 @@ describe('currency & weight', () => {
       currency: { pp: 0, gp: 100, ep: 0, sp: 0, cp: 0 },
     });
     expect(carriedWeight(s)).toBe(6 + 2); // 6 lb items + 100 coins / 50
+  });
+
+  it('attunementCount counts attuned items; slots = 3', () => {
+    expect(ATTUNEMENT_SLOTS).toBe(3);
+    const s = sheet({
+      inventory: [
+        item({ id: 'a', attuned: true }),
+        item({ id: 'b', attuned: true }),
+        item({ id: 'c', attuned: false }),
+        item({ id: 'd' }),
+      ],
+    });
+    expect(attunementCount(s)).toBe(2);
+    expect(attunementCount(sheet())).toBe(0);
   });
 });

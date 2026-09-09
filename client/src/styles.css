@@ -552,8 +552,10 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .currency-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: end; }
 .currency-row label { flex-direction: column; }
 .currency-row input { width: 54px; }
-.currency-total, .weight-tag { color: var(--muted); font-size: 11px; align-self: center; }
+.currency-total, .weight-tag, .attune-tag { color: var(--muted); font-size: 11px; align-self: center; }
 .weight-tag.over { color: #e88; }
+.attune-tag.full { color: var(--accent-2, #6cf); }
+.attune-tag.over { color: #e88; font-weight: 700; }
 .add-item-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
 .inventory-list { display: flex; flex-direction: column; gap: 6px; }
 .inv-item {

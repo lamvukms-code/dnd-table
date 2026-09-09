@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.29.0
+- **Version:** 0.30.0
 - **Status:** Living document
 - **Last updated:** 2026-09-09
 - **Owner:** lamvukms (personal project)
@@ -468,7 +468,11 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   proficiency bonus (if `proficient`) + `attackBonusMisc`; damage = base dice +
   ability mod + `damageBonusMisc`. Derived attacks are listed with manual ones
   and are read-only (edit the item instead).
-- **FR-63e (P1):** Attunement slots; item rarity; container grouping.
+- **FR-63e (P0, 0.30.0):** **Attunement counter.** `InventoryItem.attuned` +
+  `attunementCount(sheet)` / `ATTUNEMENT_SLOTS` (3). The Equipment tab shows a
+  "⚡ Điều hợp N/3" badge and a per-item ⚡ toggle; the toggle is disabled on
+  un-attuned items once 3 are attuned, so the 5e limit can't be exceeded. (Item
+  rarity / container grouping remain P1.)
 - **FR-63f (P1):** The map attack flow (FR-40) can pick a linked sheet's attack.
 - **FR-63g (P2):** A starting-equipment / weapon presets picker.
 - **FR-65 (P0):** Edits sync to all clients; a client mid-edit is not clobbered

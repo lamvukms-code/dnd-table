@@ -1,5 +1,7 @@
 import {
+  ATTUNEMENT_SLOTS,
   COIN_TYPES,
+  attunementCount,
   carriedWeight,
   carryCapacity,
   currencyInGp,
@@ -43,6 +45,8 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
   const weight = carriedWeight(draft);
   const capacity = carryCapacity(draft);
   const over = weight > capacity;
+  const attuned = attunementCount(draft);
+  const attuneFull = attuned >= ATTUNEMENT_SLOTS;
 
   const setItem = (id: string, patch: Partial<InventoryItem>) =>
     commit({ ...draft, inventory: draft.inventory.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
@@ -74,6 +78,12 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
         <span className={`weight-tag ${over ? 'over' : ''}`}>
           {weight}/{capacity} lb{over ? ' · quá tải' : ''}
         </span>
+        <span
+          className={`attune-tag ${attuned > ATTUNEMENT_SLOTS ? 'over' : attuneFull ? 'full' : ''}`}
+          title="Tối đa 3 vật phẩm điều hợp cùng lúc (5e). Tích ⚡ ở từng vật phẩm."
+        >
+          ⚡ Điều hợp {attuned}/{ATTUNEMENT_SLOTS}
+        </span>
       </div>
 
       <div className="add-item-row">
@@ -99,6 +109,7 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
               <span className="inv-meta">
                 {ITEM_TYPE_LABEL[it.type]}
                 {it.quantity > 1 ? ` ×${it.quantity}` : ''}
+                {it.attuned ? ' · ⚡' : ''}
               </span>
             </summary>
 
@@ -251,6 +262,16 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                 </label>
               )}
 
+              <label className="chk" title="Vật phẩm ma thuật cần điều hợp (tối đa 3)">
+                <input
+                  type="checkbox"
+                  checked={it.attuned ?? false}
+                  disabled={!it.attuned && attuneFull}
+                  onChange={(e) => setItem(it.id, { attuned: e.target.checked })}
+                />
+                ⚡ Điều hợp
+                {!it.attuned && attuneFull ? ' (hết slot)' : ''}
+              </label>
               <label className="grow">
                 Ghi chú
                 <input value={it.notes} onChange={(e) => setItem(it.id, { notes: e.target.value })} />

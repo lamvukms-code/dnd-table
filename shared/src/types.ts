@@ -134,6 +134,8 @@ export interface InventoryItem {
   weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
   /** Adamantine armour: while equipped, the wearer's token can't be crit. */
   grantsCritImmune?: boolean;
+  /** Magic item the character is currently attuned to (max 3 — `ATTUNEMENT_SLOTS`). */
+  attuned?: boolean;
   proficient?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage

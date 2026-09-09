@@ -81,6 +81,14 @@ export function carryCapacity(sheet: CharacterSheet): number {
   return sheet.abilities.str * 15;
 }
 
+/** Attunement slots a character has (5e: 3). */
+export const ATTUNEMENT_SLOTS = 3;
+
+/** How many inventory items the character is currently attuned to. */
+export function attunementCount(sheet: CharacterSheet): number {
+  return sheet.inventory.reduce((n, it) => n + (it.attuned ? 1 : 0), 0);
+}
+
 function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {
   const strMod = abilityMod(sheet.abilities.str);
   const dexMod = abilityMod(sheet.abilities.dex);
