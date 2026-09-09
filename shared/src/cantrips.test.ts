@@ -5,11 +5,14 @@ import {
   cantripsForSheet,
   findCantrip,
   l1SpellsForSheet,
+  l2SpellsForSheet,
   rescaleCantripSpell,
   scaleCantripDie,
   spellFromCantrip,
   SRD_CANTRIPS,
   SRD_L1_SPELLS,
+  SRD_L2_SPELLS,
+  SRD_SPELLS,
 } from './cantrips.js';
 import type { CharacterSheet } from './types.js';
 
@@ -154,5 +157,58 @@ describe('level-1 spells', () => {
     const ids = new Set(SRD_L1_SPELLS.map((c) => c.id));
     expect(ids.size).toBe(SRD_L1_SPELLS.length);
     expect(SRD_L1_SPELLS.every((c) => c.level === 1 && c.guidance.length > 10)).toBe(true);
+  });
+
+  it('rider spells (Hex, Hunter\'s Mark) carry a rider', () => {
+    const hex = spellFromCantrip(findCantrip('Hex')!, sheet({ className: 'Warlock' }), 'hx');
+    expect(hex.castKind).toBe('rider');
+    expect(hex.rider).toEqual({ dice: '1d6', type: 'necrotic' });
+    expect(hex.concentration).toBe(true);
+  });
+});
+
+describe('level-2 spells', () => {
+  it('every SRD spell def has a unique id, and levels 0/1/2 are all present', () => {
+    const ids = new Set(SRD_SPELLS.map((c) => c.id));
+    expect(ids.size).toBe(SRD_SPELLS.length);
+    expect(SRD_SPELLS.every((c) => c.guidance.length > 10)).toBe(true);
+    expect(new Set(SRD_SPELLS.map((c) => c.level ?? 0))).toEqual(new Set([0, 1, 2]));
+    expect(SRD_L2_SPELLS.every((c) => c.level === 2)).toBe(true);
+  });
+
+  it('Hold Person: WIS save, Paralyzed, concentration, no damage', () => {
+    const sp = spellFromCantrip(findCantrip('Hold Person')!, sheet({ className: 'Cleric', level: 5 }), 'hp');
+    expect(sp.level).toBe(2);
+    expect(sp.save).toEqual({ ability: 'wis', halfOnSave: undefined });
+    expect(sp.effect?.condition).toBe('paralyzed');
+    expect(sp.concentration).toBe(true);
+    expect(sp.damage).toBeUndefined();
+  });
+
+  it('Scorching Ray: attack, 6d6 fire', () => {
+    const sp = spellFromCantrip(findCantrip('Scorching Ray')!, sheet(), 'sr');
+    expect(sp.castKind).toBe('attack');
+    expect(sp.damage).toEqual([{ dice: '6d6', type: 'fire', label: 'Scorching Ray' }]);
+  });
+
+  it('Spiritual Weapon bakes the casting modifier into the damage', () => {
+    const s = sheet({ className: 'Cleric', level: 5, abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 18, cha: 10 } });
+    const sp = spellFromCantrip(findCantrip('Spiritual Weapon')!, s, 'sw');
+    expect(sp.damage).toEqual([{ dice: '1d8+4', type: 'force', label: 'Spiritual Weapon' }]);
+    expect(sp.actionType).toBe('bonus');
+  });
+
+  it('Moonbeam: half-on-save concentration AoE', () => {
+    const sp = spellFromCantrip(findCantrip('Moonbeam')!, sheet(), 'mb');
+    expect(sp.save).toEqual({ ability: 'con', halfOnSave: true });
+    expect(sp.concentration).toBe(true);
+    expect(sp.damage).toEqual([{ dice: '2d10', type: 'radiant', label: 'Moonbeam' }]);
+  });
+
+  it('l2SpellsForSheet splits by class list', () => {
+    const { own, others } = l2SpellsForSheet(sheet({ className: 'Druid', level: 3 }));
+    expect(own.some((c) => c.name === 'Moonbeam')).toBe(true);
+    expect(own.some((c) => c.name === 'Scorching Ray')).toBe(false);
+    expect(others.some((c) => c.name === 'Scorching Ray')).toBe(true);
   });
 });

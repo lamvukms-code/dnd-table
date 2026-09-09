@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.28.0
+- **Version:** 0.29.0
 - **Status:** Living document
 - **Last updated:** 2026-09-09
 - **Owner:** lamvukms (personal project)
@@ -176,15 +176,22 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   `spellSave.damageOnFail`, and the server rolls + applies it (vs. the target's
   defences) only on a failed save — 2024 cantrips deal nothing on a success.
   Utility cantrips are added as plain entries with an editable notes field.
-- **Level-1 combat spells** (0.28.0). The SRD spell DB (`shared/src/cantrips.ts`)
-  now also carries level-1 entries (`level`, `fixedDamage`, `heal`, `halfOnSave`).
+- **Level-1 & 2 combat spells** (0.28.0 / 0.29.0). The SRD spell DB
+  (`shared/src/cantrips.ts`, ~110 entries across cantrip / level 1 / level 2)
+  carries leveled entries (`level`, `fixedDamage`, `heal`, `halfOnSave`,
+  `addSpellMod`, `rider`, `actionType: 'reaction'`).
   `spellFromCantrip` handles `castKind` `heal` (new `heal` action — adds HP to a
   token, clamped to max), `damage` (auto-hit, e.g. Magic Missile — routed through
   the `damage` action, no attack roll), and `save` with `halfOnSave` (server
   applies `floor(dmg/2)` on a successful save — level 1+ only, cantrips still deal
   nothing). Healing adds the caster's spell mod automatically. A "+ Phép cấp 1
-  SRD" picker mirrors the cantrip picker. Bless/Shield/Mage Armor are
-  guidance-only (persistent buffs not auto-applied).
+  SRD" / "+ cấp 2 SRD" pickers mirror the cantrip picker. `addSpellMod` bakes
+  the caster's spell modifier into a leveled attack's damage (Spiritual Weapon).
+  Concentration spells whose branch doesn't place a target effect (Witch Bolt,
+  Moonbeam, Cloud of Daggers, …) drop a "Đang tập trung: X" marker on the
+  caster's own token so the one-concentration rule still fires. Buffs
+  (Bless/Bane/Shield/Mage Armor) and rare utility stay guidance-only; anything
+  not in the DB is added by hand with "+ Thêm phép".
 - **Unarmed strike** (0.28.0). `unarmedAction(sheet)` — 5e 2024 basic strike
   (1 + STR mod bludgeoning, proficient). `allActions` always includes it; a Monk
   gets `monkUnarmedAction` (Martial Arts die) instead.
@@ -653,6 +660,7 @@ resolution, mobile-first layout, offline mode, hosting our own 3D dice physics
 | 2026-09-08 | 5etools import | `parse5eToolsBestiary` (shared) converts pasted 5etools creature JSON → `Statblock`, best-effort (entry text de-tagged, attack/save parsed by regex). Imports go to the DM's git-ignored local bestiary only — no WotC/3rd-party data in the repo, per the SRD-only principle. The reference panel embeds a **user-run** 5etools mirror by URL; the app hosts nothing. |
 | 2026-09-08 | Class features | Data-driven from `CLASS_FEATURES` (Rogue, Barbarian, Monk, Warlock — levels 1–20, mechanics paraphrased from SRD 5.2 / CC-BY-4.0). `derivedClassFeatures(sheet)` — no storage, no manual entry; rendered as a read-only section. Semi-automatic: Rogue Sneak Attack is an "armed" one-shot (`sneakAttackArmed`) that `actionDamageParts` folds in and the sheet disarms; Barbarian Rage is a manual toggle (`raging`) + charge tracker (`rageUsed`) that auto-adds rage damage to weapon attacks and grants b/p/s resistance via `derivedDefenses` (never auto-ends — deliberate); Monk gets a derived unarmed-strike action (`monkUnarmedAction` in `allActions`, Martial Arts die) + Focus-point tracker (`focusUsed`) with Flurry/Patient Defense/Step-of-Wind/Stunning-Strike spend buttons; Warlock's Pact Magic is the existing spell system; Druid gets a Wild Shape uses tracker (`wildShapeUsed`, `wildShapeMax` 2/3/4). Base classes done: Rogue, Barbarian, Monk, Warlock, Druid. |
 | 2026-09-08 | Subclass features | `SubclassFeatureDef` + `derivedSubclassFeatures(sheet, defs)` in shared; a separate "Subclass features" section auto-populates by class level. Content is **not in the repo** — non-SRD subclasses (a setting the DM owns, homebrew) live in a git-ignored `client/src/data/subclasses.local.json` loaded via `import.meta.glob` and bundled at build time. `example.json` + `README.md` document the shape. `uses` field → a pip tracker (`subclassUsesMax`, `CharacterSheet.subclassUses`), short/long rest reset handled client-side. Consistent with the SRD-only principle and the bestiary pattern. |
+| 2026-09-09 | Level-2 combat spells (0.29.0) | SRD DB extended to level 2 (~35): Scorching Ray / Acid Arrow / Spiritual Weapon (attack, `addSpellMod`), Cloud of Daggers / Heat Metal (auto-hit), Shatter / Moonbeam / Flaming Sphere (half-on-save), Hold Person / Web / Blindness / Crown of Madness (save + condition), Prayer of Healing, + ~20 utility as guidance. `rider` cast kind added so Hex / Hunter's Mark are in the picker. Concentration for pure damage/attack conc. spells → a self-marker effect on the caster's token. Cantrip + L1 lists filled out (34 / 40). Rare utility stays manual. |
 | 2026-09-09 | Level-1 spells + healing (0.28.0) | SRD spell DB extended to level 1 (`heal` / `damage` / half-on-save `save` cast kinds). New `heal` action adds HP to a token (clamped to max); Magic Missile uses the `damage` action (auto-hit); `spellSave.damageHalfOnSave` → server applies `floor(dmg/2)` on a made save (leveled AoE only). Healing spells auto-add the caster's spell mod. Buffs (Bless/Bane/Shield) stay advisory. |
 | 2026-09-09 | Unarmed strike (0.28.0) | `unarmedAction` (1 + STR mod bludgeoning) always in `allActions`; Monks get the Martial Arts version instead. |
 | 2026-09-09 | Rider rework (0.28.0) | `SheetAction.attackKind` ('weapon' default / 'spell') + single `riderParts(sheet, kind)` used by both `actionDamageParts` and `spellAttackParts`. Spell-tagged rows skip weapon riders + Rage + Sneak Attack. |

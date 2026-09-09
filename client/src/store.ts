@@ -362,6 +362,26 @@ export const useStore = create<StoreState>((set, get) => {
       const castAbil = spellcastingAbilityOf(sheet);
       const castMod = castAbil ? abilityMod(sheet.abilities[castAbil]) : 0;
 
+      // Concentration spells whose branch places the concentration effect on the
+      // TARGET establish concentration there; the rest (pure damage / attack /
+      // saved-with-no-effect) need a marker on the CASTER's own token.
+      const placesConcOnTarget =
+        spell.castKind === 'rider' ||
+        ((spell.castKind === 'save' || spell.castKind === 'utility') && !!spell.effect);
+      if (spell.concentration && !placesConcOnTarget && sheet.tokenId) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId: sheet.tokenId,
+          effect: {
+            id: '',
+            name: `Đang tập trung: ${spell.name}`,
+            sourceSheetId: sheetId,
+            concentration: true,
+            note: spell.notes,
+          },
+        });
+      }
+
       if (spell.castKind === 'heal' && spell.heal) {
         const mod = castMod >= 0 ? `+${castMod}` : `${castMod}`;
         await get().healRoll(`${label} (hồi máu)`, `${spell.heal}${castMod ? mod : ''}`, targetTokenId, sheetId);

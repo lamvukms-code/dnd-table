@@ -6,6 +6,42 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-09
+
+### Added
+
+- **Level-2 combat spells, semi-automatic** — a "+ Phép cấp 2 SRD" picker
+  alongside the cantrip / level-1 ones:
+  - Attack: Scorching Ray, Melf's Acid Arrow, **Spiritual Weapon** (the casting
+    modifier is baked into the damage via the new `addSpellMod` flag).
+  - Auto-hit: Cloud of Daggers, Heat Metal.
+  - Save + half-on-hit: Shatter, Moonbeam, Flaming Sphere.
+  - Save + condition: **Hold Person** (Paralyzed — wired: auto-crit in melee),
+    Blindness/Deafness, Web (Restrained), Crown of Madness / Suggestion (Charmed),
+    with end-of-turn re-saves.
+  - Healing: Prayer of Healing. Plus ~20 common level-2 utility spells
+    (Misty Step, Invisibility, Blur, Darkness, Silence, Pass without Trace,
+    Enhance Ability, Lesser Restoration, Aid, …) as guidance entries.
+- **Concentration is now tracked for pure damage / attack concentration spells.**
+  Casting Witch Bolt, Moonbeam, Flaming Sphere, Cloud of Daggers, Heat Metal, …
+  places a "Đang tập trung: X" marker on the caster's own token, so casting a
+  second concentration spell correctly drops the first (and its effects).
+- **`rider` cast kind in the spell DB** — Hex and Hunter's Mark are now in the
+  picker (they place a target-bound damage rider, same as the quick "Đánh dấu"
+  control).
+- Spell reactions (`actionType: 'reaction'` — Hellish Rebuke, Feather Fall,
+  Shield).
+
+### Changed
+
+- **Cantrip + level-1 spell lists filled out** — cantrips: added Sorcerous Burst,
+  Thunderclap, Elementalism, Blade Ward, Friends (34 total). Level 1: added
+  Inflict Wounds, Hellish Rebuke, Arms of Hadar, Color Spray, Tasha's Hideous
+  Laughter, Command, Entangle, Grease, Hex, Hunter's Mark, Charm Person, and the
+  common utility spells (Detect Magic, Feather Fall, Longstrider, Jump, Speak
+  with Animals, Disguise Self, Silent Image, Find Familiar, …) — 40 total. The
+  long tail of rare utility spells is still added by hand with "+ Thêm phép".
+
 ## [0.28.0] - 2026-09-09
 
 ### Added
@@ -37,6 +73,8 @@ All notable changes to this project are documented here. Format follows
   attack rows no longer pick up weapon-only riders, Rage or Sneak Attack.
   `derivedActions` / `monkUnarmedAction` are tagged `attackKind: 'weapon'`.
 
+## [0.27.0] - 2026-09-09
+
 ### Added
 
 - **Weapon-attack vs. spell-attack tag on damage riders.** `DamageRider.scope`
@@ -55,6 +93,8 @@ All notable changes to this project are documented here. Format follows
 
 - Point-and-click spell attacks are labelled "(phép)" and fold in the caster's
   spell-scoped riders.
+
+## [0.26.0] - 2026-09-09
 
 ### Added
 
@@ -730,7 +770,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.25.0...v0.26.0

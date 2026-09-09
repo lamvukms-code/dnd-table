@@ -16,6 +16,7 @@ import {
   initiativeBonus,
   cantripsForSheet,
   l1SpellsForSheet,
+  l2SpellsForSheet,
   casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
@@ -1619,7 +1620,14 @@ function SpellsTab({ draft, commit }: EditorCtx) {
         spells={spells}
         onAdd={(sp) => set({ spells: [...spells, sp] })}
         list={l1SpellsForSheet(draft)}
-        label="+ Phép cấp 1 SRD (combat + hồi máu)"
+        label="+ Phép cấp 1 SRD"
+      />
+      <SpellDefPicker
+        draft={draft}
+        spells={spells}
+        onAdd={(sp) => set({ spells: [...spells, sp] })}
+        list={l2SpellsForSheet(draft)}
+        label="+ Phép cấp 2 SRD"
       />
 
       <button
@@ -1654,10 +1662,14 @@ const SPELL_DEF_HINT = (c: {
   fixedDamage?: string;
   heal?: string;
   damageType?: string;
+  rider?: { dice: string; type: string };
+  save?: string;
 }) => {
-  const dmg = c.fixedDamage ?? c.damageDie;
   if (c.castKind === 'heal') return c.heal ? ` (hồi ${c.heal}+mod)` : '';
-  return dmg ? ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})` : '';
+  if (c.castKind === 'rider' && c.rider) return ` (+${c.rider.dice} ${c.rider.type})`;
+  const dmg = c.fixedDamage ?? c.damageDie;
+  if (dmg) return ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})`;
+  return c.save ? ` (save ${c.save.toUpperCase()})` : '';
 };
 
 function SpellDefPicker({
