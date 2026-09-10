@@ -1,6 +1,6 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.33.0
+- **Version:** 0.34.0
 - **Status:** Living document
 - **Last updated:** 2026-09-10
 - **Owner:** lamvukms (personal project)
@@ -563,6 +563,22 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   is never written into `room.json`.
 - **FR-85 (P1):** Multi-select spawn; spawn N copies; drag-from-panel placement.
 - **FR-86 (P2):** A read-only shared bestiary players can browse (known monsters).
+
+### 3.11 Lore book & Homebrew tracker (0.34.0 groundwork)
+
+- **FR-95 (P1):** **PDF → text pipeline** (`scripts/extract-pdf.mjs`): per-page
+  `pdftotext` with a Ghostscript+Tesseract OCR fallback → `{ source, pageCount,
+  pages: [{page, text}], threads? }`. No book text in the repo — output is
+  git-ignored (`client/src/data/lorebook.local.json`).
+- **FR-96 (P1):** **Lore book** — DM-only search over the extracted setting book
+  (snippet + page + chapter), plus a pinned **Fate Weaving** view of the 13
+  Threads of Fate and their Narrative Touchpoints. Server serves the file from
+  `LOREBOOK_FILE`; the client fetches it lazily. Read-only.
+- **FR-97 (P1):** **Homebrew tracker** — `RoomState.homebrew: HomebrewEntry[]`
+  (`{id, name, kind, forPlayer?, rarity?, attunement?, status, description,
+  mechanics?, secret?, notes?}`), DM-only edit (`homebrewUpsert`/`homebrewRemove`,
+  like the bestiary), players see non-`secret` entries read-only.
+- See `docs/LOREBOOK.md`.
 
 ---
 

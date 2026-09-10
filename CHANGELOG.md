@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-09-10
+
+### Added
+
+- **PDF → text extraction pipeline** (`scripts/extract-pdf.mjs`): per-page text
+  via Poppler `pdftotext`, with an OCR fallback (Ghostscript + Tesseract) for
+  image-only pages. Emits a full `.txt`, a `pages.json` manifest, and a
+  `lorebook.json` (`{ source, pageCount, pages: [{page,text}], threads? }`).
+  Groundwork for the DM-only **Lore book** (fast search over a setting book you
+  own, with a pinned Fate Weaving / Threads-of-Fate view) and **Homebrew
+  tracker** screens — see `docs/LOREBOOK.md`. Book text stays out of the repo
+  (`client/src/data/lorebook.local.json` / `homebrew.local.json` git-ignored);
+  the repo ships only the script + JSON schemas (`*.example.json`).
+
 ## [0.33.0] - 2026-09-10
 
 ### Added
@@ -825,7 +839,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...v0.31.0

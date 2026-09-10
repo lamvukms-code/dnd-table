@@ -1,0 +1,26 @@
+[
+  {
+    "id": "hb-everflame-lantern",
+    "name": "Everflame Lantern",
+    "kind": "item",
+    "forPlayer": "Sabine (Rogue / Sinner)",
+    "rarity": "uncommon",
+    "attunement": true,
+    "status": "live",
+    "description": "A dented tin lantern whose flame never dies, not in wind nor water.",
+    "mechanics": "Bright light 20 ft, dim 20 ft more. Action, 1/long rest: the flame flares — each creature within 15 ft makes a DC 13 CON save or is Blinded until the end of its next turn.",
+    "secret": false,
+    "notes": "Balance: roughly Driftglobe + a once/day control burst. Revisit if it trivialises dark dungeons."
+  },
+  {
+    "id": "hb-grievous-wounds",
+    "name": "House rule: Grievous Wounds",
+    "kind": "rule",
+    "forPlayer": "",
+    "status": "draft",
+    "description": "Dropping to 0 HP leaves a lingering injury until a long rest + a Medicine check.",
+    "mechanics": "Roll on the injury table (see notes). DC 15 WIS (Medicine) during a long rest removes it.",
+    "secret": true,
+    "notes": "Trying this for the Crimson Monastery arc only. Tell players before session 4."
+  }
+]

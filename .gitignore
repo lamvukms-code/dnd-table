@@ -9,6 +9,8 @@ server/data/room.json
 server/data/bestiary.json
 server/data/uploads/
 client/src/data/subclasses.local.json
+client/src/data/lorebook.local.json
+client/src/data/homebrew.local.json
 deploy/Caddyfile
 deploy/.dnd-setup.env
 .DS_Store

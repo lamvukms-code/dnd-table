@@ -1,0 +1,30 @@
+{
+  "source": "My Setting Book.pdf",
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "pageCount": 3,
+  "pages": [
+    {
+      "page": 1,
+      "text": "Chapter 1: Wickermoor Hollow\n\nA fog-bound valley cut off from the world. The villagers keep the Old Ways…"
+    },
+    {
+      "page": 2,
+      "text": "The blacksmith, Yorgrim, hammers through the night. Few know what he buries behind the forge…"
+    },
+    {
+      "page": 3,
+      "text": "Fated Tarot Reading. If The Fool was pulled, the character's Whistle becomes an uncommon magic item…"
+    }
+  ],
+  "threads": [
+    {
+      "name": "The Fool",
+      "character": "",
+      "summary": "A story about beginnings and reckless hope. 6 Narrative Touchpoints spread across the campaign.",
+      "touchpoints": [
+        { "page": 158, "label": "Touchpoint 1 — The Call", "text": "…" },
+        { "page": 172, "label": "Touchpoint 2 — The Connection", "text": "…" }
+      ]
+    }
+  ]
+}
