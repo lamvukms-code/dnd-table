@@ -6,6 +6,24 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-09-10
+
+### Added
+
+- **Level-3 spells, semi-automatic** — a "+ Phép cấp 3 SRD" picker (~55 spells,
+  2024 mechanics paraphrased), same wiring as levels 1–2:
+  - Save + half-on-hit AoE: **Fireball**, **Lightning Bolt**, Call Lightning,
+    **Spirit Guardians**, Conjure Animals, Conjure Barrage, Wind Wall, Thunder
+    Step.
+  - Save + condition: **Fear** (Frightened), **Hypnotic Pattern**, Slow,
+    Stinking Cloud, Bestow Curse, Sleet Storm — with end-of-turn re-saves.
+  - Attack / auto damage: Vampiric Touch, Hunger of Hadar.
+  - Healing: Mass Healing Word, Aura of Vitality (bonus-action, concentration).
+  - Smite riders: Blinding Smite, Lightning Arrow.
+  - Buffs (Haste, Fly, Blink, Protection from Energy, …) and the utility long
+    tail (Counterspell, Dispel Magic, Tongues, Summon Fey/Undead, …) as guidance
+    entries. `SRD_L3_SPELLS` / `l3SpellsForSheet`.
+
 ## [0.34.0] - 2026-09-10
 
 ### Added
@@ -839,7 +857,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...v0.32.0

@@ -6,12 +6,14 @@ import {
   findCantrip,
   l1SpellsForSheet,
   l2SpellsForSheet,
+  l3SpellsForSheet,
   rescaleCantripSpell,
   scaleCantripDie,
   spellFromCantrip,
   SRD_CANTRIPS,
   SRD_L1_SPELLS,
   SRD_L2_SPELLS,
+  SRD_L3_SPELLS,
   SRD_SPELLS,
 } from './cantrips.js';
 import type { CharacterSheet } from './types.js';
@@ -168,12 +170,13 @@ describe('level-1 spells', () => {
 });
 
 describe('level-2 spells', () => {
-  it('every SRD spell def has a unique id, and levels 0/1/2 are all present', () => {
+  it('every SRD spell def has a unique id, and levels 0..3 are all present', () => {
     const ids = new Set(SRD_SPELLS.map((c) => c.id));
     expect(ids.size).toBe(SRD_SPELLS.length);
     expect(SRD_SPELLS.every((c) => c.guidance.length > 10)).toBe(true);
-    expect(new Set(SRD_SPELLS.map((c) => c.level ?? 0))).toEqual(new Set([0, 1, 2]));
+    expect(new Set(SRD_SPELLS.map((c) => c.level ?? 0))).toEqual(new Set([0, 1, 2, 3]));
     expect(SRD_L2_SPELLS.every((c) => c.level === 2)).toBe(true);
+    expect(SRD_L3_SPELLS.every((c) => c.level === 3)).toBe(true);
   });
 
   it('Hold Person: WIS save, Paralyzed, concentration, no damage', () => {
@@ -210,5 +213,45 @@ describe('level-2 spells', () => {
     expect(own.some((c) => c.name === 'Moonbeam')).toBe(true);
     expect(own.some((c) => c.name === 'Scorching Ray')).toBe(false);
     expect(others.some((c) => c.name === 'Scorching Ray')).toBe(true);
+  });
+});
+
+describe('level-3 spells', () => {
+  it('Fireball: DEX save, 8d6 fire, half on save', () => {
+    const sp = spellFromCantrip(findCantrip('Fireball')!, sheet({ className: 'Wizard', level: 5 }), 'fb');
+    expect(sp.level).toBe(3);
+    expect(sp.save).toEqual({ ability: 'dex', halfOnSave: true });
+    expect(sp.damage).toEqual([{ dice: '8d6', type: 'fire', label: 'Fireball' }]);
+    expect(sp.concentration).toBe(false);
+  });
+
+  it('Mass Healing Word: bonus-action heal', () => {
+    const sp = spellFromCantrip(findCantrip('Mass Healing Word')!, sheet({ className: 'Cleric' }), 'mhw');
+    expect(sp.castKind).toBe('heal');
+    expect(sp.heal).toBe('2d4');
+    expect(sp.actionType).toBe('bonus');
+  });
+
+  it('Spirit Guardians: WIS save half-on-save concentration + speed-halved effect', () => {
+    const sp = spellFromCantrip(findCantrip('Spirit Guardians')!, sheet({ className: 'Cleric' }), 'sg');
+    expect(sp.save).toEqual({ ability: 'wis', halfOnSave: true });
+    expect(sp.concentration).toBe(true);
+    expect(sp.damage).toEqual([{ dice: '3d8', type: 'radiant', label: 'Spirit Guardians' }]);
+    expect(sp.effect?.note).toMatch(/tốc độ/i);
+  });
+
+  it('Blinding Smite: rider spell (+3d8 radiant), concentration, bonus action', () => {
+    const sp = spellFromCantrip(findCantrip('Blinding Smite')!, sheet({ className: 'Paladin' }), 'bs');
+    expect(sp.castKind).toBe('rider');
+    expect(sp.rider).toEqual({ dice: '3d8', type: 'radiant' });
+    expect(sp.concentration).toBe(true);
+    expect(sp.actionType).toBe('bonus');
+  });
+
+  it('l3SpellsForSheet splits by class list', () => {
+    const { own, others } = l3SpellsForSheet(sheet({ className: 'Wizard', level: 5 }));
+    expect(own.some((c) => c.name === 'Fireball')).toBe(true);
+    expect(own.some((c) => c.name === 'Spirit Guardians')).toBe(false);
+    expect(others.some((c) => c.name === 'Spirit Guardians')).toBe(true);
   });
 });

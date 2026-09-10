@@ -17,6 +17,7 @@ import {
   cantripsForSheet,
   l1SpellsForSheet,
   l2SpellsForSheet,
+  l3SpellsForSheet,
   casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
@@ -1673,6 +1674,13 @@ function SpellsTab({ draft, commit }: EditorCtx) {
         onAdd={(sp) => set({ spells: [...spells, sp] })}
         list={l2SpellsForSheet(draft)}
         label="+ Phép cấp 2 SRD"
+      />
+      <SpellDefPicker
+        draft={draft}
+        spells={spells}
+        onAdd={(sp) => set({ spells: [...spells, sp] })}
+        list={l3SpellsForSheet(draft)}
+        label="+ Phép cấp 3 SRD"
       />
 
       <button
