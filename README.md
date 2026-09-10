@@ -74,6 +74,12 @@ npm run build      # build client vào client/dist
 npm start          # server phục vụ luôn client tại http://<IP>:8787
 ```
 
+### Chơi từ xa (khác mạng / khác nước)
+
+Dựng trên một VPS nhỏ chạy 24/7 — 1 link cố định + 1 mật khẩu chung, không ai
+phải cài gì. Xem [`docs/HOSTING.md`](docs/HOSTING.md). Tóm tắt: tạo droplet
+Ubuntu, dán một lệnh, xong.
+
 ## Bật xúc xắc 3D dddice
 
 1. Mở **Cài đặt** (nút ⚙ góc phải).

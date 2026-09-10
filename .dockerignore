@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+**/node_modules
+dist
+**/dist
+client/dist
+server/data
+deploy
+docs
+*.log
+coverage
+.vite
+**/*.test.ts

@@ -58,7 +58,7 @@ app.post('/upload', (req, res) => {
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));
 
-const clientDist = join(__dirname, '..', '..', 'client', 'dist');
+const clientDist = process.env.CLIENT_DIST ?? join(__dirname, '..', '..', 'client', 'dist');
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));

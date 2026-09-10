@@ -1,8 +1,8 @@
 # Software Requirements Specification — dnd-table
 
-- **Version:** 0.32.0
+- **Version:** 0.33.0
 - **Status:** Living document
-- **Last updated:** 2026-09-09
+- **Last updated:** 2026-09-10
 - **Owner:** lamvukms (personal project)
 
 ---
@@ -99,7 +99,9 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
 
 ### 2.4 Assumptions
 
-- All participants are on the same LAN or trusted VPN.
+- Participants are on the same LAN / trusted VPN, **or** reach a self-hosted VPS
+  over the internet through a reverse proxy that adds a shared password
+  (`deploy/`, 0.33.0). The app's own trust model is unchanged either way.
 - One room per server process. Running multiple games means multiple processes
   on different ports.
 - Background map images are supplied by the user as URLs they trust.
@@ -512,6 +514,26 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   crashing; migratable ones (v2+) upgrade in place.
 - **FR-72 (P1):** Named save slots / manual snapshots the DM can restore.
 - **FR-73 (P2):** Export the whole room as a downloadable file.
+
+### 3.10 Deployment (0.33.0)
+
+- **FR-90 (P0):** A **Docker image** (`Dockerfile`) builds the client and runs
+  the server, which serves the built client (`CLIENT_DIST` env) — one process,
+  one port. Data (`room.json`, `bestiary.json`, `uploads/`) lives in a `/data`
+  volume. `deploy/setup.sh` builds it on the VPS from a `git clone`; an optional
+  GitHub Actions workflow (`deploy/optional-ghcr-workflow.yml`) can publish it to
+  `ghcr.io/lamvukms-code/dnd-table` for faster updates.
+- **FR-91 (P0):** **Remote hosting** (`deploy/`): `docker-compose.yml` runs the
+  app plus **Caddy** as a TLS-terminating reverse proxy. Caddy does automatic
+  HTTPS for `<vps-ip>.sslip.io` (no domain purchase) and puts the *entire* room
+  behind **HTTP Basic Auth** with one shared credential — the app itself stays
+  auth-free (LAN-trust model unchanged); the proxy is the gate for a
+  permanently-public URL. `deploy/setup.sh` is a `curl … | sudo bash`
+  installer/updater for a fresh Ubuntu VPS (installs Docker, adds swap, prompts
+  for the shared password, `docker compose up -d --build`). Re-running it updates.
+  See `docs/HOSTING.md`.
+- **FR-92 (P1):** Optional custom domain via `SITE_ADDRESS`; optional prebuilt
+  GHCR image for faster updates.
 
 ### 3.9 Bestiary (NPC / monster stat blocks)
 

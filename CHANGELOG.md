@@ -6,6 +6,21 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-09-10
+
+### Added
+
+- **One-command remote hosting.** `Dockerfile` (client build + server in one
+  image), `deploy/docker-compose.yml` + `deploy/Caddyfile.template` — Caddy does
+  automatic HTTPS on a `<ip>.sslip.io` address (no domain needed) and gates the
+  **whole room** behind one shared HTTP Basic-Auth password (the app itself stays
+  auth-free). `deploy/setup.sh` is a `curl … | sudo bash` installer/updater for a
+  fresh Ubuntu VPS: installs Docker + git, adds swap, clones the repo, prompts
+  for the shared password, `docker compose up -d --build`; re-run to update.
+  Step-by-step Vietnamese guide in `docs/HOSTING.md`. Server reads `CLIENT_DIST`
+  for the static-file path. Optional prebuilt-image path (GHCR + GitHub Actions)
+  documented in `deploy/optional-ghcr-workflow.yml`.
+
 ## [0.32.0] - 2026-09-09
 
 ### Added
@@ -810,7 +825,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.29.0...v0.30.0

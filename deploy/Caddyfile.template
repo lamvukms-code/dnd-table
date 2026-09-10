@@ -1,0 +1,9 @@
+# Generated into ./Caddyfile by deploy/setup.sh (placeholders substituted).
+# Automatic HTTPS via Let's Encrypt; one shared password for the whole group.
+__SITE__ {
+	encode zstd gzip
+	basic_auth {
+		__USER__ __HASH__
+	}
+	reverse_proxy app:8787
+}
