@@ -217,12 +217,28 @@ describe('level-2 spells', () => {
 });
 
 describe('level-3 spells', () => {
-  it('Fireball: DEX save, 8d6 fire, half on save', () => {
+  it('Fireball: DEX save, 8d6 fire, half on save, range 150ft / area cầu 20ft', () => {
     const sp = spellFromCantrip(findCantrip('Fireball')!, sheet({ className: 'Wizard', level: 5 }), 'fb');
     expect(sp.level).toBe(3);
     expect(sp.save).toEqual({ ability: 'dex', halfOnSave: true });
     expect(sp.damage).toEqual([{ dice: '8d6', type: 'fire', label: 'Fireball' }]);
     expect(sp.concentration).toBe(false);
+    expect(sp.range).toBe('150ft');
+    expect(sp.area).toBe('cầu 20ft');
+  });
+
+  it('AoE spells: range is the casting range, area is the template', () => {
+    // Self line/cone/emanation → range "Bản thân", area carries the size
+    const lb = spellFromCantrip(findCantrip('Lightning Bolt')!, sheet(), 'lb');
+    expect(lb.range).toBe('Bản thân');
+    expect(lb.area).toMatch(/tia/);
+    const bh = spellFromCantrip(findCantrip('Burning Hands')!, sheet(), 'bh');
+    expect(bh.range).toBe('Bản thân');
+    expect(bh.area).toBe('nón 15ft');
+    // ranged AoE keeps its casting range + a template
+    const sg = spellFromCantrip(findCantrip('Stinking Cloud')!, sheet(), 'sc');
+    expect(sg.range).toBe('90ft');
+    expect(sg.area).toBe('cầu 20ft');
   });
 
   it('Mass Healing Word: bonus-action heal', () => {

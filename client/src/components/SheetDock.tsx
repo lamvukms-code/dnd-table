@@ -1717,12 +1717,14 @@ const SPELL_DEF_HINT = (c: {
   damageType?: string;
   rider?: { dice: string; type: string };
   save?: string;
+  area?: string;
 }) => {
-  if (c.castKind === 'heal') return c.heal ? ` (hồi ${c.heal}+mod)` : '';
+  const aoe = c.area ? ` · ${c.area}` : '';
+  if (c.castKind === 'heal') return `${c.heal ? ` (hồi ${c.heal}+mod)` : ''}${aoe}`;
   if (c.castKind === 'rider' && c.rider) return ` (+${c.rider.dice} ${c.rider.type})`;
   const dmg = c.fixedDamage ?? c.damageDie;
-  if (dmg) return ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})`;
-  return c.save ? ` (save ${c.save.toUpperCase()})` : '';
+  if (dmg) return ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})${aoe}`;
+  return `${c.save ? ` (save ${c.save.toUpperCase()})` : ''}${aoe}`;
 };
 
 function SpellDefPicker({
@@ -2006,13 +2008,32 @@ function SpellRow({
             </>
           )}
 
+          <label>
+            Tầm
+            <input
+              className="sr-range"
+              value={sp.range ?? ''}
+              placeholder="150ft / Chạm"
+              onChange={(e) => onChange({ range: e.target.value || undefined })}
+            />
+          </label>
+          <label>
+            Vùng (AoE)
+            <input
+              className="sr-range"
+              value={sp.area ?? ''}
+              placeholder="cầu 20ft / nón 15ft"
+              onChange={(e) => onChange({ area: e.target.value || undefined })}
+            />
+          </label>
+
           <label className="grow">
             Ghi chú / hướng dẫn
             <textarea
               className="sr-notes"
               rows={2}
               value={sp.notes ?? ''}
-              placeholder="cách hoạt động, tầm, hiệu ứng phụ…"
+              placeholder="cách hoạt động, hiệu ứng phụ…"
               onChange={(e) => onChange({ notes: e.target.value || undefined })}
             />
           </label>

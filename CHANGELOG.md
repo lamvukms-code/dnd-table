@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-09-10
+
+### Changed
+
+- **Spell range vs. area of effect are now separate.** `Spell.area` /
+  `CantripDef.area` holds the AoE template ("cầu 20ft", "nón 15ft", "tia dài
+  100ft"); `range` is purely the casting range. ~40 spell defs updated: Lightning
+  Bolt / Burning Hands / Thunderwave / Fear / Spirit Guardians / … are now
+  `range: 'Bản thân'` with the template in `area`; Beacon of Hope fixed to 30 ft;
+  Fireball etc. keep their real casting range plus a template. The cast banner
+  and the spell picker show both; the range ring on the map uses whichever is
+  larger (casting range, or the area for a Self spell). The Spell tab exposes
+  editable **Tầm** / **Vùng (AoE)** fields.
+
 ## [0.35.0] - 2026-09-10
 
 ### Added
@@ -857,7 +871,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.32.0...v0.33.0

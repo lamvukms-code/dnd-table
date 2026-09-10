@@ -720,6 +720,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .sr-detail label.chk { flex-direction: row; gap: 3px; align-items: center; }
 .sr-detail label.grow { flex-basis: 100%; }
 .sr-notes { width: 100%; font: inherit; resize: vertical; }
+.sr-range { width: 120px; }
 .cantrip-picker {
   display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted);
   border-top: 1px solid var(--line); padding-top: 4px;

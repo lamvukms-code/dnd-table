@@ -387,6 +387,8 @@ export interface Spell {
     rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
   };
   range?: string;
+  /** Area-of-effect template, for display (e.g. "cầu 20ft", "nón 15ft"). */
+  area?: string;
   notes?: string;
 }
 

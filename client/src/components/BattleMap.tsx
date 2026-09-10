@@ -76,7 +76,11 @@ export function BattleMap() {
     ? (() => {
         const casterTokenId = sheets.find((s) => s.id === castingSpell.sheetId)?.tokenId;
         const tk = casterTokenId ? tokens.find((t) => t.id === casterTokenId) : undefined;
-        const feet = parseRangeFeet(castingSpell.spell.range);
+        // "how far does this reach": casting range, or the area for a Self spell
+        const feet = Math.max(
+          parseRangeFeet(castingSpell.spell.range),
+          parseRangeFeet(castingSpell.spell.area),
+        );
         if (!tk || !feet) return null;
         return { tk, feet, radiusPx: (feet / FEET_PER_CELL) * CELL };
       })()
@@ -233,7 +237,8 @@ export function BattleMap() {
       {castingSpell && (
         <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
           🪄 Ra <strong>{castingSpell.spell.name}</strong>
-          {castingSpell.spell.range ? ` · tầm ${castingSpell.spell.range}` : ''} — bấm token mục
+          {castingSpell.spell.range ? ` · tầm ${castingSpell.spell.range}` : ''}
+          {castingSpell.spell.area ? ` · vùng ${castingSpell.spell.area}` : ''} — bấm token mục
           tiêu (Esc / bấm đây để hủy)
         </div>
       )}
