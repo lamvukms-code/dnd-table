@@ -1,6 +1,7 @@
 import type {
   Ability,
   ActiveEffect,
+  TurnUsed,
   AttackRange,
   BattleMap,
   CharacterSheet,
@@ -54,6 +55,7 @@ export type ClientAction =
   // spell / feature effects on a token (conditions, riders, recurring saves)
   | { t: 'applyEffect'; targetTokenId: string; effect: ActiveEffect }
   | { t: 'removeEffect'; tokenId: string; effectId: string }
+  | { t: 'setTurnUsed'; tokenId: string; patch: Partial<TurnUsed> }
   | { t: 'clearConcentration'; tokenId: string }
   // 2024 Unarmed Strike Grapple: server rolls the target's STR/DEX save (its
   // better modifier) vs `dc`; on a failure it gains the Grappled condition from

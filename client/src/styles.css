@@ -1177,3 +1177,12 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .bt-ident .mc-editor { border-bottom: none; padding-bottom: 0; min-width: 280px; }
 .mc-warn { color: #c0392b; }
 .sr-class { font-size: 11px; padding: 1px 3px; max-width: 92px; }
+
+/* action economy + multiclass limits */
+.economy-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0 6px; }
+.eco-pip { font-size: 12px; padding: 2px 9px; border-radius: 999px; }
+.eco-pip.ready { border-color: #2e7d4f; }
+.eco-pip.spent { opacity: 0.55; text-decoration: line-through; }
+.eco-attacks { font-size: 12px; color: var(--muted); }
+.mc-limits { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; }
+.mc-limits .over { color: #c0392b; font-weight: 600; }

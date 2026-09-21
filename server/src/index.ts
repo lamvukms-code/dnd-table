@@ -147,6 +147,11 @@ wss.on('connection', (ws) => {
       return;
     }
     const action = envelope.action;
+    // a well-formed JSON message without an action must not take the whole server down
+    if (!action || typeof action.t !== 'string') {
+      send(ws, { t: 'error', message: 'Bad message' });
+      return;
+    }
 
     if (action.t === 'join') {
       let participant = action.participantId ? getParticipant(action.participantId) : undefined;

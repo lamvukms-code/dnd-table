@@ -3,6 +3,7 @@ import type { Ability, CharacterSheet, Feature, InventoryItem, SheetAction, Spel
 import { computeSpellSlots, abilityMod, emptyCurrency } from './rules.js';
 import { withClassSaves } from './classDefaults.js';
 import { SRD_SPELLS, spellFromCantrip } from './cantrips.js';
+import { SIRINDOODLES_GEOMETRY } from './sirindoodlesGeometry.js';
 
 /**
  * Read a filled-in fillable-PDF character sheet ("Sirindoodles" 5e layout: text fields named
@@ -55,6 +56,69 @@ export function isSirindoodlesSheet(fields: PdfField[]): boolean {
   return names.has('Infos 12') && names.has('Infos 20') && names.has('Infos 101048') && names.has('Infos 119');
 }
 
+const geoName = (k: string) => (k.startsWith('I') ? `Infos ${k.slice(1)}` : `Check Box ${k.slice(1)}`);
+
+/**
+ * A newer revision of the same template (players' "Phil Jacques" sheet): same boxes, but the layout was reworked —
+ * fields are numbered +1 in most lists and some boxes moved by up to ~50 points, so neither the numbers nor absolute
+ * positions can be trusted. Two passes map every field back onto the names the importer knows:
+ *  1. vertical lists (saves, skills, ability scores, check-box columns…): same column + same number of rows →
+ *     k-th from the top ↔ k-th from the top;
+ *  2. everything else: nearest box on the same page (best pair first).
+ * The fields keep their own on-page rectangle (the spell-column logic reads it). Returns null when the sheet doesn't
+ * resemble the template (fewer than 85% of fields map).
+ */
+export function remapSirindoodlesV2(fields: PdfField[]): PdfField[] | null {
+  type Ref = { name: string; page: number; x: number; y: number; w: number; h: number; chk: boolean };
+  const refs: Ref[] = SIRINDOODLES_GEOMETRY.map(([k, page, x, y, w, h]) => ({ name: geoName(k), page, x, y, w, h, chk: k[0] === 'C' }));
+  const chkOf = (f: PdfField) => f.checked !== undefined;
+  const cluster = <T extends { page: number; x: number; w: number; h: number }>(items: T[], chk: (t: T) => boolean) => {
+    const cl: { page: number; chk: boolean; x: number; w: number; h: number; items: T[] }[] = [];
+    for (const it of items) {
+      const c = cl.find((k) => k.page === it.page && k.chk === chk(it) && Math.abs(k.x - it.x) <= 3 && Math.abs(k.w - it.w) <= 3 && Math.abs(k.h - it.h) <= 3);
+      if (c) c.items.push(it);
+      else cl.push({ page: it.page, chk: chk(it), x: it.x, w: it.w, h: it.h, items: [it] });
+    }
+    return cl;
+  };
+  const cf = cluster(fields, chkOf);
+  const cr = cluster(refs, (r) => r.chk);
+  for (const c of [...cf, ...cr]) c.items.sort((p, q) => q.y - p.y);
+
+  const mapped = new Map<PdfField, Ref>();
+  const usedRef = new Set<Ref>();
+  const usedCl = new Set<(typeof cr)[number]>();
+  for (const c of cf.filter((k) => k.items.length >= 3)) {
+    const cand = cr
+      .filter((k) => !usedCl.has(k) && k.page === c.page && k.chk === c.chk && k.items.length === c.items.length)
+      .map((k) => ({ k, d: Math.abs(k.x - c.x) + Math.abs(k.w - c.w) + Math.abs(k.h - c.h) + Math.abs(k.items[0].y - c.items[0].y) / 10 }))
+      .sort((p, q) => p.d - q.d)[0];
+    if (!cand || cand.d >= 40) continue;
+    usedCl.add(cand.k);
+    c.items.forEach((fl, i) => {
+      mapped.set(fl, cand.k.items[i]);
+      usedRef.add(cand.k.items[i]);
+    });
+  }
+  const pairs: [number, PdfField, Ref][] = [];
+  for (const fl of fields) {
+    if (mapped.has(fl)) continue;
+    for (const r of refs) {
+      if (usedRef.has(r) || r.page !== fl.page || r.chk !== chkOf(fl)) continue;
+      const d = Math.abs(r.x - fl.x) + Math.abs(r.y - fl.y) + Math.abs(r.w - fl.w) + Math.abs(r.h - fl.h);
+      if (d <= 45) pairs.push([d, fl, r]);
+    }
+  }
+  pairs.sort((p, q) => p[0] - q[0]);
+  for (const [, fl, r] of pairs) {
+    if (mapped.has(fl) || usedRef.has(r)) continue;
+    mapped.set(fl, r);
+    usedRef.add(r);
+  }
+  const out = [...mapped].map(([fl, r]) => ({ ...fl, name: r.name }));
+  return out.length >= fields.length * 0.85 && out.length >= refs.length * 0.85 ? out : null;
+}
+
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 function lev(a: string, b: string): number {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)] as number[]);
@@ -94,11 +158,17 @@ export function sheetFromPdfFields(
   ownerId: string,
   newId: () => string,
 ): PdfSheetResult | null {
-  if (!isSirindoodlesSheet(fields)) return null;
+  let remapped = false;
+  if (!isSirindoodlesSheet(fields)) {
+    const re = remapSirindoodlesV2(fields);
+    if (!re || !isSirindoodlesSheet(re)) return null;
+    fields = re;
+    remapped = true;
+  }
   const byName = new Map(fields.map((f) => [f.name, f]));
   const t = (n: number | string): string => (byName.get(typeof n === 'number' ? `Infos ${n}` : n)?.value ?? '').trim();
   const checked = (n: number) => !!byName.get(`Check Box ${n}`)?.checked;
-  const report: string[] = [];
+  const report: string[] = remapped ? ['Mẫu phiếu bản mới (số ô lệch +1) — đã ánh xạ theo vị trí ô về mẫu chuẩn'] : [];
 
   // --- identity / class ---
   const name = t(12) || 'Nhân vật nhập từ PDF';
@@ -137,6 +207,7 @@ export function sheetFromPdfFields(
   const currentHp = num(t(17)) ?? maxHp;
   const dexMod = abilityMod(abilities.dex);
   const initTotal = num(t(115));
+  const printedAc = num(t(114));
 
   // --- attacks (4 rows: name / bonus / damage) ---
   const actions: SheetAction[] = [];
@@ -223,7 +294,8 @@ export function sheetFromPdfFields(
     currentHp: Math.min(currentHp, maxHp),
     tempHp: num(t(19)) ?? 0,
     armorClass: num(t(114)) ?? 10,
-    acOverride: null,
+    // the AC printed on the sheet wins: the inventory is plain text, so armor / shield / spells can't be derived from it
+    acOverride: printedAc !== null && printedAc !== 10 + dexMod ? printedAc : null,
     speed: num(t(116)) ?? 30,
     initiativeMisc: initTotal === null ? 0 : initTotal - dexMod,
     actions,

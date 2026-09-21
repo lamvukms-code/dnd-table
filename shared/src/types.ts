@@ -358,10 +358,20 @@ export interface ActiveEffect {
   acMin?: number;
   /** Alternative base AC while no armor is worn (Mage Armor 13 + DEX). */
   acBase?: number;
-  /** Melee attackers take this damage while the bearer has temp HP (Armor of Agathys). */
-  retaliate?: { dice: string; type: string };
+  /** Melee attackers take this damage while the bearer has temp HP (Armor of Agathys); `always` = no temp HP needed. */
+  retaliate?: { dice: string; type: string; always?: boolean };
   /** Reshapes the bearer's weapon attacks while active (Shillelagh). */
   weaponImbue?: WeaponImbue;
+  /** Flat temp HP the bearer gains at the start of each of its turns (Rampant Growth). */
+  turnTempHp?: number;
+  /** Advantage on saving throws in these abilities while active (Oaken Resolve). */
+  saveAdvantage?: Ability[];
+  /** Extra damage on the bearer's own weapon attacks while active (Gnarled Thorns). */
+  attackRiders?: { dice: string; type: string; label: string; melee?: boolean }[];
+  /** Damage types the bearer resists while active (Mighty Trunk). */
+  resist?: string[];
+  /** Ends when the bearer drops to 0 HP or gains an incapacitating condition (Wood Wose). */
+  endsWhenDown?: boolean;
 }
 
 /** What a token is currently concentrating on (one at a time). */
@@ -515,6 +525,17 @@ export interface Token {
   turnAnchor?: { x: number; y: number } | null;
   /** Extra movement feet this turn (Dash). Reset when the turn changes. */
   extraMove?: number;
+  /** Action economy spent this turn (reset when this token's turn starts). */
+  turnUsed?: TurnUsed;
+}
+
+/** What a creature has spent of its action economy since its turn started. */
+export interface TurnUsed {
+  action?: boolean;
+  bonus?: boolean;
+  reaction?: boolean;
+  /** Attack rolls made with the Attack action this turn (Extra Attack). */
+  attacks?: number;
 }
 
 export interface BattleMap {

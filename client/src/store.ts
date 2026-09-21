@@ -35,6 +35,14 @@ import {
   type ServerEvent,
   type Spell,
   findCantrip,
+  economyKindOf,
+  spendEconomy as spendEconomyRule,
+  woodWoseEffect,
+  oldWaysClass,
+  wildShapeMax,
+  WOOD_WOSE,
+  type CharacterSheet,
+  type EconomyKind,
 } from '@dnd-table/shared';
 import {
   getLocalKey,
@@ -123,6 +131,13 @@ interface StoreState {
   /** Point-click spell casting: arm a spell, then click a token on the map. */
   castingSpell: { sheetId: string; spell: Spell } | null;
   beginCast: (sheetId: string, spell: Spell) => void;
+  /**
+   * Spend Action / Bonus Action / Reaction for a token (only while initiative is running). Returns false when the
+   * player declines to go on after a "already spent" warning. Attack rows count against Extra Attack.
+   */
+  spendEconomy: (tokenId: string | undefined, kind: EconomyKind, opts?: { attack?: boolean; maxAttacks?: number }) => boolean;
+  /** Circle of the Old Ways: turn on Wood Wose (effect + Rampant Growth temp HP). Pays 1 Wild Shape when asked to. */
+  activateWoodWose: (sheet: CharacterSheet, opts?: { spendWildShape?: boolean }) => boolean;
   cancelCast: () => void;
   /** Bestiary entry the DM asked to open from a token (null = none). */
   bestiaryFocus: string | null;
@@ -406,6 +421,36 @@ export const useStore = create<StoreState>((set, get) => {
     removeEffect: (tokenId, effectId) => rawSend({ t: 'removeEffect', tokenId, effectId }),
     clearConcentration: (tokenId) => rawSend({ t: 'clearConcentration', tokenId }),
 
+    spendEconomy: (tokenId, kind, opts) => {
+      const room = get().room;
+      const tok = tokenId ? room?.tokens.find((t) => t.id === tokenId) : undefined;
+      if (!room || !tok || !room.initiative.running) return true; // economy only matters in combat
+      const r = spendEconomyRule(tok.turnUsed, kind, opts);
+      if (r.warning && !window.confirm(r.warning + '. Vẫn thực hiện?')) return false;
+      rawSend({ t: 'setTurnUsed', tokenId: tok.id, patch: r.used });
+      return true;
+    },
+    activateWoodWose: (sheet, opts) => {
+      const room = get().room;
+      const tok = room?.tokens.find((t) => t.id === sheet.tokenId);
+      const ww = room ? woodWoseEffect(sheet, room.initiative.round ?? 1) : null;
+      if (!room || !tok || !ww) {
+        set({ error: 'Wood Wose cần nhân vật Circle of the Old Ways gắn với token trên bản đồ.' });
+        return false;
+      }
+      if ((tok.effects ?? []).some((e) => e.name === WOOD_WOSE)) return false;
+      const used = sheet.wildShapeUsed ?? 0;
+      if (opts?.spendWildShape) {
+        if (used >= wildShapeMax(sheet)) {
+          set({ error: 'Hết lần Wild Shape.' });
+          return false;
+        }
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, wildShapeUsed: used + 1 } });
+      }
+      rawSend({ t: 'applyEffect', targetTokenId: tok.id, effect: { id: '', ...ww.effect } });
+      rawSend({ t: 'grantTempHp', targetTokenId: tok.id, notation: String(ww.tempHp), label: 'Rampant Growth (HP tạm)', sourceSheetId: sheet.id });
+      return true;
+    },
     beginCast: (sheetId, spell) => {
       // Save spells with a parseable template: place the area on the map instead of clicking one target.
       const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
@@ -458,6 +503,8 @@ export const useStore = create<StoreState>((set, get) => {
       set({ castingSpell: null });
       if (!sheet) return;
       const label = `${sheet.name} · ${spell.name}`;
+      const econ = economyKindOf(spell.actionType);
+      if (econ && !get().spendEconomy(sheet.tokenId, econ)) return;
       const atkBonus = spellAttackBonus(sheet, spell) ?? 0;
       const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
       const castAbil = spellcastingAbilityOf(sheet, spell);
@@ -566,6 +613,17 @@ export const useStore = create<StoreState>((set, get) => {
           label: `${label} (HP tạm)`,
           sourceSheetId: sheetId,
         });
+      }
+      // Circle of the Old Ways: Shillelagh can also switch on Wood Wose (1 Wild Shape, no extra action)
+      if (
+        spell.name === 'Shillelagh' &&
+        sheet.tokenId === targetTokenId &&
+        oldWaysClass(sheet) &&
+        (sheet.wildShapeUsed ?? 0) < wildShapeMax(sheet) &&
+        !(room.tokens.find((t) => t.id === targetTokenId)?.effects ?? []).some((e) => e.name === WOOD_WOSE) &&
+        window.confirm('Circle of the Old Ways: tốn 1 lần Wild Shape để bật Wood Wose luôn (AC = 10 + DEX + WIS, HP tạm, lợi thế save STR/CON)?')
+      ) {
+        get().activateWoodWose(sheet, { spendWildShape: true });
       }
       // Spells added before an effect was wired (e.g. Shillelagh) fall back to the DB definition.
       const fx: Spell['effect'] = spell.effect ?? (spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined);

@@ -28,6 +28,7 @@ import {
   effectiveArmorClass,
   npcArmorClass,
   computeSpeed,
+  emptyDefenses,
   grantTempHp,
   hitDicePools,
   spendHitDie,
@@ -183,10 +184,29 @@ export class Room {
       return { applied: 0, absorbed: 0 };
     }
     // Armor of Agathys-style effects end with the temp HP that fuel them.
-    if (r.temp <= 0 && token.effects?.some((e) => e.retaliate)) {
-      token.effects = token.effects.filter((e) => !e.retaliate);
+    if (r.temp <= 0 && token.effects?.some((e) => e.retaliate && !e.retaliate.always)) {
+      token.effects = token.effects.filter((e) => !e.retaliate || e.retaliate.always);
     }
+    // Wood Wose & co.: end when the bearer drops to 0 HP
+    if (r.hp <= 0) this.endDownEffects(token, 'còn 0 HP');
     return { applied: r.applied, absorbed: r.absorbed };
+  }
+
+  /** Remove effects flagged `endsWhenDown` (Wood Wose) with a log line. */
+  private endDownEffects(token: Token, why: string): void {
+    const ending = (token.effects ?? []).filter((e) => e.endsWhenDown);
+    if (ending.length === 0) return;
+    token.effects = (token.effects ?? []).filter((e) => !e.endsWhenDown);
+    for (const e of ending) {
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: 'system',
+        actorName: 'Hệ thống',
+        label: `${token.label}: ${e.name} kết thúc (${why})`,
+        result: externalRollResult('', { total: 0, faces: [] }),
+      });
+    }
   }
 
   private applyHeal(token: Token, heal: number): number {
@@ -213,7 +233,7 @@ export class Room {
     attackRange: AttackRange | undefined,
     actor: Participant,
   ): void {
-    if (!attackerId || hadTemp <= 0 || !eff?.retaliate) return;
+    if (!attackerId || !eff?.retaliate || (hadTemp <= 0 && !eff.retaliate.always)) return;
     if (attackRange === 'ranged') return; // only melee hits trigger it, even at point-blank range
     const attacker = this.state.tokens.find((t) => t.id === attackerId);
     if (!attacker || attacker.id === target.id) return;
@@ -321,7 +341,10 @@ export class Room {
   /** A token's damage defences merged with anything its linked sheet grants (adamantine). */
   private effectiveDefenses(token: Token): Defenses | undefined {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-    return mergeDefenses(token.defenses, sheet ? derivedDefenses(sheet) : undefined);
+    const base = mergeDefenses(token.defenses, sheet ? derivedDefenses(sheet) : undefined);
+    const fromEffects = [...new Set((token.effects ?? []).flatMap((e) => e.resist ?? []))];
+    if (fromEffects.length === 0) return base;
+    return mergeDefenses(base, { ...emptyDefenses(), resistances: fromEffects });
   }
 
   /** Saving-throw bonus for a token in one ability (linked sheet, else stat block, else 0). */
@@ -410,6 +433,32 @@ export class Room {
   private processTurnEffects(token: Token, phase: 'start-of-turn' | 'end-of-turn'): void {
     const round = this.state.initiative.round;
     const keep: ActiveEffect[] = [];
+    if (phase === 'start-of-turn') token.turnUsed = undefined; // a new turn: Action / Bonus / Reaction available again
+    const INCAPACITATING = ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'];
+    if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
+    if (phase === 'start-of-turn') {
+      // Rampant Growth: temp HP at the start of each of the bearer's turns (never stacks)
+      for (const e of token.effects ?? []) {
+        if (!e.turnTempHp) continue;
+        const sheet = this.linkedSheet(token);
+        const before = this.tempOf(token);
+        const next = grantTempHp(before, e.turnTempHp);
+        if (next > before) {
+          if (sheet) {
+            sheet.tempHp = next;
+            this.mirrorSheetToToken(sheet);
+          } else token.tempHp = next;
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: `${token.label}: ${e.name} → ${next > before ? `HP tạm ${before} → ${next}` : `giữ ${before} HP tạm`}`,
+          result: externalRollResult('', { total: e.turnTempHp, faces: [] }),
+        });
+      }
+    }
     for (const e of token.effects ?? []) {
       if (typeof e.expiresRound === 'number' && round >= e.expiresRound) {
         this.pushRoll({
@@ -1045,6 +1094,9 @@ export class Room {
           }
         }
         target.effects = [...(target.effects ?? []), effect];
+        if (effect.condition && ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'].includes(effect.condition)) {
+          this.endDownEffects(target, effect.name);
+        }
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
@@ -1053,6 +1105,16 @@ export class Room {
           label: `${target.label} chịu hiệu ứng: ${effect.name}`,
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'setTurnUsed': {
+        const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        const next = { ...(token.turnUsed ?? {}), ...action.patch };
+        token.turnUsed = next.action || next.bonus || next.reaction || next.attacks ? next : undefined;
         this.touch();
         break;
       }
@@ -1319,6 +1381,7 @@ export class Room {
         this.state.initiative.running = this.state.initiative.entries.length > 0;
         this.state.initiative.round = 1;
         this.state.initiative.turnIndex = 0;
+        for (const tk of this.state.tokens) tk.turnUsed = undefined;
         markActive(this.state.initiative);
         this.syncTurnAnchors();
         this.touch();
@@ -1352,6 +1415,7 @@ export class Room {
       case 'initReset': {
         if (!isDm) return 'Chỉ DM được reset initiative';
         this.state.initiative = { entries: [], round: 1, turnIndex: 0, running: false };
+        for (const tk of this.state.tokens) tk.turnUsed = undefined;
         this.syncTurnAnchors();
         this.touch();
         break;

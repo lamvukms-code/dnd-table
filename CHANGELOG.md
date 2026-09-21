@@ -6,6 +6,33 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-09-22
+
+### Added
+
+- **PDF import: the newer "Sirindoodles" sheet revision** (the one the "Phil Jacques" sheet uses — fields numbered +1,
+  boxes moved). Fields are mapped back onto the known template by column + row order, then nearest box
+  (`remapSirindoodlesV2`; geometry only in `sirindoodlesGeometry.ts`). Also: a CLASS box holding just a subclass
+  ("Sinner") resolves to its class from the local subclass data; the AC printed on the sheet is kept as an override
+  when it differs from 10 + DEX (armor is plain text in the PDF). `scripts/dump-pdf-fields.mjs` dumps a template's
+  fields for mapping a further revision.
+- **Circle of the Old Ways — Wood Wose, fully wired** (`woodWoseEffect`): Bark Bulwark AC, **Rampant Growth** temp
+  HP (WIS mod + PB) now and at the start of each of your turns (server, never stacks), Oaken Resolve advantage on
+  STR / CON saves, level 6 Gnarled Thorns (+1d6 piercing on melee weapon hits, added to the damage roll), level 10
+  Bramblebark (1d8 piercing to melee attackers — no temp HP needed), level 14 Mighty Trunk (resist bludgeoning +
+  piercing). Ends after 10 minutes, at 0 HP, on an incapacitating condition, or when dismissed (the button toggles).
+  Casting Shillelagh as an Old Ways druid offers to switch it on for 1 Wild Shape without a second action.
+- **Action economy per turn**: Action / Bonus Action / Reaction pips (plus Extra Attack progress) for the sheet's token
+  while initiative runs; reset when the token's turn starts. Attack rows, spells (by their action type), Rage,
+  Wild Shape and Wood Wose spend the matching resource and warn — never block — when it is already spent. Extra Attack
+  does not stack across classes (Fighter scales 2 → 3 → 4).
+- **Multiclass: prepared-spell limits per casting class** (SRD 5.2.1 class tables): "chuẩn bị 5/6 · cantrip 3/3" per
+  class, counted from each spell's casting class; red when over.
+
+### Fixed
+
+- The server no longer crashes on a well-formed JSON message that has no `action`.
+
 ## [0.50.0] - 2026-09-22
 
 ### Added
@@ -1152,7 +1179,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...HEAD
+[0.51.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...v0.48.0

@@ -272,7 +272,24 @@ export function riderParts(
  * Sneak Attack. Spell-attack rows skip weapon-only riders and the weapon
  * features — see `attackKindOf`.
  */
-export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): DamagePart[] {
+/** Whether the effects give Advantage on a saving throw in `ability` (Oaken Resolve). */
+export function effectSaveAdvantage(effects: ActiveEffect[] | undefined, ability: Ability): boolean {
+  return (effects ?? []).some((e) => e.saveAdvantage?.includes(ability));
+}
+
+/** Extra damage the bearer's effects add to one of its attacks (Gnarled Thorns: melee weapon hits). */
+export function effectAttackRiders(
+  effects: ActiveEffect[] | undefined,
+  action: Pick<SheetAction, 'attackKind' | 'attackRange' | 'range' | 'description'>,
+): { dice: string; type: string; label: string }[] {
+  if ((action.attackKind ?? 'weapon') !== 'weapon') return [];
+  const melee = attackRangeOf(action) === 'melee';
+  return (effects ?? []).flatMap((e) =>
+    (e.attackRiders ?? []).filter((r) => !r.melee || melee).map((r) => ({ dice: r.dice, type: r.type, label: r.label })),
+  );
+}
+
+export function actionDamageParts(sheet: CharacterSheet, action: SheetAction, effects?: ActiveEffect[]): DamagePart[] {
   const parts: DamagePart[] = [];
   if (action.damage) parts.push({ dice: action.damage, type: action.damageType || '' });
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
@@ -284,6 +301,8 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   const primaryType = action.damageType || parts[0]?.type || '';
 
   for (const p of riderParts(sheet, kind, { unarmed: isUnarmedAction(action) })) parts.push(p);
+  // effect-borne extra damage on the bearer's own attacks (Wood Wose · Gnarled Thorns)
+  for (const p of effectAttackRiders(effects, action)) parts.push({ dice: p.dice, type: p.type, label: p.label });
 
   if (kind === 'weapon') {
     // Barbarian: rage damage on a weapon attack while raging.

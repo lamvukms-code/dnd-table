@@ -53,6 +53,18 @@ export async function importPdfSheet(
   }
   const res = sheetFromPdfFields(fields, ownerId, newId);
   if (!res) throw new Error('Không nhận ra mẫu phiếu này — hiện chỉ đọc được mẫu "Sirindoodles" 5e.');
+  // Some players type only the subclass in the CLASS box ("Sinner"): find its class in the local subclass data.
+  const KNOWN = ['barbarian', 'bard', 'cleric', 'druid', 'fighter', 'monk', 'paladin', 'ranger', 'rogue', 'sorcerer', 'warlock', 'wizard', 'artificer'];
+  if (!KNOWN.includes(res.sheet.className.trim().toLowerCase())) {
+    const typed = (res.sheet.className + ' ' + (res.sheet.subclass ?? '')).trim().toLowerCase();
+    const hit = SUBCLASS_DEFS.find((d) => typed === d.subclass.toLowerCase() || typed.includes(d.subclass.toLowerCase()));
+    if (hit) {
+      const cls = hit.class.charAt(0).toUpperCase() + hit.class.slice(1);
+      res.report.push(`Class: ${cls} (nhận từ subclass "${hit.subclass}")`);
+      res.sheet.className = cls;
+      res.sheet.subclass = hit.subclass;
+    }
+  }
   // Snap the typed subclass ("Circle of the old way") to the official name in the local subclass data.
   const known = derivedSubclassFeatures({ ...res.sheet, level: 20 }, SUBCLASS_DEFS)[0]?.subclass;
   if (known && known !== res.sheet.subclass) {

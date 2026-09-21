@@ -43,6 +43,12 @@ import {
   rogueLevel,
   saveBonus,
   sheetClasses,
+  attacksPerAction,
+  economyKindOf,
+  effectSaveAdvantage,
+  oldWaysClass,
+  spellLimits,
+  WOOD_WOSE,
   castingClassesOf,
   extraAttackClasses,
   multiclassIssues,
@@ -70,6 +76,7 @@ import {
   type DamagePart,
   type SheetAction,
   type Spell,
+  type Token,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -419,6 +426,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const damageRoll = useStore((s) => s.damageRoll);
   const rollInitiativeForMe = useStore((s) => s.rollInitiativeForMe);
   const applyEffect = useStore((s) => s.applyEffect);
+  const spendEconomy = useStore((s) => s.spendEconomy);
   const removeEffect = useStore((s) => s.removeEffect);
   const grapple = useStore((s) => s.grapple);
   const tokens = useStore((s) => s.room?.tokens ?? []);
@@ -456,17 +464,18 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const ac = effectiveArmorClass(draft, linkedToken?.effects);
   const speedInfo = computeSpeed(draft);
   const actions = allActions(draft, linkedToken?.effects);
-  const modeTag =
-    rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
-  const roll = (label: string, mod: number, kind: 'check' | 'save' | 'other' = 'other') => {
-    let notation = d20Check(mod, rollMode);
+  const roll = (label: string, mod: number, kind: 'check' | 'save' | 'other' = 'other', ab?: Ability) => {
+    // Oaken Resolve (Wood Wose): Advantage on STR / CON saves — cancels a Disadvantage
+    const effMode: RollMode =
+      kind === 'save' && ab && effectSaveAdvantage(linkedToken?.effects, ab) ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode;
+    let notation = d20Check(mod, effMode);
     let extra = '';
     const gb = kind === 'check' ? pendingRollBonus(linkedToken ?? undefined, 'check') : undefined;
     if (gb) {
       notation = `${notation}+${gb.dice}`;
       extra = ` +${gb.dice} (${gb.name})`;
     }
-    rollDice(`${draft.name} · ${label}${modeTag}${extra}`, notation);
+    rollDice(`${draft.name} · ${label}${effMode === 'advantage' ? ' (lợi thế)' : effMode === 'disadvantage' ? ' (bất lợi)' : ''}${extra}`, notation);
     if (gb && draft.tokenId) removeEffect(draft.tokenId, gb.id);
   };
 
@@ -670,7 +679,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                       </button>
                       <button
                         className={`roll-btn sm ${prof ? 'prof' : ''}`}
-                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab), 'save')}
+                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab), 'save', ab)}
                       >
                         save {fmtMod(saveBonus(draft, ab))}
                       </button>
@@ -833,6 +842,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
           );
         })()}
 
+        <EconomyBar token={linkedToken} sheet={draft} />
+
         {(['action', 'bonus', 'reaction'] as ActionType[]).map((type) => {
           const list = actions.filter((a) => a.actionType === type);
           const others = actions.filter(
@@ -847,7 +858,11 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 <ActionRow
                   key={a.id}
                   action={a}
-                  parts={actionDamageParts(draft, a)}
+                  parts={actionDamageParts(draft, a, linkedToken?.effects)}
+                  onSpend={(attack) => {
+                    const kind = economyKindOf(a.actionType);
+                    return kind ? spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks: attacksPerAction(draft) }) : true;
+                  }}
                   sheetName={draft.name}
                   attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
                   targetId={targetId}
@@ -947,6 +962,7 @@ function ActionRow({
   attackRoll,
   damageRoll,
   onFired,
+  onSpend,
   grapple,
   onToggleRange,
   onDelete,
@@ -976,6 +992,8 @@ function ActionRow({
     targetTokenId: string,
     attacker?: { sheetId?: string; tokenId?: string },
   ) => Promise<void>;
+  /** Called before the row's primary roll; false = the player cancelled (economy already spent). */
+  onSpend?: (attack: boolean) => boolean;
   onFired?: () => void;
   grapple?: { dc: number; grappling: boolean; onToggle: (release: boolean) => void };
   onToggleRange?: () => void;
@@ -1020,6 +1038,7 @@ function ActionRow({
         <button
           className="roll-btn strong"
           onClick={() => {
+            if (onSpend && !onSpend(true)) return;
             void attackRoll({
               label: `${base} → ${targetName}`,
               attackBonus: action.attackBonus!,
@@ -1039,7 +1058,10 @@ function ActionRow({
       {isAttack && !targetId && (
         <button
           className="roll-btn"
-          onClick={() => rollDice(`${base} (đánh)`, atkNotation(action.attackBonus!))}
+          onClick={() => {
+            if (onSpend && !onSpend(true)) return;
+            void rollDice(`${base} (đánh)`, atkNotation(action.attackBonus!));
+          }}
         >
           đánh
         </button>
@@ -1048,6 +1070,7 @@ function ActionRow({
         <button
           className="roll-btn"
           onClick={() => {
+            if (!isAttack && onSpend && !onSpend(false)) return; // damage-only rows spend on their roll
             if (targetId) void damageRoll(`${base} → ${targetName}`, parts, targetId, attacker);
             else void rollDice(`${base} (sát thương)`, combinedDamage);
             onFired?.();
@@ -1057,7 +1080,7 @@ function ActionRow({
         </button>
       )}
       {action.notation && !action.damage && (
-        <button className="roll-btn" onClick={() => rollDice(base, action.notation!)}>
+        <button className="roll-btn" onClick={() => { if (onSpend && !onSpend(false)) return; void rollDice(base, action.notation!); }}>
           tung
         </button>
       )}
@@ -1329,6 +1352,9 @@ function FocusPips({
 function ClassFeatures({ draft, commit }: EditorCtx) {
   const send = useStore((s) => s.send);
   const room = useStore((s) => s.room);
+  const activateWoodWose = useStore((s) => s.activateWoodWose);
+  const spendEconomy = useStore((s) => s.spendEconomy);
+  const spendTurn = (kind: 'action' | 'bonus' | 'reaction') => spendEconomy(draft.tokenId || undefined, kind);
   const feats = derivedClassFeatures(draft);
   if (feats.length === 0) return null;
   const rl = rogueLevel(draft);
@@ -1348,40 +1374,28 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const fUsed = Math.min(draft.focusUsed ?? 0, fMax);
   const spendFocus = (n = 1) => set({ focusUsed: Math.min(fMax, fUsed + n) });
 
-  // Circle of the Old Ways — Wood Wose: 1 Wild Shape (bonus action, or while casting Shillelagh).
-  // Bark Bulwark: unarmored AC = 10 + DEX + WIS; Rampant Growth: temp HP = WIS mod + PB. 10 minutes.
+  // Circle of the Old Ways — Wood Wose (SRD-independent local subclass text): 1 Wild Shape, Bonus Action (or while
+  // casting Shillelagh), 10 minutes. The effect itself (Bark Bulwark AC, Oaken Resolve, Rampant Growth temp HP at the
+  // start of each turn, level 6/10/14 upgrades) is built by woodWoseEffect() and runs on the server.
   const woodTok = room?.tokens.find((t) => t.id === draft.tokenId);
-  const isOldWays = /old ways/i.test(draft.subclass ?? '');
-  const woseActive = !!woodTok?.effects?.some((e) => e.name === 'Wood Wose');
-  function activateWoodWose() {
-    if (!woodTok || !room || wsUsed >= wsMax || woseActive) return;
-    const wis = abilityMod(draft.abilities.wis);
+  const isOldWays = !!oldWaysClass(draft);
+  const woseEffect = woodTok?.effects?.find((e) => e.name === WOOD_WOSE);
+  const woseActive = !!woseEffect;
+  function toggleWoodWose() {
+    if (!woodTok) return;
+    if (woseEffect) {
+      send({ t: 'removeEffect', tokenId: woodTok.id, effectId: woseEffect.id }); // dismiss early
+      return;
+    }
+    if (wsUsed >= wsMax) return;
+    if (!spendTurn('bonus')) return;
     set({ wildShapeUsed: wsUsed + 1 });
-    send({
-      t: 'applyEffect',
-      targetTokenId: woodTok.id,
-      effect: {
-        id: '',
-        name: 'Wood Wose',
-        sourceSheetId: draft.id,
-        acBase: 10 + wis,
-        expiresRound: (room.initiative.round ?? 1) + 100,
-        note: 'Bark Bulwark: AC = 10 + DEX + WIS khi không mặc giáp · Oaken Resolve: lợi thế save STR/CON · 10 phút',
-      },
-    });
-    const thp = wis + draft.proficiencyBonus;
-    if (thp > 0)
-      send({
-        t: 'grantTempHp',
-        targetTokenId: woodTok.id,
-        notation: String(thp),
-        label: 'Rampant Growth (HP tạm)',
-        sourceSheetId: draft.id,
-      });
+    activateWoodWose({ ...draft, wildShapeUsed: wsUsed + 1 });
   }
 
   function toggleRage() {
     if (draft.raging) return set({ raging: false });
+    if (!spendTurn('bonus')) return; // entering a Rage is a Bonus Action
     set(rUsed < rMax ? { raging: true, rageUsed: rUsed + 1 } : { raging: true });
   }
 
@@ -1461,7 +1475,10 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
               <button
                 className="cf-btn"
                 disabled={wsUsed >= wsMax}
-                onClick={() => set({ wildShapeUsed: Math.min(wsMax, wsUsed + 1) })}
+                onClick={() => {
+                  if (!spendTurn('bonus')) return;
+                  set({ wildShapeUsed: Math.min(wsMax, wsUsed + 1) });
+                }}
                 title="Dùng 1 lần Wild Shape (hồi 1 khi nghỉ ngắn, hết khi nghỉ dài)"
               >
                 Wild Shape −1
@@ -1469,11 +1486,15 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
               {isOldWays && (
                 <button
                   className={`cf-btn ${woseActive ? 'on' : ''}`}
-                  disabled={woseActive || wsUsed >= wsMax || !woodTok}
-                  onClick={activateWoodWose}
-                  title="Bonus action (hoặc khi đúc Shillelagh): tốn 1 Wild Shape → AC = 10 + DEX + WIS (không giáp), HP tạm = WIS + PB, 10 phút"
+                  disabled={(!woseActive && wsUsed >= wsMax) || !woodTok}
+                  onClick={toggleWoodWose}
+                  title={
+                    woseActive
+                      ? 'Bấm để tắt Wood Wose (tự tắt khi hết 10 phút, về 0 HP hoặc mất khả năng hành động)'
+                      : 'Bonus Action (hoặc khi đúc Shillelagh — lúc đó hỏi luôn): tốn 1 Wild Shape → AC = 10 + DEX + WIS (không giáp), HP tạm = WIS + PB (và mỗi đầu lượt), lợi thế save STR/CON, 10 phút'
+                  }
                 >
-                  🌳 Wood Wose {woseActive ? '— ĐANG BẬT' : '(−1 Wild Shape)'}
+                  🌳 Wood Wose {woseActive ? '— ĐANG BẬT (bấm để tắt)' : '(−1 Wild Shape)'}
                 </button>
               )}
               <span className="hint">Dùng stat block quái từ Bestiary cho hình dạng thú.</span>
@@ -2614,11 +2635,52 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
           ℹ Extra Attack từ {extra.join(' + ')} <strong>không cộng dồn</strong> (tối đa 2 đòn từ feature này).
         </p>
       )}
+      {spellLimits(draft).length > 0 && (
+        <div className="mc-limits">
+          {spellLimits(draft).map((l) => (
+            <span key={l.cls} className={l.preparedUsed > l.preparedMax || l.cantripsUsed > l.cantripsMax ? 'over' : ''}>
+              {l.cls} {l.level}: chuẩn bị {l.preparedUsed}/{l.preparedMax}
+              {l.cantripsMax > 0 ? ' · cantrip ' + l.cantripsUsed + '/' + l.cantripsMax : ''}
+            </span>
+          ))}
+        </div>
+      )}
       {multi && (
         <p className="hint">
           Đa nghề: cấp tổng, Thành thạo (PB), hit dice (gộp theo loại d), ô phép (nghề caster cộng dồn — half caster
           làm tròn lên) đều tự tính. Save / kỹ năng khởi đầu chỉ lấy từ nghề đầu tiên.
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Action / Bonus Action / Reaction of the sheet's token this turn (reset when its turn starts) plus Extra Attack
+ * progress. Click a pip to spend / refund by hand. Shown only while initiative is running.
+ */
+function EconomyBar({ token, sheet }: { token: Token | null; sheet: CharacterSheet }) {
+  const send = useStore((s) => s.send);
+  const running = useStore((s) => s.room?.initiative.running);
+  if (!token || !running) return null;
+  const used = token.turnUsed ?? {};
+  const max = attacksPerAction(sheet);
+  const flip = (k: 'action' | 'bonus' | 'reaction') =>
+    send({ t: 'setTurnUsed', tokenId: token.id, patch: k === 'action' && used.action ? { action: false, attacks: 0 } : { [k]: !used[k] } });
+  const pip = (k: 'action' | 'bonus' | 'reaction', label: string, title: string) => (
+    <button key={k} className={'eco-pip ' + (used[k] ? 'spent' : 'ready')} title={title} onClick={() => flip(k)}>
+      {used[k] ? '○' : '●'} {label}
+    </button>
+  );
+  return (
+    <div className="economy-bar">
+      {pip('action', 'Action', 'Action lượt này (đánh, ra phép, Dash…) — bấm để đổi trạng thái')}
+      {pip('bonus', 'Bonus', 'Bonus Action lượt này')}
+      {pip('reaction', 'Reaction', 'Reaction — hồi ở đầu lượt của bạn')}
+      {max > 1 && (
+        <span className="eco-attacks" title="Extra Attack không cộng dồn giữa các nghề">
+          Đòn: {used.attacks ?? 0}/{max}
+        </span>
       )}
     </div>
   );

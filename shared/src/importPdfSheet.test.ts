@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { sheetFromPdfFields, type PdfField } from './importPdfSheet.js';
+import { remapSirindoodlesV2, sheetFromPdfFields, type PdfField } from './importPdfSheet.js';
+import { SIRINDOODLES_GEOMETRY } from './sirindoodlesGeometry.js';
 
 let n = 0;
 const id = () => `id${++n}`;
@@ -59,5 +60,37 @@ describe('sheetFromPdfFields', () => {
   it('derives Druid slots from the class table', () => {
     expect(s.spellSlots.find((x) => x.level === 1)?.max).toBe(4);
     expect(s.spellSlots.find((x) => x.level === 2)?.max).toBe(2);
+  });
+});
+
+describe('newer template revision (fields renumbered +1, boxes moved)', () => {
+  // Rebuild every field of the known template with the numbering shifted and each box nudged, then fill a few.
+  const shifted: PdfField[] = SIRINDOODLES_GEOMETRY.map(([k, page, x, y, w, h], i) => {
+    const num = k.slice(1);
+    const isChk = k[0] === 'C';
+    const name = isChk ? `Check Box ${num}` : `Infos ${Number(num) + 1}`;
+    return { name, page, x: x + (i % 3), y: y - 4 + (i % 5), w, h, ...(isChk ? { checked: false } : { value: '' }) };
+  });
+  const setByRef = (ref: string, value: string) => {
+    const idx = SIRINDOODLES_GEOMETRY.findIndex((g) => g[0] === ref);
+    shifted[idx] = { ...shifted[idx], value };
+  };
+  setByRef('I12', 'Nova'); // name
+  setByRef('I13', 'Rogue Sinner'); // class
+  setByRef('I4', '4'); // level
+  ['I20', 'I21', 'I22', 'I23', 'I24', 'I25'].forEach((r, i) => setByRef(r, String([10, 18, 16, 12, 16, 15][i])));
+  it('is recognised and maps names back to the known template', () => {
+    const re = remapSirindoodlesV2(shifted);
+    expect(re).not.toBeNull();
+    const byName = new Map(re!.map((f) => [f.name, f]));
+    expect(byName.get('Infos 12')?.value).toBe('Nova');
+    expect(byName.get('Infos 25')?.value).toBe('15');
+  });
+  it('imports through the normal path', () => {
+    const res = sheetFromPdfFields(shifted, 'o', id)!;
+    expect(res.sheet.name).toBe('Nova');
+    expect(res.sheet.className).toBe('Rogue');
+    expect(res.sheet.abilities).toEqual({ str: 10, dex: 18, con: 16, int: 12, wis: 16, cha: 15 });
+    expect(res.sheet.level).toBe(4);
   });
 });
