@@ -373,7 +373,11 @@ export function BattleMap() {
             confirmAoe(aoeView.hitIds);
           }}
           onDragOver={(e) => {
-            if (e.dataTransfer.types.includes('text/token-id')) e.preventDefault();
+            const types = e.dataTransfer.types;
+            if (types.includes('text/token-id') || types.includes('text/statblock-id')) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'copy';
+            }
           }}
           onDrop={onBoardDrop}
           onClick={(e) => {
