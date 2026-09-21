@@ -826,6 +826,7 @@ export class Room {
         this.state.initiative.entries = this.state.initiative.entries.filter(
           (e) => e.tokenId !== action.id,
         );
+        for (const sh of this.state.sheets) if (sh.tokenId === action.id) sh.tokenId = undefined;
         this.touch();
         break;
       }

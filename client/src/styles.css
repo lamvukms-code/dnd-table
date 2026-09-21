@@ -1048,3 +1048,6 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .badge { font-size: 11px; padding: 1px 7px; border-radius: 10px; vertical-align: middle; }
 .badge.ok { background: var(--hit); color: #fff; }
 .badge.off { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+
+.token { -webkit-touch-callout: none; -webkit-user-drag: none; }
+.insp-head .link.danger:hover { color: #e74c3c; }

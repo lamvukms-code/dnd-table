@@ -102,6 +102,20 @@ export function BattleMap() {
 
   const selectedToken = tokens.find((t) => t.id === selected) ?? null;
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Delete' || !selectedToken) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      if (!(isDm || selectedToken.controllerId === meId)) return;
+      if (!window.confirm(`Xóa token "${selectedToken.label}"?`)) return;
+      send({ t: 'removeToken', id: selectedToken.id });
+      setSelected(null);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedToken, isDm, meId, send]);
+
   function toggleGroup(id: string) {
     setGroupSel((prev) => {
       const next = new Set(prev);
@@ -374,7 +388,16 @@ export function BattleMap() {
                     height: span * CELL - 4,
                     background: t.imageUrl ? `center/cover url(${t.imageUrl})` : t.color,
                   }}
-                  onPointerDown={(e) => onPointerDown(e, t)}
+                  onPointerDown={(e) => {
+                    if (e.button === 2) return; // right-click handled by onContextMenu
+                    onPointerDown(e, t);
+                  }}
+                  onContextMenu={(e) => {
+                    // No browser menu on tokens: right-click just selects (inspector has Delete).
+                    e.preventDefault();
+                    if (!castingSpell && !groupMode) setSelected(t.id);
+                  }}
+                  onDragStart={(e) => e.preventDefault()}
                   title={t.label}
                 >
                   {!t.imageUrl && <span className="tk-initial">{t.label.slice(0, 2)}</span>}
@@ -801,6 +824,19 @@ function TokenInspector({
         >
           ⧉
         </button>
+        {canControl && (
+          <button
+            className="link danger"
+            title="Xóa token (phím Delete)"
+            onClick={() => {
+              if (!window.confirm(`Xóa token "${token.label}"?`)) return;
+              send({ t: 'removeToken', id: token.id });
+              onClose();
+            }}
+          >
+            🗑
+          </button>
+        )}
         <button className="link" onClick={onClose}>
           ✕
         </button>
