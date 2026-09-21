@@ -6,6 +6,25 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-09-21
+
+### Added
+
+- **AoE templates on the map.** `shared/src/aoe.ts` parses "30-foot Cone" / "20-foot
+  Emanation" / "cầu 20ft" text and computes which tokens a cone / line / cube /
+  sphere / emanation catches (`parseArea`, `aoeGeometry`, `aoeTokenIds`).
+  - Monster actions that force a save and describe an area get a **🔺 vùng** button:
+    the template follows the cursor (anchored on the monster, or on a chosen point
+    with a range ring), tokens inside are outlined red, the banner counts them; click
+    to confirm and the server silently rolls each target's save + damage.
+  - Save spells that have an `area` (Fireball, Burning Hands, Fear, Hypnotic
+    Pattern, …) use the same placement instead of picking a single token.
+  - AoE damage dice are rolled **once** per cast and shared by all targets
+    (`spellSave.aoeId`); a multi-target concentration effect no longer wipes the
+    previous targets' effect.
+- `scripts/link-token-art.mjs`: match a token-art folder to bestiary entries by name
+  (typo-tolerant), copy the images into the uploads folder and set `imageUrl`.
+
 ## [0.39.0] - 2026-09-21
 
 ### Added
@@ -929,7 +948,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...v0.37.0

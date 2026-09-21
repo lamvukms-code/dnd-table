@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  aoeGeometry,
+  aoeTokenIds,
+  defaultAnchor,
+  parseArea,
   ABILITIES,
   abilityMod,
   CONDITION_VI,
@@ -53,6 +57,9 @@ export function BattleMap() {
   const me = useStore((s) => s.me());
   const castingSpell = useStore((s) => s.castingSpell);
   const cancelCast = useStore((s) => s.cancelCast);
+  const aoe = useStore((s) => s.aoe);
+  const confirmAoe = useStore((s) => s.confirmAoe);
+  const [aoeAim, setAoeAim] = useState<{ x: number; y: number } | null>(null);
   const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
   const { map, tokens, diceTray } = room;
   const sheets = room.sheets;
@@ -89,11 +96,34 @@ export function BattleMap() {
     : null;
 
   useEffect(() => {
-    if (!castingSpell) return;
+    if (!castingSpell && !aoe) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cancelCast();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [castingSpell, cancelCast]);
+  }, [castingSpell, aoe, cancelCast]);
+
+  // AoE template placement: origin (caster centre or chosen grid point), aim, and who is inside.
+  const aoeView = (() => {
+    if (!aoe) return null;
+    const caster = tokens.find((t) => t.id === aoe.casterTokenId);
+    const cSpan = caster ? SIZE_CELLS[caster.size] : 1;
+    const cCentre = caster ? { x: caster.x + cSpan / 2, y: caster.y + cSpan / 2 } : null;
+    const aim = aoeAim ?? cCentre ?? { x: 0, y: 0 };
+    const origin =
+      aoe.anchor === 'self' && cCentre ? cCentre : { x: Math.round(aim.x), y: Math.round(aim.y) };
+    const geo = aoeGeometry(aoe.spec, aoe.anchor, origin, aim, cSpan);
+    const hitIds = aoeTokenIds(
+      aoe.spec,
+      aoe.anchor,
+      origin,
+      aim,
+      tokens
+        .filter((t) => isDm || !t.hidden)
+        .map((t) => ({ id: t.id, x: t.x, y: t.y, span: SIZE_CELLS[t.size] })),
+      aoe.casterTokenId,
+    );
+    return { geo, hitIds, cCentre };
+  })();
 
   const [selected, setSelected] = useState<string | null>(null);
   const [groupMode, setGroupMode] = useState(false);
@@ -153,6 +183,11 @@ export function BattleMap() {
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (aoe && boardRef.current) {
+      const r = boardRef.current.getBoundingClientRect();
+      setAoeAim({ x: (e.clientX - r.left) / CELL, y: (e.clientY - r.top) / CELL });
+      return;
+    }
     if (!drag.current) return;
     const rect = boardRef.current!.getBoundingClientRect();
     const x = (e.clientX - rect.left - drag.current.dx) / CELL;
@@ -258,6 +293,14 @@ export function BattleMap() {
         </details>
       )}
 
+      {aoe && aoeView && (
+        <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
+          🔺 <strong>{aoe.label}</strong> · {aoe.spec.shape} {aoe.spec.size}ft —{' '}
+          <strong>{aoeView.hitIds.length}</strong> mục tiêu trong vùng — bấm bản đồ để xác nhận
+          (Esc / bấm đây để hủy)
+        </div>
+      )}
+
       {castingSpell && (
         <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
           🪄 Ra <strong>{castingSpell.spell.name}</strong>
@@ -323,6 +366,12 @@ export function BattleMap() {
           }}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerDownCapture={(e) => {
+            if (!aoe || !aoeView) return;
+            e.stopPropagation();
+            e.preventDefault();
+            confirmAoe(aoeView.hitIds);
+          }}
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes('text/token-id')) e.preventDefault();
           }}
@@ -365,6 +414,37 @@ export function BattleMap() {
             </>
           )}
 
+          {aoe && aoeView && (
+            <>
+              {aoe.anchor === 'point' && aoe.rangeFeet && aoeView.cCentre ? (
+                <div
+                  className="cast-range"
+                  style={{
+                    left: aoeView.cCentre.x * CELL - (aoe.rangeFeet / FEET_PER_CELL) * CELL,
+                    top: aoeView.cCentre.y * CELL - (aoe.rangeFeet / FEET_PER_CELL) * CELL,
+                    width: (aoe.rangeFeet / FEET_PER_CELL) * CELL * 2,
+                    height: (aoe.rangeFeet / FEET_PER_CELL) * CELL * 2,
+                  }}
+                />
+              ) : null}
+              <svg className="aoe-layer" width={map.cols * CELL} height={map.rows * CELL}>
+                {aoeView.geo.kind === 'circle' ? (
+                  <circle
+                    className="aoe-shape"
+                    cx={aoeView.geo.cx * CELL}
+                    cy={aoeView.geo.cy * CELL}
+                    r={aoeView.geo.r * CELL}
+                  />
+                ) : (
+                  <polygon
+                    className="aoe-shape"
+                    points={aoeView.geo.pts.map((p) => `${p.x * CELL},${p.y * CELL}`).join(' ')}
+                  />
+                )}
+              </svg>
+            </>
+          )}
+
           {castRing && (
             <div
               className="cast-range"
@@ -390,7 +470,7 @@ export function BattleMap() {
                     groupSel.has(t.id) ? 'group-sel' : ''
                   } ${t.hidden ? 'hidden' : ''} ${
                     t.cover === 'total' ? 'cover-total' : ''
-                  }`}
+                  } ${aoeView?.hitIds.includes(t.id) ? 'aoe-hit' : ''}`}
                   style={{
                     left: t.x * CELL,
                     top: t.y * CELL,
@@ -825,6 +905,46 @@ function TokenInspector({
     ? (bestiary.find((s) => s.id === token.statblock!.fromId) ?? null)
     : null;
 
+  const beginAoe = useStore((s) => s.beginAoe);
+
+  function startActionAoe(
+    a: NonNullable<Token['statblock']>['actions'][number],
+    base: string,
+    parts: ReturnType<typeof statblockDamageParts>,
+  ) {
+    const desc = a.description ?? '';
+    const spec = parseArea(desc);
+    if (!spec || !a.save) return;
+    const point = /point (?:you|it) choose|point within|within \d+ feet of (?:you|it)/i.test(desc);
+    const rangeFeet = Number(/within (\d+) feet/i.exec(desc)?.[1] ?? 0);
+    const half = /half damage/i.test(desc);
+    const save = a.save;
+    beginAoe({
+      label: base,
+      spec,
+      anchor:
+        point && (spec.shape === 'sphere' || spec.shape === 'cube')
+          ? 'point'
+          : defaultAnchor(spec, 0, true),
+      casterTokenId: token.id,
+      rangeFeet: point ? rangeFeet : 0,
+      onConfirm: (ids, aoeId) =>
+        ids.forEach((id) =>
+          send({
+            t: 'spellSave',
+            targetTokenId: id,
+            ability: save.ability,
+            dc: save.dc,
+            label: base,
+            damageOnFail: parts.length ? parts : undefined,
+            damageHalfOnSave: half,
+            aoeId,
+            sourceTokenId: token.id,
+          }),
+        ),
+    });
+  }
+
   function saveToBestiary() {
     const next = statblockFromToken(token, linkedEntry ?? undefined);
     send({ t: 'bestiaryUpsert', statblock: next });
@@ -1147,6 +1267,15 @@ function TokenInspector({
                     onClick={() => rollDice(`${base} (đánh)${mtag}`, sbd20(a.attackBonus!))}
                   >
                     đánh
+                  </button>
+                )}
+                {a.save && parseArea(a.description) && (
+                  <button
+                    className="roll-btn strong"
+                    title="Đặt vùng AoE lên bản đồ, chọn mục tiêu rồi tự roll save"
+                    onClick={() => startActionAoe(a, base, parts)}
+                  >
+                    🔺 vùng
                   </button>
                 )}
                 {parts.length > 0 && (

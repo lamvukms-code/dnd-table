@@ -5,3 +5,4 @@ export * from './rules.js';
 export * from './classFeatures.js';
 export * from './cantrips.js';
 export * from './import5etools.js';
+export * from './aoe.js';

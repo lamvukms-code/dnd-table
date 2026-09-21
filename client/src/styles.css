@@ -1077,3 +1077,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .insp-sb-link { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
 .insp-sb-link button { font-size: 11px; padding: 2px 6px; }
 .bestiary-palette { left: 215px; }
+
+.aoe-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; }
+.aoe-shape { fill: rgba(231, 76, 60, 0.28); stroke: #e74c3c; stroke-width: 2; }
+.token.aoe-hit { outline: 3px solid #e74c3c; outline-offset: 1px; box-shadow: 0 0 12px 3px rgba(231, 76, 60, 0.8); }

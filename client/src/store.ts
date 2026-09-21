@@ -13,6 +13,11 @@ import {
   spellAttackParts,
   spellcastingAbilityOf,
   spellSaveDc,
+  parseArea,
+  defaultAnchor,
+  parseRangeFeet,
+  type AreaAnchor,
+  type AreaSpec,
   tokenConditions,
   type ActiveEffect,
   type ClientAction,
@@ -61,6 +66,17 @@ interface AttackParams {
   attackerTokenId?: string;
 }
 
+export interface AoeMode {
+  label: string;
+  spec: AreaSpec;
+  anchor: AreaAnchor;
+  /** Token the template is anchored on / measured from (never hit by its own template). */
+  casterTokenId?: string;
+  /** Casting range for point-anchored templates (0 = none). */
+  rangeFeet?: number;
+  onConfirm: (targetIds: string[], aoeId: string) => void;
+}
+
 interface StoreState {
   status: 'idle' | 'connecting' | 'open' | 'closed';
   participantId: string | null;
@@ -102,7 +118,12 @@ interface StoreState {
   /** Bestiary entry the DM asked to open from a token (null = none). */
   bestiaryFocus: string | null;
   openBestiary: (id: string | null) => void;
-  resolveCastOnToken: (targetTokenId: string) => Promise<void>;
+  resolveCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean }) => Promise<void>;
+  /** Armed AoE template awaiting placement on the map. */
+  aoe: AoeMode | null;
+  beginAoe: (mode: AoeMode) => void;
+  cancelAoe: () => void;
+  confirmAoe: (targetIds: string[]) => void;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
     name: string,
@@ -365,11 +386,50 @@ export const useStore = create<StoreState>((set, get) => {
     removeEffect: (tokenId, effectId) => rawSend({ t: 'removeEffect', tokenId, effectId }),
     clearConcentration: (tokenId) => rawSend({ t: 'clearConcentration', tokenId }),
 
-    beginCast: (sheetId, spell) => set({ castingSpell: { sheetId, spell } }),
-    cancelCast: () => set({ castingSpell: null }),
+    beginCast: (sheetId, spell) => {
+      // Save spells with a parseable template: place the area on the map instead of clicking one target.
+      const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
+      const casterTokenId = get().room?.sheets.find((s) => s.id === sheetId)?.tokenId;
+      if (spec && casterTokenId) {
+        const selfRange = /bản thân|self/i.test(spell.range ?? '');
+        const rangeFeet = selfRange ? 0 : parseRangeFeet(spell.range);
+        set({
+          castingSpell: null,
+          aoe: {
+            label: spell.name,
+            spec,
+            anchor: defaultAnchor(spec, rangeFeet, selfRange),
+            casterTokenId,
+            rangeFeet,
+            onConfirm: (ids, aoeId) => {
+              ids.forEach((id, i) => {
+                set({ castingSpell: { sheetId, spell } });
+                void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0 });
+              });
+            },
+          },
+        });
+        return;
+      }
+      set({ castingSpell: { sheetId, spell } });
+    },
+    cancelCast: () => set({ castingSpell: null, aoe: null }),
+    aoe: null,
+    beginAoe: (mode) => set({ aoe: mode, castingSpell: null }),
+    cancelAoe: () => set({ aoe: null }),
+    confirmAoe: (targetIds) => {
+      const mode = get().aoe;
+      if (!mode) return;
+      set({ aoe: null });
+      if (targetIds.length === 0) {
+        set({ error: 'Không có token nào trong vùng — hủy.' });
+        return;
+      }
+      mode.onConfirm(targetIds, `aoe-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`);
+    },
     bestiaryFocus: null,
     openBestiary: (id) => set({ bestiaryFocus: id }),
-    resolveCastOnToken: async (targetTokenId) => {
+    resolveCastOnToken: async (targetTokenId, opts) => {
       const cast = get().castingSpell;
       const room = get().room;
       if (!cast || !room) return;
@@ -389,7 +449,7 @@ export const useStore = create<StoreState>((set, get) => {
       const placesConcOnTarget =
         spell.castKind === 'rider' ||
         ((spell.castKind === 'save' || spell.castKind === 'utility') && !!spell.effect);
-      if (spell.concentration && !placesConcOnTarget && sheet.tokenId) {
+      if (spell.concentration && !placesConcOnTarget && sheet.tokenId && !opts?.skipConc) {
         rawSend({
           t: 'applyEffect',
           targetTokenId: sheet.tokenId,
@@ -443,6 +503,7 @@ export const useStore = create<StoreState>((set, get) => {
           sourceSheetId: sheetId,
           damageOnFail: spell.damage && spell.damage.length ? spell.damage : undefined,
           damageHalfOnSave: spell.save.halfOnSave,
+          aoeId: opts?.aoeId,
           effectOnFail: spell.effect
             ? {
                 id: '',

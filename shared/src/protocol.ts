@@ -77,6 +77,8 @@ export type ClientAction =
       damageOnFail?: DamagePart[];
       // level 1+ AoE: the target still takes half of `damageOnFail` on a success
       damageHalfOnSave?: boolean;
+      /** Same id on every target of one AoE cast → the damage dice are rolled once. */
+      aoeId?: string;
       sourceSheetId?: string;
       sourceTokenId?: string;
     }

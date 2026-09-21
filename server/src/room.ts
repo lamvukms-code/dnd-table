@@ -151,6 +151,9 @@ export class Room {
 
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
+  /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
+  private aoeRolls = new Map<string, ReturnType<Room['rollDamageParts']>>();
+
   private rollDamageParts(
     parts: DamagePart[],
     crit: boolean,
@@ -1009,11 +1012,18 @@ export class Room {
         // (level 1+ AoE); 2024 cantrips deal nothing on a success.
         const takesDamage = action.damageOnFail?.length && (!pass ? true : !!action.damageHalfOnSave);
         if (takesDamage) {
-          let rd;
-          try {
-            rd = this.rollDamageParts(action.damageOnFail!, false, undefined);
-          } catch (err) {
-            return (err as Error).message;
+          // AoE: damage is rolled ONCE and shared by every creature in the area.
+          let rd = action.aoeId ? this.aoeRolls.get(action.aoeId) : undefined;
+          if (!rd) {
+            try {
+              rd = this.rollDamageParts(action.damageOnFail!, false, undefined);
+            } catch (err) {
+              return (err as Error).message;
+            }
+            if (action.aoeId) {
+              this.aoeRolls.set(action.aoeId, rd);
+              if (this.aoeRolls.size > 20) this.aoeRolls.delete(this.aoeRolls.keys().next().value!);
+            }
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
           const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
@@ -1045,7 +1055,7 @@ export class Room {
           if (effect.concentration) {
             const srcId = this.sourceTokenId(effect);
             const src = srcId && this.state.tokens.find((t) => t.id === srcId);
-            if (src) {
+            if (src && src.concentration?.name !== effect.name) {
               this.dropConcentration(src, `chuyển sang ${effect.name}`, actor);
               src.concentration = { name: effect.name, since: this.state.initiative.round };
             }
