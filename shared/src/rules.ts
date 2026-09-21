@@ -935,6 +935,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     focusUsed: 0,
     wildShapeUsed: 0,
     subclassUses: {},
+    speciesUses: {},
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),

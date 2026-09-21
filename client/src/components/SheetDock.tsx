@@ -42,6 +42,12 @@ import {
   skillBonus,
   sneakAttackDice,
   subclassUsesMax,
+  applySpecies,
+  derivedSpeciesFeatures,
+  findSpecies,
+  speciesUsesMax,
+  syncSpeciesSpells,
+  SPECIES_SPELL_ABILITIES,
   warlockLevel,
   wildShapeMax,
   spellAttackBonus,
@@ -61,6 +67,7 @@ import {
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { SUBCLASS_DEFS } from '../subclassData.js';
+import { SPECIES_DEFS } from '../speciesData.js';
 import { FormulaHint } from './FormulaHint.js';
 import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
@@ -464,6 +471,23 @@ function BasicTab({ draft, commit }: EditorCtx) {
               value={draft.className}
               onChange={(e) => set('className', e.target.value)}
             />
+            {SPECIES_DEFS.length > 0 && (
+              <select
+                className="bt-species"
+                title="Species — đổi ở đây sẽ đổi luôn racial features, tốc độ và phép chủng tộc"
+                value={draft.species ?? ''}
+                onChange={(e) =>
+                  commit(applySpecies(draft, findSpecies(SPECIES_DEFS, e.target.value), nanoIdish))
+                }
+              >
+                <option value="">— Species —</option>
+                {SPECIES_DEFS.map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <label>
               Cấp
               <input
@@ -473,7 +497,12 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 value={draft.level}
                 onChange={(e) => {
                   const level = Number(e.target.value);
-                  commit({ ...draft, level, proficiencyBonus: proficiencyByLevel(level) });
+                  const leveled = { ...draft, level, proficiencyBonus: proficiencyByLevel(level) };
+                  commit(
+                    draft.species
+                      ? syncSpeciesSpells(leveled, findSpecies(SPECIES_DEFS, draft.species), nanoIdish)
+                      : leveled,
+                  );
                 }}
               />
             </label>
@@ -647,7 +676,10 @@ function BasicTab({ draft, commit }: EditorCtx) {
             >
               ⚔ Init {fmtMod(initiativeBonus(draft))}
             </button>
-            <button className="rest" onClick={() => commit(withSubclassRest(applyShortRest(draft), 'short'))}>
+            <button
+              className="rest"
+              onClick={() => commit(withSpeciesRest(withSubclassRest(applyShortRest(draft), 'short'), 'short'))}
+            >
               Nghỉ ngắn
             </button>
             <button className="rest" onClick={() => commit(applyLongRest(draft))}>
@@ -660,6 +692,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
       </div>
 
       <ClassFeatures draft={draft} commit={commit} />
+      <SpeciesFeatures draft={draft} commit={commit} />
       <SubclassFeatures draft={draft} commit={commit} />
 
       {/* actions economy */}
@@ -1337,6 +1370,86 @@ function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): Charac
     }
   }
   return changed ? { ...sheet, subclassUses: used } : sheet;
+}
+
+/** Reset species-trait use pools that recharge on the given rest. */
+function withSpeciesRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
+  const def = findSpecies(SPECIES_DEFS, sheet.species);
+  if (!def) return sheet;
+  const used = { ...(sheet.speciesUses ?? {}) };
+  let changed = false;
+  for (const f of derivedSpeciesFeatures(sheet, def)) {
+    if (f.uses && (kind === 'long' || f.uses.recharge === 'short') && used[f.id]) {
+      delete used[f.id];
+      changed = true;
+    }
+  }
+  return changed ? { ...sheet, speciesUses: used } : sheet;
+}
+
+/** Racial traits of the chosen species (from the local species data), with use trackers. */
+function SpeciesFeatures({ draft, commit }: EditorCtx) {
+  const def = findSpecies(SPECIES_DEFS, draft.species);
+  if (!def) return null;
+  const feats = derivedSpeciesFeatures(draft, def);
+  const used = draft.speciesUses ?? {};
+  const setUse = (id: string, n: number) =>
+    commit({ ...draft, speciesUses: { ...used, [id]: Math.max(0, n) } });
+  const meta = [
+    def.creatureType,
+    def.size,
+    `Speed ${def.speed} ft`,
+    def.movement,
+    def.darkvision ? `Darkvision ${def.darkvision} ft` : null,
+  ].filter(Boolean);
+
+  return (
+    <details className="class-features species-features" open>
+      <summary>
+        Species — {def.name}
+        {def.blurb ? ` (${def.blurb})` : ''}
+      </summary>
+      <p className="hint">{meta.join(' · ')}</p>
+      {(def.spells?.length ?? 0) > 0 && (
+        <label className="sf-ability">
+          Chỉ số ra phép của species
+          <select
+            value={draft.speciesSpellAbility ?? draft.spellcastingAbility ?? 'wis'}
+            onChange={(e) => {
+              const a = e.target.value as (typeof SPECIES_SPELL_ABILITIES)[number];
+              commit({ ...draft, speciesSpellAbility: a, spellcastingAbility: draft.spellcastingAbility ?? a });
+            }}
+          >
+            {SPECIES_SPELL_ABILITIES.map((a) => (
+              <option key={a} value={a}>
+                {a.toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <div className="cf-list">
+        {feats.map((f) => {
+          const max = f.uses ? speciesUsesMax(f.uses.max, draft) : 0;
+          const u = Math.min(used[f.id] ?? 0, max);
+          return (
+            <div key={f.id} className="cf-row">
+              <span className="cf-lvl">{f.level && f.level > 1 ? `L${f.level}` : '•'}</span>
+              <span className="cf-body">
+                <strong>{f.name}.</strong> {f.description}
+                {f.uses && (
+                  <span className="cf-uses">
+                    <FocusPips max={max} used={u} onChange={(n) => setUse(f.id, n)} />
+                    <em>hồi khi nghỉ {f.uses.recharge === 'short' ? 'ngắn' : 'dài'}</em>
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  );
 }
 
 /** Subclass features, from the DM's local subclass data file. Separate from class features. */

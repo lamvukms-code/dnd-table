@@ -202,6 +202,12 @@ export interface CharacterSheet {
   wildShapeUsed?: number;
   /** Subclass-feature limited-use pools spent, keyed by feature id. */
   subclassUses?: Record<string, number>;
+  /** Chosen species (name); its traits are derived from the local species data. */
+  species?: string;
+  /** Limited-use species traits spent, keyed by trait id. */
+  speciesUses?: Record<string, number>;
+  /** Casting ability for species spells (INT / WIS / CHA). */
+  speciesSpellAbility?: Ability;
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];
@@ -361,6 +367,8 @@ export interface Spell {
   concentration?: boolean;
   ritual?: boolean;
   prepared: boolean;
+  /** Set when a species grants this spell (removed if the species changes). */
+  fromSpecies?: string;
   castKind: SpellCastKind;
   actionType?: ActionType;
   /** 'save' spells: the save the target rolls. DC defaults to the sheet's spell save DC.

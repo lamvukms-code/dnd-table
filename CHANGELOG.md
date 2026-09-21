@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-09-21
+
+### Added
+
+- **Species on the character sheet.** A **Species** dropdown next to the class (Cơ bản tab)
+  lists species from a local, git-ignored `client/src/data/species.local.json` (the repo ships
+  none; see `species.example.json` and the data README). Choosing one:
+  - sets the base Speed and shows type / size / movement (Fly = Speed…) / Darkvision;
+  - adds the spells it grants — the cantrip at level 1 and "always prepared" ones once the
+    character reaches their level (tagged so they are removed cleanly if the species changes);
+  - lists the racial traits under **Species features**, level-gated, with pip trackers for
+    limited-use traits (1/short, PB/long…) that reset on short / long rest;
+  - a casting-ability picker (INT/WIS/CHA) for species spells.
+  Changing species swaps everything in place. PDF import reads the sheet's RACE box and
+  applies the matching species (typos forgiven). `shared/src/species.ts` + tests (invented
+  test species only).
+
 ## [0.43.0] - 2026-09-21
 
 ### Added
@@ -997,7 +1014,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...v0.41.0

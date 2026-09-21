@@ -19,3 +19,4 @@ coverage/
 .srd-src/
 server/data/*.backup.json
 client/public/theme/
+client/src/data/species.local.json

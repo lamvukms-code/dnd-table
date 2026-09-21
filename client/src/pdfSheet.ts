@@ -1,4 +1,11 @@
-import { sheetFromPdfFields, type PdfField, type PdfSheetResult } from '@dnd-table/shared';
+import {
+  applySpecies,
+  matchSpecies,
+  sheetFromPdfFields,
+  type PdfField,
+  type PdfSheetResult,
+} from '@dnd-table/shared';
+import { SPECIES_DEFS } from './speciesData.js';
 
 /**
  * Read a fillable character-sheet PDF in the browser (nothing is uploaded) and turn it into a
@@ -44,5 +51,12 @@ export async function importPdfSheet(
   }
   const res = sheetFromPdfFields(fields, ownerId, newId);
   if (!res) throw new Error('Không nhận ra mẫu phiếu này — hiện chỉ đọc được mẫu "Sirindoodles" 5e.');
+  // The sheet's RACE box: if it names a species we have data for (typos forgiven), apply it.
+  const race = /Chủng tộc: (.+)/.exec(res.sheet.notes)?.[1]?.trim();
+  const def = matchSpecies(SPECIES_DEFS, race);
+  if (def) {
+    res.sheet = applySpecies(res.sheet, def, newId);
+    res.report.push(`Species: ${def.name} (từ ô RACE "${race}")`);
+  }
   return res;
 }

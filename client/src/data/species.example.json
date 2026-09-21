@@ -1,0 +1,30 @@
+[
+  {
+    "id": "emberkin",
+    "name": "Emberkin",
+    "blurb": "An invented example species — replace with species from a book you own.",
+    "creatureType": "Humanoid",
+    "size": "Medium (5–6 ft)",
+    "speed": 30,
+    "movement": "Climb = your Speed",
+    "darkvision": 60,
+    "spells": [
+      { "name": "Minor Illusion", "level": 0 },
+      { "name": "Charm Person", "level": 1, "minLevel": 3 }
+    ],
+    "features": [
+      {
+        "id": "emberkin-warm-blood",
+        "name": "Warm Blood",
+        "description": "Resistance to Cold damage."
+      },
+      {
+        "id": "emberkin-spark",
+        "name": "Spark",
+        "description": "Bonus Action: a creature within 30 ft takes Fire damage equal to your PB.",
+        "level": 3,
+        "uses": { "max": "prof", "recharge": "long" }
+      }
+    ]
+  }
+]

@@ -42,3 +42,14 @@ tracker**. Shape (`homebrew.example.json`): array of
 attunement?, status: 'draft'|'live'|'retired', description, mechanics?, secret?,
 notes? }`. `secret: true` = DM-only. Normally the DM edits these in-app (they
 live in the room state); this file is just an optional starting seed.
+
+---
+
+# Local species  (`species.local.json`, git-ignored)
+
+Species (races) from a setting book **you own**. The repo ships none — see `species.example.json`.
+An array of `SpeciesDef`: `{ id, name, blurb?, creatureType?, size?, speed, movement?, darkvision?, spells?: [{ name, level, minLevel? }], features: [{ id, name, description, level?, uses?: { max: number|"prof", recharge: "short"|"long" } }] }`.
+
+Pick a species on the character sheet: it sets the base speed, adds the granted spells (cantrip, and
+"always prepared" ones from their level), and lists the traits — with pip trackers for limited-use
+ones that reset on a short / long rest. Changing species swaps everything cleanly.
