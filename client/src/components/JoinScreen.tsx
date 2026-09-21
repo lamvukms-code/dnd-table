@@ -14,7 +14,7 @@ export function JoinScreen({ connecting }: { connecting: boolean }) {
     <div className="join">
       <div className="join-card">
         <h1>D&D Table</h1>
-        <p>Bàn chơi D&D 5e (2024) cá nhân — LAN.</p>
+        <p>Bàn chơi D&D 5e (2024) cá nhân.</p>
         <label>
           Tên hiển thị
           <input

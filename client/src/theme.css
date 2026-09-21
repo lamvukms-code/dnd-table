@@ -1,0 +1,160 @@
+/*
+ * "Crooked Moon" look: warm night-dark chrome around the map, aged-parchment panels
+ * (sepia ink, crimson seal accent). Purely cosmetic overrides on top of styles.css.
+ * Textures / vine ornaments live in client/public/theme/ (local only, git-ignored);
+ * every rule degrades gracefully to plain flat colours when those files are missing.
+ */
+:root {
+  --bg: #16110c;
+  --panel: #211a12;
+  --panel-2: #2e251a;
+  --line: #5d4c38;
+  --text: #ece0c8;
+  --muted: #a8977b;
+  --accent: #cda75b; /* candle gold on the dark chrome */
+  --accent-2: #8b6b3d;
+  --hit: #5f8f4a;
+  --miss: #a5342e;
+  --serif: 'IM Fell English SC', 'Alegreya', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --serif-body: 'Alegreya', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+}
+
+body {
+  font-family: var(--serif-body);
+  font-size: 15px;
+}
+
+/* dark chrome */
+.topbar { background: linear-gradient(#251c13, #1b140d); border-bottom: 1px solid #6b5637; }
+.topbar > strong { font-family: var(--serif); letter-spacing: 0.06em; font-size: 17px; color: #e9d7ae; }
+.topbar button, .init-bar button { background: #2f2418; border-color: #665238; color: #e9dcc3; }
+.topbar button:hover, .init-bar button:hover { border-color: var(--accent); color: #fff3d6; }
+.topbar button.on, .init-bar button.on { background: #6b2320; border-color: #a5342e; color: #fbe9d0; }
+button.primary { background: #8a1c1c; border-color: #b23a32; color: #fbeedb; }
+button.on { background: #6b2320; border-color: #a5342e; color: #fbe9d0; }
+button { border-radius: 4px; }
+
+/* parchment panels */
+.sheet-dock,
+.inspector,
+.modal,
+.reference-panel,
+.dice-window,
+.dice-window-fab,
+.token-palette,
+.join-card {
+  --bg: #f7f1e4;
+  --panel: #ede4d1;
+  --panel-2: #e1d5bd;
+  --line: #b5a68d;
+  --text: #3f3122;
+  --muted: #7b6a54;
+  --accent: #8a1c1c; /* crimson seal */
+  --accent-2: #6d4c2f;
+  --hit: #3d6b3a;
+  --miss: #8a1c1c;
+  color-scheme: light;
+  font-family: var(--serif-body);
+  color: var(--text);
+  background-color: #ede4d1;
+  background-image: url('/theme/paper.jpg');
+  background-size: 640px auto;
+  border-color: #a89985;
+}
+
+.inspector,
+.modal,
+.dice-window,
+.token-palette,
+.join-card {
+  border: 2px solid #a89985;
+  border-radius: 10px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(120, 95, 55, 0.16);
+}
+
+/* vine border along the bottom edge (a background layer so scrolling content doesn't drag it) */
+.inspector,
+.modal,
+.reference-panel,
+.join-card {
+  background-image: url('/theme/vine-bottom.png'), url('/theme/paper.jpg');
+  background-position: center bottom, 0 0;
+  background-size: 100% 46px, 640px auto;
+  background-repeat: no-repeat, repeat;
+  padding-bottom: 44px;
+}
+.sheet-dock {
+  background-image: url('/theme/vine-bottom.png'), url('/theme/paper.jpg');
+  background-position: center bottom, 0 0;
+  background-size: 100% 40px, 640px auto;
+  background-repeat: no-repeat, repeat;
+  border-top: 3px solid #a89985;
+}
+
+/* controls inside parchment */
+.sheet-dock button, .inspector button, .modal button, .reference-panel button,
+.dice-window button, .token-palette button, .join-card button {
+  background: #e3d7bf;
+  border-color: #b5a68d;
+  color: #3f3122;
+}
+.sheet-dock button:hover, .inspector button:hover, .modal button:hover,
+.reference-panel button:hover, .dice-window button:hover { border-color: #8a1c1c; }
+.sheet-dock button.primary, .inspector button.primary, .modal button.primary, .join-card button.primary {
+  background: #8a1c1c; border-color: #6e1414; color: #fbeedb;
+}
+.sheet-dock button.on, .inspector button.on, .modal button.on, .reference-panel button.on,
+.dice-window button.on {
+  background: #8a1c1c; border-color: #6e1414; color: #fbeedb;
+}
+.sheet-dock button.danger, .inspector button.danger, .modal button.danger { color: #8a1c1c; border-color: #8a1c1c; }
+.sheet-dock button.link, .inspector button.link, .modal button.link, .reference-panel button.link,
+.dice-window button.link { background: none; border: none; color: #7b6a54; }
+.sheet-dock input, .sheet-dock select, .sheet-dock textarea,
+.inspector input, .inspector select, .inspector textarea,
+.modal input, .modal select, .modal textarea,
+.reference-panel input, .reference-panel select, .reference-panel textarea,
+.dice-window input, .dice-window select,
+.join-card input, .token-palette input {
+  background: rgba(255, 252, 244, 0.7);
+  border-color: #b5a68d;
+  color: #3f3122;
+}
+.sheet-dock .roll-btn.strong, .inspector .roll-btn.strong { background: #8a1c1c; color: #fbeedb; border-color: #6e1414; }
+
+/* headings: card-style small caps with a divider */
+.modal h1, .modal h2, .modal h3, .inspector h3, .join-card h1, .join-card h2, .sheet-dock h3, .sheet-dock h4 {
+  font-family: var(--serif);
+  letter-spacing: 0.05em;
+  color: #4a3a25;
+  font-weight: normal;
+}
+.join-card h1, .modal-head h2, .modal-head h3 {
+  padding-bottom: 8px;
+  background: url('/theme/divider.png') center bottom / 100% 10px no-repeat;
+}
+.join { background: radial-gradient(ellipse at center, #2a2016 0%, #120d08 75%); }
+.join-card h1 { font-size: 26px; text-align: center; }
+
+.sd-tabs button, .lore-tabs button, .rp-tabs button { font-family: var(--serif); letter-spacing: 0.04em; }
+.sheet-dock .sd-tabs button.on, .rp-tabs button.on, .lore-tabs button.on, .lore-chips button.on {
+  background: #8a1c1c; color: #fbeedb; border-color: #6e1414;
+}
+
+/* map area extras */
+.cast-banner { font-family: var(--serif-body); }
+.aoe-shape { fill: rgba(165, 52, 46, 0.3); stroke: #a5342e; }
+.toast { background: #8a1c1c; font-family: var(--serif-body); }
+
+/* refinements after first review */
+.board-scroll { background: #120e09; }
+.sheet-dock {
+  background-image: url('/theme/paper.jpg');
+  background-size: 640px auto;
+  background-repeat: repeat;
+  background-position: 0 0;
+}
+.inspector { overflow-x: hidden; font-size: 14px; }
+.inspector input, .inspector select { min-width: 0; max-width: 100%; }
+.insp-grid > * { min-width: 0; }
+.sheet-dock { font-size: 14px; }
