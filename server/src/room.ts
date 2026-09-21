@@ -39,6 +39,7 @@ import {
   tokenStatblockFrom,
   type Ability,
   type ActiveEffect,
+  type AttackRange,
   type ClientAction,
   type DamagePart,
   type Defenses,
@@ -209,13 +210,17 @@ export class Room {
     attackerId: string | undefined,
     hadTemp: number,
     eff: ActiveEffect | undefined,
+    attackRange: AttackRange | undefined,
     actor: Participant,
   ): void {
     if (!attackerId || hadTemp <= 0 || !eff?.retaliate) return;
+    if (attackRange === 'ranged') return; // only melee hits trigger it, even at point-blank range
     const attacker = this.state.tokens.find((t) => t.id === attackerId);
     if (!attacker || attacker.id === target.id) return;
     const span = (t: Token) => ({ tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 })[t.size] ?? 1;
-    if (gridFeet(attacker, target) > 5 * Math.max(span(attacker), span(target))) return; // not a melee hit
+    // Melee-tagged: allow reach weapons (10 ft). Untagged legacy attacks: adjacency only.
+    const reach = attackRange === 'melee' ? 10 : 5;
+    if (gridFeet(attacker, target) > reach * Math.max(span(attacker), span(target))) return;
     let rolled: number;
     try {
       rolled = rollNotation(eff.retaliate.dice).total;
@@ -814,7 +819,7 @@ export class Room {
               notes: [...(damageBreakdownNotes(outcome) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
             },
           });
-          this.retaliate(target, action.attackerTokenId, hadTemp, retEff, actor);
+          this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
         }
         this.touch();
         break;

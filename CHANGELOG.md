@@ -6,6 +6,26 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-09-22
+
+### Added
+
+- **Melee / ranged tag on attacks** (`SheetAction.attackRange`, `InventoryItem.attackRange`,
+  `attack.attackRange`). Every attack row shows a **⚔ cận / 🏹 xa** chip you can flip (a thrown
+  dagger stabbed in melee, a bow fired point-blank); untagged attacks are inferred from their
+  range ("5 ft" / "Chạm" → melee, "80/320 ft" → ranged) and stat-block wording ("Ranged Attack
+  Roll"). It works whatever the distance, so a ranged attack made at close quarters is still
+  *ranged*:
+  - a ranged attack against a target within 5 ft automatically has **Disadvantage** (noted in
+    the roll label);
+  - **Armor of Agathys** retaliation now needs a *melee*-tagged hit (reach weapons count),
+    so a bow shot from an adjacent enemy no longer triggers it.
+
+### Fixed
+
+- The client-side movement ring used the sheet's raw speed; it now uses the computed speed
+  (Fast Movement / Unarmored Movement) like the server.
+
 ## [0.45.0] - 2026-09-22
 
 ### Added
@@ -1044,7 +1064,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...v0.43.0

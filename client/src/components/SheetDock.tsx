@@ -11,6 +11,8 @@ import {
   effectiveArmorClass,
   computeSpeed,
   hitDicePools,
+  attackRangeOf,
+  type AttackRange,
   d20Check,
   derivedClassFeatures,
   emptyCurrency,
@@ -815,6 +817,27 @@ function BasicTab({ draft, commit }: EditorCtx) {
                         }
                       : undefined
                   }
+                  onToggleRange={
+                    a.id === 'unarmed' || a.id === 'monk-unarmed'
+                      ? undefined
+                      : () => {
+                          const next: AttackRange = attackRangeOf(a) === 'melee' ? 'ranged' : 'melee';
+                          if (a.id.startsWith('weapon:')) {
+                            const itemId = a.id.slice('weapon:'.length);
+                            commit({
+                              ...draft,
+                              inventory: draft.inventory.map((it) =>
+                                it.id === itemId ? { ...it, attackRange: next } : it,
+                              ),
+                            });
+                          } else {
+                            commit({
+                              ...draft,
+                              actions: draft.actions.map((x) => (x.id === a.id ? { ...x, attackRange: next } : x)),
+                            });
+                          }
+                        }
+                  }
                   onDelete={
                     a.source === 'weapon'
                       ? undefined
@@ -862,6 +885,7 @@ function ActionRow({
   damageRoll,
   onFired,
   grapple,
+  onToggleRange,
   onDelete,
 }: {
   action: SheetAction;
@@ -881,6 +905,7 @@ function ActionRow({
     rollMode?: RollMode;
     attackerSheetId?: string;
     attackerTokenId?: string;
+    attackRange?: AttackRange;
   }) => Promise<void>;
   damageRoll: (
     label: string,
@@ -890,6 +915,7 @@ function ActionRow({
   ) => Promise<void>;
   onFired?: () => void;
   grapple?: { dc: number; grappling: boolean; onToggle: (release: boolean) => void };
+  onToggleRange?: () => void;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
@@ -913,6 +939,20 @@ function ActionRow({
             : action.notation || action.description || ''}
         {action.range ? <em className="ar-range"> · tầm {action.range}</em> : null}
       </span>
+      {isAttack && (
+        <button
+          className={`range-tag ${attackRangeOf(action)}`}
+          disabled={!onToggleRange}
+          title={
+            attackRangeOf(action) === 'melee'
+              ? 'Cận chiến — bấm để đổi sang tầm xa (tầm xa đánh sát địch bị bất lợi)'
+              : 'Tầm xa — bấm để đổi sang cận chiến'
+          }
+          onClick={onToggleRange}
+        >
+          {attackRangeOf(action) === 'melee' ? '⚔ cận' : '🏹 xa'}
+        </button>
+      )}
       {isAttack && targetId && (
         <button
           className="roll-btn strong"
@@ -925,6 +965,7 @@ function ActionRow({
               targetTokenId: targetId,
               attackerSheetId: attacker.sheetId,
               attackerTokenId: attacker.tokenId,
+              attackRange: attackRangeOf(action),
             });
             onFired?.();
           }}

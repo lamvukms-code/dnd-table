@@ -1,5 +1,6 @@
 import type {
   Ability,
+  AttackRange,
   CasterType,
   CharacterSheet,
   ClassEntry,
@@ -19,6 +20,29 @@ import type {
 import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
 import { regainHitDice } from './derived.js';
+
+/** Guess melee vs ranged from a range text: "5 ft", "Chạm", "reach 10 ft" → melee; "80/320 ft", "60ft" → ranged. */
+export function inferAttackRange(range: string | undefined): AttackRange {
+  const t = (range ?? '').toLowerCase().trim();
+  if (!t || /chạm|touch|bản thân|self|reach/.test(t)) return 'melee';
+  if (t.includes('/')) return 'ranged';
+  const m = /(\d+)/.exec(t);
+  return m && Number(m[1]) > 10 ? 'ranged' : 'melee';
+}
+
+/** The action's melee / ranged tag: the explicit one, else inferred from its range. */
+export function attackRangeOf(a: { attackRange?: AttackRange; range?: string; description?: string }): AttackRange {
+  if (a.attackRange) return a.attackRange;
+  const d = (a.description ?? '').toLowerCase();
+  if (/^ranged attack roll/.test(d)) return 'ranged'; // stat-block wording
+  if (/^melee attack roll/.test(d) || /^melee or ranged/.test(d)) return 'melee';
+  return inferAttackRange(a.range);
+}
+
+/** A ranged attack made against a target within 5 ft has Disadvantage (5e). */
+export function rangedAtCloseQuarters(range: AttackRange, distanceFeet: number): boolean {
+  return range === 'ranged' && distanceFeet <= 5;
+}
 
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
@@ -175,6 +199,7 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         range: it.rangeText || '5 ft',
         source: 'weapon' as const,
         attackKind: 'weapon' as const,
+        attackRange: it.attackRange ?? inferAttackRange(it.rangeText),
       };
     });
 }
@@ -196,6 +221,7 @@ export function unarmedAction(sheet: CharacterSheet): SheetAction {
     range: '5 ft',
     source: 'weapon',
     attackKind: 'weapon',
+    attackRange: 'melee',
     description: '5e 2024: 1 + STR mod đập. Có thể thay bằng Grapple / Shove.',
   };
 }

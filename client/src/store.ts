@@ -13,6 +13,10 @@ import {
   spellAttackParts,
   spellcastingAbilityOf,
   spellSaveDc,
+  inferAttackRange,
+  rangedAtCloseQuarters,
+  gridFeet,
+  type AttackRange,
   effectiveArmorClass,
   npcArmorClass,
   parseArea,
@@ -66,6 +70,8 @@ interface AttackParams {
   targetTokenId: string;
   attackerSheetId?: string;
   attackerTokenId?: string;
+  /** Melee / ranged tag of the attack (ranged at ≤5 ft ⇒ Disadvantage). */
+  attackRange?: AttackRange;
 }
 
 export interface AoeMode {
@@ -313,6 +319,7 @@ export const useStore = create<StoreState>((set, get) => {
       targetTokenId,
       attackerSheetId,
       attackerTokenId,
+      attackRange,
     }) => {
       const room = get().room;
       // Fold condition-implied advantage/disadvantage into the manual roll mode.
@@ -328,9 +335,16 @@ export const useStore = create<StoreState>((set, get) => {
             : undefined;
         const tgtTok = room?.tokens.find((t) => t.id === targetTokenId);
         const cm = conditionAttackMode(tokenConditions(atkTok), tokenConditions(tgtTok));
-        const finalMode = combineRollModes(rollMode ?? 'normal', cm.mode);
+        const reasons = [...cm.reasons];
+        let mode = cm.mode;
+        // Ranged attack made at close quarters (target within 5 ft): Disadvantage.
+        if (attackRange === 'ranged' && atkTok && tgtTok && rangedAtCloseQuarters('ranged', gridFeet(atkTok, tgtTok))) {
+          mode = combineRollModes(mode, 'disadvantage');
+          reasons.push('tầm xa trong tầm cận chiến');
+        }
+        const finalMode = combineRollModes(rollMode ?? 'normal', mode);
         notation = d20Check(attackBonus, finalMode);
-        if (cm.mode !== 'normal') condNote = ` [${cm.mode === 'advantage' ? 'lợi thế' : 'bất lợi'}: ${cm.reasons.join(', ')}]`;
+        if (mode !== 'normal') condNote = ` [${mode === 'advantage' ? 'lợi thế' : 'bất lợi'}: ${reasons.join(', ')}]`;
       }
       const finalLabel = label + condNote;
       const plain = () =>
@@ -342,6 +356,7 @@ export const useStore = create<StoreState>((set, get) => {
           targetTokenId,
           attackerSheetId,
           attackerTokenId,
+          attackRange,
         });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(notation);
@@ -537,6 +552,7 @@ export const useStore = create<StoreState>((set, get) => {
           targetTokenId,
           attackerSheetId: sheetId,
           attackerTokenId: sheet.tokenId,
+          attackRange: inferAttackRange(spell.range),
         });
         return;
       }

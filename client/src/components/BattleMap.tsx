@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  attackRangeOf,
+  computeSpeed,
   aoeGeometry,
   aoeTokenIds,
   defaultAnchor,
@@ -38,7 +40,7 @@ const CELL = 56; // display px per grid cell
 /** A token's walking speed for the client move tracker. */
 function tokenWalkSpeed(token: Token, sheets: CharacterSheet[]): number {
   const sheet = sheets.find((s) => s.tokenId === token.id);
-  return walkSpeed(sheet?.speed, token.statblock?.speed, tokenIsGrappled(token));
+  return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token));
 }
 const SIZE_CELLS: Record<TokenSize, number> = {
   tiny: 0.5,
@@ -1259,6 +1261,7 @@ function TokenInspector({
                         damageParts: parts,
                         targetTokenId: sbTargetId,
                         attackerTokenId: token.id,
+                        attackRange: attackRangeOf(a),
                       })
                     }
                   >

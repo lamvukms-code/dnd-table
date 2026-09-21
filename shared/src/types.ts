@@ -33,6 +33,9 @@ export interface Attack {
   source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
 }
 
+/** How an attack is delivered: a melee attack, or a ranged one (which may still be made at close quarters). */
+export type AttackRange = 'melee' | 'ranged';
+
 export type ActionType = 'action' | 'bonus' | 'reaction' | 'free' | 'other';
 export const ACTION_TYPES: ActionType[] = ['action', 'bonus', 'reaction', 'free', 'other'];
 export type Recharge = 'short' | 'long' | 'other';
@@ -79,6 +82,8 @@ export interface SheetAction {
   /** For attacks: whether it's a physical strike or a spell attack. Drives which
    *  standing riders + weapon features (Rage, Sneak Attack) apply. Default 'weapon'. */
   attackKind?: 'weapon' | 'spell';
+  /** Melee / ranged tag. Unset = inferred from `range` (see `attackRangeOf`). */
+  attackRange?: AttackRange;
 }
 
 /** Limited-use class resource: Ki, Rage, Bardic Inspiration, Sorcery Points… */
@@ -136,6 +141,8 @@ export interface InventoryItem {
   weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
   /** Reach / range text for the attack, e.g. "5 ft" (melee), "20/60 ft" (thrown). */
   rangeText?: string;
+  /** Melee / ranged tag for this weapon (a thrown dagger: flip it to melee when stabbing). */
+  attackRange?: AttackRange;
   /** Adamantine armour: while equipped, the wearer's token can't be crit. */
   grantsCritImmune?: boolean;
   /** Magic item the character is currently attuned to (max 3 — `ATTUNEMENT_SLOTS`). */

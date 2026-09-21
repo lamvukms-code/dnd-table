@@ -1,6 +1,7 @@
 import type {
   Ability,
   ActiveEffect,
+  AttackRange,
   BattleMap,
   CharacterSheet,
   DamagePart,
@@ -40,6 +41,8 @@ export type ClientAction =
       targetTokenId: string;
       attackerSheetId?: string;
       attackerTokenId?: string;
+      /** Melee or ranged delivery (drives Armor of Agathys retaliation, ranged-in-melee). */
+      attackRange?: AttackRange;
       // When present, the client already rolled (via dddice). On a crit the
       // per-part totals are the homebrew-crit notation's roll.
       external?: {
