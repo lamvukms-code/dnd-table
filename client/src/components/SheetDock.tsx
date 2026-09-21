@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ABILITIES,
   SKILLS,
@@ -174,6 +174,26 @@ export function SheetDock() {
   const [openId, setOpenId] = useState<string | null>(mine[0]?.id ?? null);
   const [sub, setSub] = useState<SubTab>('basic');
   const sheet = room.sheets.find((s) => s.id === openId) ?? mine[0] ?? null;
+  const pdfRef = useRef<HTMLInputElement>(null);
+  const [importNote, setImportNote] = useState<string | null>(null);
+
+  /** Read a filled-in character-sheet PDF in the browser and create the sheet from it. */
+  async function importPdf(file: File) {
+    if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+      setImportNote('❌ Chỉ nhận file .pdf');
+      return;
+    }
+    setImportNote('Đang đọc PDF…');
+    try {
+      const { importPdfSheet } = await import('../pdfSheet.js');
+      const res = await importPdfSheet(file, meId, nanoIdish);
+      send({ t: 'upsertSheet', sheet: res.sheet });
+      setOpenId(res.sheet.id);
+      setImportNote('✅ Đã nhập từ PDF\n' + res.report.join('\n'));
+    } catch (e) {
+      setImportNote('❌ ' + (e as Error).message);
+    }
+  }
 
   const [height, setHeight] = useState(() => {
     const v = Number(localStorage.getItem(DOCK_H_KEY));
@@ -202,8 +222,26 @@ export function SheetDock() {
   };
 
   return (
-    <div className="sheet-dock" style={{ height }}>
+    <div
+      className="sheet-dock"
+      style={{ height }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+          e.preventDefault();
+          void importPdf(file);
+        }
+      }}
+    >
       <div className="sd-resize" onPointerDown={drag} title="Kéo để đổi cỡ" />
+      {importNote && (
+        <div className="sd-import-note" onClick={() => setImportNote(null)} title="Bấm để ẩn">
+          {importNote}
+        </div>
+      )}
       <div className="sd-tabs">
         <div className="sd-chars">
           {mine.map((s) => (
@@ -226,6 +264,24 @@ export function SheetDock() {
           >
             +
           </button>
+          <button
+            className="add"
+            title="Nhập phiếu nhân vật từ file PDF (hoặc kéo thả PDF vào đây)"
+            onClick={() => pdfRef.current?.click()}
+          >
+            📄 PDF
+          </button>
+          <input
+            ref={pdfRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void importPdf(file);
+            }}
+          />
         </div>
         {sheet && (
           <div className="sd-subtabs">

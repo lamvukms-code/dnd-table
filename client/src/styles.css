@@ -1081,3 +1081,17 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .aoe-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; }
 .aoe-shape { fill: rgba(231, 76, 60, 0.28); stroke: #e74c3c; stroke-width: 2; }
 .token.aoe-hit { outline: 3px solid #e74c3c; outline-offset: 1px; box-shadow: 0 0 12px 3px rgba(231, 76, 60, 0.8); }
+.sd-import-note {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  z-index: 5;
+  max-width: 46%;
+  white-space: pre-line;
+  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-2);
+  cursor: pointer;
+}

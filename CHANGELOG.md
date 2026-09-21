@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-09-21
+
+### Added
+
+- **Import a character sheet from PDF.** In the character dock, **📄 PDF** (or drag a PDF
+  onto the dock) reads a filled-in fillable "Sirindoodles" 5e sheet **in the browser**
+  (nothing is uploaded; `pdf-lib` is lazy-loaded) and creates the sheet: name, class +
+  subclass, level, ability scores, save / skill proficiencies (from check boxes or the
+  printed bonuses, incl. expertise), HP, AC, speed, initiative, attacks, features, gear,
+  coins, notes (race, background, personality, backstory…), and spells by level — each
+  spell fuzzy-matched to the built-in DB (typos and mis-filed cantrips handled) so it
+  is wired for semi-automatic casting; unknown spells become note entries. Spell slots
+  come from the class table. `shared/src/importPdfSheet.ts` + tests.
+
 ## [0.40.0] - 2026-09-21
 
 ### Added
@@ -948,7 +962,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...v0.38.0
