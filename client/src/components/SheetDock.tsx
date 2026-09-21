@@ -43,6 +43,9 @@ import {
   rogueLevel,
   saveBonus,
   sheetClasses,
+  castingClassesOf,
+  extraAttackClasses,
+  multiclassIssues,
   skillBonus,
   sneakAttackDice,
   subclassUsesMax,
@@ -297,6 +300,17 @@ export function SheetDock() {
         </div>
         {sheet && (
           <div className="sd-subtabs">
+            <button
+              className="sd-del"
+              title="Xóa nhân vật này khỏi bàn chơi"
+              onClick={() => {
+                if (!window.confirm(`Xóa nhân vật "${sheet.name}"? Không hoàn tác được.`)) return;
+                send({ t: 'removeSheet', id: sheet.id });
+                setOpenId(null);
+              }}
+            >
+              🗑 Xóa
+            </button>
             {(
               [
                 ['basic', 'Cơ bản'],
@@ -426,6 +440,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
+  const multiClass = (draft.classes?.length ?? 0) > 0;
   const [rollMode, setRollMode] = useState<RollMode>('normal');
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
 
@@ -470,13 +485,16 @@ function BasicTab({ draft, commit }: EditorCtx) {
               value={draft.name}
               onChange={(e) => set('name', e.target.value)}
             />
-            <input
-              className="bt-class"
-              placeholder="Lớp"
-              value={draft.className}
-              onChange={(e) => set('className', e.target.value)}
-            />
-            {!draft.classes?.length && (
+            {multiClass && <ClassListEditor draft={draft} commit={commit} />}
+            {!multiClass && (
+              <input
+                className="bt-class"
+                placeholder="Lớp"
+                value={draft.className}
+                onChange={(e) => set('className', e.target.value)}
+              />
+            )}
+            {!multiClass && (
               <>
                 <input
                   className="bt-subclass"
@@ -523,6 +541,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 min={1}
                 max={20}
                 value={draft.level}
+                disabled={multiClass}
+                title={multiClass ? 'Đa nghề: cấp tổng = tổng cấp các nghề (sửa ở danh sách nghề)' : undefined}
                 onChange={(e) => {
                   const level = Number(e.target.value);
                   const leveled = { ...draft, level, proficiencyBonus: proficiencyByLevel(level) };
@@ -534,7 +554,27 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 }}
               />
             </label>
-            <span className="bt-prof">Thành thạo {fmtMod(draft.proficiencyBonus)}</span>
+            {!multiClass && (
+              <button
+                className="bt-multi"
+                title="Thêm nghề thứ hai (đa nghề / multiclass)"
+                onClick={() =>
+                  commit({
+                    ...draft,
+                    classes: [
+                      { name: draft.className, subclass: draft.subclass, level: draft.level },
+                      { name: '', level: 1 },
+                    ],
+                    subclass: undefined,
+                  })
+                }
+              >
+                + nghề phụ
+              </button>
+            )}
+            <span className="bt-prof">
+              {multiClass ? `Tổng cấp ${totalLevelOf(draft)} · ` : ''}Thành thạo {fmtMod(draft.proficiencyBonus)}
+            </span>
             <button
               className="bt-setup"
               title="Tự điền save, kỹ năng class, HP và feature theo class + cấp"
@@ -882,8 +922,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
             Nguồn sát thương thêm — rider ({draft.damageRiders.filter((r) => r.enabled).length})
           </summary>
           <p className="hint">
-            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa). Chọn “đòn vũ
-            khí / đòn phép / cả hai” để giới hạn loại đòn được cộng.
+            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa). Chọn loại đòn được cộng: “đòn vũ
+            khí” (gồm cả đánh tay không), “đánh tay không” (chỉ đòn tay không), “đòn phép” hoặc “cả hai”.
           </p>
           <DamageRidersEditor
             riders={draft.damageRiders}
@@ -1845,66 +1885,11 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   const byLevel = new Map<number, Spell[]>();
   for (const s of spells) byLevel.set(s.level, [...(byLevel.get(s.level) ?? []), s]);
 
-  const classes = sheetClasses(draft);
   const multi = (draft.classes?.length ?? 0) > 0;
-
-  function setClass(i: number, patch: Partial<ClassEntry>) {
-    const list = classes.map((c, j) => (j === i ? { ...c, ...patch } : c));
-    set({ classes: list, subclass: undefined });
-  }
 
   return (
     <div className="spells-tab">
-      <div className="mc-editor">
-        <span className="sg-label">Nghề {multi ? `· tổng cấp ${totalLevelOf(draft)}` : ''}</span>
-        {classes.map((c, i) => (
-          <div key={i} className="mc-row">
-            <input
-              className="mc-name"
-              value={c.name}
-              placeholder="Wizard"
-              onChange={(e) => setClass(i, { name: e.target.value })}
-            />
-            <input
-              className="mc-sub"
-              value={c.subclass ?? ''}
-              placeholder="subclass"
-              onChange={(e) => setClass(i, { subclass: e.target.value || undefined })}
-            />
-            <input
-              className="mc-lvl"
-              type="number"
-              min={1}
-              max={20}
-              value={c.level}
-              onChange={(e) => setClass(i, { level: Math.max(1, Number(e.target.value)) })}
-            />
-            <span className="mc-type">{casterTypeForClass(c.name, c.subclass)}</span>
-            {(multi || classes.length > 1) && (
-              <button
-                className="link"
-                onClick={() => {
-                  const list = classes.filter((_, j) => j !== i);
-                  set({ classes: list.length > 1 ? list : undefined });
-                }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          className="link"
-          onClick={() =>
-            set({
-              classes: [...classes, { name: 'Nghề mới', level: 1 }],
-              subclass: undefined,
-            })
-          }
-        >
-          + nghề phụ (đa nghề)
-        </button>
-      </div>
+      <ClassListEditor draft={draft} commit={commit} />
 
       <div className="spell-head">
         {!multi && (
@@ -1969,6 +1954,7 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 sp={sp}
                 canCast={caster !== 'none'}
                 onCast={() => beginCast(draft.id, sp)}
+                castingClasses={castingClassesOf(draft).map((c) => c.name)}
                 onChange={(p) => upd(sp.id, p)}
                 onRescale={
                   sp.level === 0 && rescaleCantripSpell(sp, draft)
@@ -2143,6 +2129,7 @@ function SpellDefPicker({
 function SpellRow({
   sp,
   canCast,
+  castingClasses,
   onCast,
   onChange,
   onRescale,
@@ -2150,6 +2137,8 @@ function SpellRow({
 }: {
   sp: Spell;
   canCast: boolean;
+  /** Multiclass: the sheet's casting classes (a spell picks one → its ability / DC). */
+  castingClasses: string[];
   onCast: () => void;
   onChange: (p: Partial<Spell>) => void;
   onRescale?: () => void;
@@ -2182,6 +2171,21 @@ function SpellRow({
           onChange={(e) => onChange({ level: Math.max(0, Math.min(9, Number(e.target.value))) })}
         />
         {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
+        {castingClasses.length > 1 && (
+          <select
+            className="sr-class"
+            value={sp.castingClass ?? ''}
+            title="Nghề ra phép: dùng chỉ số ra phép + DC của nghề này (đa nghề)"
+            onChange={(e) => onChange({ castingClass: e.target.value || undefined })}
+          >
+            <option value="">nghề?</option>
+            {castingClasses.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
         {onRescale && (
           <button
             className="link"
@@ -2502,6 +2506,120 @@ function AbilitiesTab({ draft, commit }: EditorCtx) {
         + Thêm năng lực
       </button>
       {draft.features.length === 0 && <p className="empty">Chưa có năng lực.</p>}
+    </div>
+  );
+}
+
+const CLASS_NAMES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Warlock', 'Wizard'];
+
+/**
+ * Class list of a (multiclass) character: one row per class with its own subclass + level. Total level, proficiency
+ * bonus, hit dice pools, spell slots, class features and subclass features all derive from it. Also warns about the
+ * SRD multiclass prerequisites (13+ in each class' primary ability) and non-stacking Extra Attack.
+ */
+function ClassListEditor({ draft, commit }: EditorCtx) {
+  const classes = sheetClasses(draft);
+  const multi = (draft.classes?.length ?? 0) > 0;
+  const total = totalLevelOf(draft);
+  const issues = multiclassIssues(draft);
+  const extra = extraAttackClasses(draft);
+  const set = (patch: Partial<CharacterSheet>) => {
+    const next = { ...draft, ...patch };
+    // total level + proficiency bonus follow the class list right away (the server derives them too)
+    if (next.classes?.length) {
+      next.level = Math.max(1, totalLevelOf(next));
+      next.proficiencyBonus = proficiencyByLevel(next.level);
+    }
+    commit(next);
+  };
+
+  function setClass(i: number, patch: Partial<ClassEntry>) {
+    set({ classes: classes.map((c, j) => (j === i ? { ...c, ...patch } : c)), subclass: undefined });
+  }
+  function removeClass(i: number) {
+    const list = classes.filter((_, j) => j !== i);
+    // back to one class: restore the plain single-class fields (the multiclass label "A 3 / B 2" is derived)
+    if (list.length <= 1) {
+      const only = list[0];
+      set({ classes: undefined, className: only?.name ?? '', level: only?.level ?? 1, subclass: only?.subclass });
+    } else set({ classes: list });
+  }
+
+  return (
+    <div className="mc-editor">
+      <span className="sg-label">Nghề {multi ? `· tổng cấp ${total}` : ''}</span>
+      {classes.map((c, i) => (
+        <div key={i} className="mc-row">
+          <input
+            className="mc-name"
+            list="mc-class-names"
+            value={c.name}
+            placeholder="Wizard"
+            onChange={(e) => setClass(i, { name: e.target.value })}
+          />
+          <input
+            className="mc-sub"
+            list={`mc-sub-${i}-${draft.id}`}
+            value={c.subclass ?? ''}
+            placeholder="subclass"
+            onChange={(e) => setClass(i, { subclass: e.target.value || undefined })}
+          />
+          <datalist id={`mc-sub-${i}-${draft.id}`}>
+            {Array.from(
+              new Set(
+                SUBCLASS_DEFS.filter((d) => d.class.toLowerCase() === (c.name ?? '').trim().toLowerCase()).map(
+                  (d) => d.subclass,
+                ),
+              ),
+            ).map((n) => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+          <input
+            className="mc-lvl"
+            type="number"
+            min={1}
+            max={Math.max(1, 20 - (total - c.level))}
+            value={c.level}
+            title="Cấp của nghề này (tổng tối đa 20)"
+            onChange={(e) => setClass(i, { level: Math.max(1, Math.min(20 - (total - c.level), Number(e.target.value))) })}
+          />
+          <span className="mc-type">{casterTypeForClass(c.name, c.subclass)}</span>
+          {classes.length > 1 && (
+            <button className="link" title="Bỏ nghề này" onClick={() => removeClass(i)}>
+              ✕
+            </button>
+          )}
+        </div>
+      ))}
+      <datalist id="mc-class-names">
+        {CLASS_NAMES.map((n) => (
+          <option key={n} value={n} />
+        ))}
+      </datalist>
+      <button
+        className="link"
+        disabled={total >= 20}
+        onClick={() => set({ classes: [...classes, { name: '', level: 1 }], subclass: undefined })}
+      >
+        + nghề phụ (đa nghề)
+      </button>
+      {issues.length > 0 && (
+        <p className="hint mc-warn">
+          ⚠ Chưa đủ điều kiện đa nghề (cần 13+ ở chỉ số chính của <em>mọi</em> nghề): {issues.join(' · ')}
+        </p>
+      )}
+      {extra.length > 1 && (
+        <p className="hint">
+          ℹ Extra Attack từ {extra.join(' + ')} <strong>không cộng dồn</strong> (tối đa 2 đòn từ feature này).
+        </p>
+      )}
+      {multi && (
+        <p className="hint">
+          Đa nghề: cấp tổng, Thành thạo (PB), hit dice (gộp theo loại d), ô phép (nghề caster cộng dồn — half caster
+          làm tròn lên) đều tự tính. Save / kỹ năng khởi đầu chỉ lấy từ nghề đầu tiên.
+        </p>
+      )}
     </div>
   );
 }

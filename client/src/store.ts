@@ -458,9 +458,9 @@ export const useStore = create<StoreState>((set, get) => {
       set({ castingSpell: null });
       if (!sheet) return;
       const label = `${sheet.name} · ${spell.name}`;
-      const atkBonus = spellAttackBonus(sheet) ?? 0;
-      const dc = spell.save?.dcOverride ?? spellSaveDc(sheet) ?? 10;
-      const castAbil = spellcastingAbilityOf(sheet);
+      const atkBonus = spellAttackBonus(sheet, spell) ?? 0;
+      const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
+      const castAbil = spellcastingAbilityOf(sheet, spell);
       const castMod = castAbil ? abilityMod(sheet.abilities[castAbil]) : 0;
 
       // Concentration spells whose branch places the concentration effect on the

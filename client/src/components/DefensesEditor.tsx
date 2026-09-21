@@ -126,6 +126,7 @@ export function DamageRidersEditor({
             onChange={(e) => upd(r.id, { scope: e.target.value as DamageRider['scope'] })}
           >
             <option value="weapon">đòn vũ khí</option>
+            <option value="unarmed">đánh tay không</option>
             <option value="spell">đòn phép</option>
             <option value="any">cả hai</option>
           </select>
@@ -135,7 +136,7 @@ export function DamageRidersEditor({
         </div>
       ))}
       <button
-        className="link"
+        className="rider-add"
         onClick={() =>
           onChange([
             ...riders,

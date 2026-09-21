@@ -7,7 +7,7 @@ import type {
   SpellCastKind,
   WeaponImbue,
 } from './types.js';
-import { abilityMod, sheetClasses, spellcastingAbilityOf, totalLevelOf } from './rules.js';
+import { abilityMod, castingClassesOf, sheetClasses, spellcastingAbilityOf, totalLevelOf } from './rules.js';
 
 /**
  * D&D 5e (2024) cantrips. Descriptions are short paraphrases of the mechanics —
@@ -918,9 +918,23 @@ export function l3SpellsForSheet(sheet: CharacterSheet) {
 }
 
 /** The caster's spellcasting ability modifier (0 if not yet a caster). */
-function castMod(sheet: CharacterSheet): number {
-  const ab = spellcastingAbilityOf(sheet);
+function castMod(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass'>): number {
+  const ab = spellcastingAbilityOf(sheet, spell);
   return ab ? abilityMod(sheet.abilities[ab]) : 0;
+}
+
+/**
+ * Multiclass: which of the sheet's casting classes a spell def belongs to (the first that has it on its list).
+ * Only set when the character has 2+ casting classes — a single-class caster needs no tag.
+ */
+export function castingClassFor(def: CantripDef, sheet: CharacterSheet): string | undefined {
+  const casters = castingClassesOf(sheet);
+  if (casters.length < 2) return undefined;
+  const hit = casters.find((c) => {
+    const n = (c.name ?? '').toLowerCase().trim();
+    return def.classes.some((cl) => n.includes(cl) || cl.includes(n));
+  });
+  return hit?.name;
 }
 
 /** The base damage parts for a spell def, scaled for cantrips / fixed for leveled. */
@@ -932,7 +946,7 @@ function defDamageParts(def: CantripDef, sheet: CharacterSheet): DamagePart[] | 
       : undefined;
   if (!dice) return undefined;
   if (def.addSpellMod) {
-    const m = castMod(sheet);
+    const m = castMod(sheet, { castingClass: castingClassFor(def, sheet) });
     if (m) dice = `${dice}${m > 0 ? '+' : ''}${m}`;
   }
   return [{ dice, type: def.damageType ?? '', label: def.name }];
@@ -946,6 +960,7 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
   return {
     id,
     name: def.name,
+    castingClass: castingClassFor(def, sheet),
     level: def.level ?? 0,
     school: def.school,
     prepared: true,

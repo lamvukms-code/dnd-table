@@ -60,8 +60,8 @@ export interface DamageRider {
   type: string;
   enabled: boolean;
   /** Which attacks it rides. 'weapon' (default) = weapon / manual attack rows;
-   *  'spell' = spell attacks only; 'any' = both. */
-  scope?: 'weapon' | 'spell' | 'any';
+   *  'spell' = spell attacks only; 'any' = both; 'unarmed' = unarmed strikes only. */
+  scope?: 'weapon' | 'spell' | 'any' | 'unarmed';
 }
 
 /** An entry in the action economy: an attack, a utility roll, or just a note. */
@@ -391,6 +391,8 @@ export interface ClassEntry {
 /** A spell on a character sheet — known, and (level 1+) optionally prepared. */
 export interface Spell {
   id: string;
+  /** Multiclass: which of the sheet's classes this spell is prepared through (its casting ability + DC come from that class). */
+  castingClass?: string;
   name: string;
   level: number; // 0 = cantrip (always available, ignores `prepared`)
   school?: string;

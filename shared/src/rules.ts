@@ -13,6 +13,7 @@ import type {
   InventoryItem,
   RollMode,
   SheetAction,
+  Spell,
   SpellSlots,
   Statblock,
   Token,
@@ -234,6 +235,10 @@ export function unarmedAction(sheet: CharacterSheet): SheetAction {
  * apply. Explicit `action.attackKind` wins; equipped weapons are 'weapon';
  * everything else (manual rows) defaults to 'weapon' too.
  */
+/** The unarmed strike rows: the basic one everyone has, and the Monk's Martial Arts version. */
+export function isUnarmedAction(action: Pick<SheetAction, 'id'>): boolean {
+  return action.id === 'unarmed' || action.id === 'monk-unarmed';
+}
 export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
   return action.attackKind ?? 'weapon';
 }
@@ -244,11 +249,18 @@ export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
  * single place rider scoping is decided — `actionDamageParts` and
  * `spellAttackParts` both go through it.
  */
-export function riderParts(sheet: CharacterSheet, kind: 'weapon' | 'spell'): DamagePart[] {
+export function riderParts(
+  sheet: CharacterSheet,
+  kind: 'weapon' | 'spell',
+  opts?: { unarmed?: boolean },
+): DamagePart[] {
   return (sheet.damageRiders ?? [])
     .filter((r) => {
       if (!r.enabled) return false;
       const sc = r.scope ?? 'weapon';
+      // 'unarmed' riders ride unarmed strikes only; an unarmed strike is a weapon-kind attack, so it also
+      // still gets the ordinary 'weapon' / 'any' riders (no double counting: one rider, one scope)
+      if (sc === 'unarmed') return kind === 'weapon' && !!opts?.unarmed;
       return sc === 'any' || sc === kind;
     })
     .map((r) => ({ dice: r.dice, type: r.type, label: r.name }));
@@ -271,7 +283,7 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction): D
   const kind = attackKindOf(action);
   const primaryType = action.damageType || parts[0]?.type || '';
 
-  for (const p of riderParts(sheet, kind)) parts.push(p);
+  for (const p of riderParts(sheet, kind, { unarmed: isUnarmedAction(action) })) parts.push(p);
 
   if (kind === 'weapon') {
     // Barbarian: rage damage on a weapon attack while raging.
@@ -503,31 +515,104 @@ export function casterTypeOf(sheet: CharacterSheet): CasterType {
   return 'none';
 }
 
-/** The spellcasting ability for this sheet, or null if it isn't a caster. */
-export function spellcastingAbilityOf(sheet: CharacterSheet): Ability | null {
+/** The spellcasting ability one class uses, or null if the class doesn't cast. */
+export function classSpellAbility(c: ClassEntry): Ability | null {
+  if (casterTypeForClass(c.name, c.subclass) === 'none') return null;
+  const sub = (c.subclass ?? '').trim().toLowerCase();
+  if (THIRD_CASTER_SUBCLASSES.includes(sub)) return 'int';
+  const cls = (c.name ?? '').trim().toLowerCase();
+  for (const [k, v] of Object.entries(CLASS_SPELL_ABILITY)) if (cls.includes(k)) return v;
+  return null;
+}
+
+/** The sheet's classes that have Spellcasting / Pact Magic. */
+export function castingClassesOf(sheet: CharacterSheet): ClassEntry[] {
+  return sheetClasses(sheet).filter((c) => c.level > 0 && casterTypeForClass(c.name, c.subclass) !== 'none');
+}
+
+/**
+ * The spellcasting ability for this sheet, or null if it isn't a caster. Multiclass (SRD 5.2.1): "each spell
+ * you prepare is associated with one of your classes, and you use the spellcasting ability of that class" —
+ * pass the spell to get its own class' ability.
+ */
+export function spellcastingAbilityOf(
+  sheet: CharacterSheet,
+  spell?: Pick<Spell, 'castingClass'>,
+): Ability | null {
+  const cc = spell?.castingClass?.trim().toLowerCase();
+  if (cc) {
+    const c = sheetClasses(sheet).find((x) => (x.name ?? '').trim().toLowerCase() === cc);
+    const a = c ? classSpellAbility(c) : null;
+    if (a) return a;
+  }
   if (sheet.spellcastingAbility) return sheet.spellcastingAbility;
   for (const c of sheetClasses(sheet)) {
-    if (casterTypeForClass(c.name, c.subclass) === 'none') continue;
-    const sub = (c.subclass ?? '').trim().toLowerCase();
-    if (THIRD_CASTER_SUBCLASSES.includes(sub)) return 'int';
-    const cls = (c.name ?? '').trim().toLowerCase();
-    for (const [k, v] of Object.entries(CLASS_SPELL_ABILITY)) if (cls.includes(k)) return v;
+    const a = classSpellAbility(c);
+    if (a) return a;
   }
   return null;
 }
 
 /** 5e 2024 spell save DC: 8 + proficiency bonus + spellcasting ability modifier. */
-export function spellSaveDc(sheet: CharacterSheet): number | null {
-  const ab = spellcastingAbilityOf(sheet);
+export function spellSaveDc(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass'>): number | null {
+  const ab = spellcastingAbilityOf(sheet, spell);
   if (!ab || casterTypeOf(sheet) === 'none') return null;
   return 8 + sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
 }
 
 /** Spell attack modifier: proficiency bonus + spellcasting ability modifier. */
-export function spellAttackBonus(sheet: CharacterSheet): number | null {
-  const ab = spellcastingAbilityOf(sheet);
+export function spellAttackBonus(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass'>): number | null {
+  const ab = spellcastingAbilityOf(sheet, spell);
   if (!ab || casterTypeOf(sheet) === 'none') return null;
   return sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
+}
+
+// ---------------------------------------------------------------------------
+// Multiclass (SRD 5.2.1)
+// ---------------------------------------------------------------------------
+
+/** Primary-ability requirements of each class for multiclassing (score 13+ in every listed ability; "either" = one of). */
+const MULTICLASS_PREREQ: Record<string, { all?: Ability[]; either?: Ability[] }> = {
+  barbarian: { all: ['str'] },
+  bard: { all: ['cha'] },
+  cleric: { all: ['wis'] },
+  druid: { all: ['wis'] },
+  fighter: { either: ['str', 'dex'] },
+  monk: { all: ['dex', 'wis'] },
+  paladin: { all: ['str', 'cha'] },
+  ranger: { all: ['dex', 'wis'] },
+  rogue: { all: ['dex'] },
+  sorcerer: { all: ['cha'] },
+  warlock: { all: ['cha'] },
+  wizard: { all: ['int'] },
+};
+
+/**
+ * Multiclass prerequisites: to have a class, the character needs 13+ in that class' primary ability, and
+ * "your current classes" must qualify too — so every class of a multiclass character is checked. Returns
+ * human-readable problems (empty for a single class, or when everything qualifies).
+ */
+export function multiclassIssues(sheet: CharacterSheet): string[] {
+  const classes = sheetClasses(sheet).filter((c) => c.level > 0);
+  if (classes.length < 2) return [];
+  const issues: string[] = [];
+  for (const c of classes) {
+    const req = MULTICLASS_PREREQ[(c.name ?? '').trim().toLowerCase()];
+    if (!req) continue;
+    const low = (req.all ?? []).filter((a) => sheet.abilities[a] < 13);
+    if (low.length) issues.push(`${c.name}: cần ${low.map((a) => a.toUpperCase() + ' 13+').join(' và ')}`);
+    if (req.either && !req.either.some((a) => sheet.abilities[a] >= 13))
+      issues.push(`${c.name}: cần ${req.either.map((a) => a.toUpperCase()).join(' hoặc ')} 13+`);
+  }
+  return issues;
+}
+
+/** Classes that grant Extra Attack at level 5 — several of them do NOT stack (max 2 attacks from the feature). */
+const EXTRA_ATTACK_CLASSES = ['barbarian', 'fighter', 'monk', 'paladin', 'ranger'];
+export function extraAttackClasses(sheet: CharacterSheet): string[] {
+  return sheetClasses(sheet)
+    .filter((c) => c.level >= 5 && EXTRA_ATTACK_CLASSES.includes((c.name ?? '').trim().toLowerCase()))
+    .map((c) => c.name);
 }
 
 // ---------------------------------------------------------------------------
@@ -660,7 +745,8 @@ export function computeSpellSlots(sheet: CharacterSheet): SpellSlots[] {
   // Multiclass: combined caster level indexes the full-caster table.
   let cl = 0;
   for (const c of casters) {
-    cl += c.t === 'full' ? c.level : c.t === 'half' ? Math.floor(c.level / 2) : Math.floor(c.level / 3);
+    // SRD 5.2.1: all Bard/Cleric/Druid/Sorcerer/Wizard levels + half (round UP) of Paladin/Ranger levels
+    cl += c.t === 'full' ? c.level : c.t === 'half' ? Math.ceil(c.level / 2) : Math.floor(c.level / 3);
   }
   return rowToSlots(FULL_SLOTS[Math.min(20, cl)] ?? []);
 }

@@ -80,15 +80,13 @@ export function ClassSetup({
   const newFeatures: Feature[] = useMemo(() => {
     if (!srd || !primary) return [];
     const have = new Set(draft.features.map((f) => f.name.toLowerCase()));
+    // multiclass: every class contributes its own features up to ITS level (not the total level)
+    const classes = sheetClasses(draft).filter((c) => c.level > 0);
     return srd
-      .filter(
-        (e) =>
-          !e.sub &&
-          e.level > 0 &&
-          e.level <= primary.level &&
-          e.class.toLowerCase() === primary.name.trim().toLowerCase() &&
-          !have.has(e.name.toLowerCase()),
-      )
+      .filter((e) => {
+        if (e.sub || e.level <= 0 || have.has(e.name.toLowerCase())) return false;
+        return classes.some((c) => e.class.toLowerCase() === (c.name ?? '').trim().toLowerCase() && e.level <= c.level);
+      })
       .map((e) => ({
         id: nanoIdish(),
         name: e.name,
@@ -162,7 +160,11 @@ export function ClassSetup({
 
         <label className="chk">
           <input type="checkbox" checked={doFeatures} onChange={(e) => setDoFeatures(e.target.checked)} />
-          Thêm <strong>{newFeatures.length}</strong> feature của class (cấp 1–{primary.level}, từ SRD)
+          Thêm <strong>{newFeatures.length}</strong> feature của class (
+          {sheetClasses(draft)
+            .map((c) => `${c.name} 1–${c.level}`)
+            .join(', ')}
+          , từ SRD)
           {srd === null ? ' — đang tải…' : ''}
         </label>
 
@@ -184,6 +186,12 @@ export function ClassSetup({
             </label>
           ))}
         </div>
+        {sheetClasses(draft).length > 1 && (
+          <p className="hint">
+            Đa nghề: save và kỹ năng khởi đầu chỉ lấy từ nghề đầu tiên ({primary.name}); các nghề sau chỉ thêm
+            feature. HP khuyến nghị đã tính đủ mọi nghề (HP cấp 1 chỉ của nghề đầu).
+          </p>
+        )}
         <p className="hint">
           Kỹ năng từ xuất thân (background) hãy tích thêm ở tab Kỹ năng. Tổng save / kỹ năng tự tính từ
           chỉ số + thành thạo — không cần gõ tay.

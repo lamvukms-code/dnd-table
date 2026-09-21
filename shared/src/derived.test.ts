@@ -9,7 +9,7 @@ import {
   regainHitDice,
   spendHitDie,
 } from './derived.js';
-import { allActions, applyLongRest } from './rules.js';
+import { allActions, applyLongRest, computeSpellSlots, isUnarmedAction, multiclassIssues, riderParts, spellAttackBonus, spellSaveDc } from './rules.js';
 import type { CharacterSheet, InventoryItem } from './types.js';
 
 const sheet = (over: Partial<CharacterSheet> = {}): CharacterSheet =>
@@ -108,5 +108,41 @@ describe('Shillelagh imbue + Wood Wose', () => {
   it('Wood Wose: unarmored AC 10 + DEX + WIS', () => {
     // DEX 16 (+3), WIS 14 (+2)
     expect(effectiveArmorClass(druid(), [{ id: 'e', name: 'Wood Wose', acBase: 12 }]).ac).toBe(15);
+  });
+});
+
+describe('multiclass', () => {
+  const mc = (classes: { name: string; level: number; subclass?: string }[], over: Partial<CharacterSheet> = {}) =>
+    sheet({ classes, level: classes.reduce((n, c) => n + c.level, 0), className: 'x', ...over });
+
+  it('level 1 + prerequisites (13+ in the primary ability of every class)', () => {
+    const s = mc([{ name: 'Wizard', level: 3 }, { name: 'Rogue', level: 2 }], { abilities: { str: 8, dex: 16, con: 14, int: 10, wis: 10, cha: 10 } });
+    expect(multiclassIssues(s)).toEqual(['Wizard: cần INT 13+']);
+    expect(multiclassIssues(mc([{ name: 'Fighter', level: 1 }, { name: 'Monk', level: 1 }], { abilities: { str: 14, dex: 14, con: 10, int: 10, wis: 8, cha: 10 } }))).toEqual(['Monk: cần WIS 13+']);
+    expect(multiclassIssues(mc([{ name: 'Rogue', level: 5 }]))).toEqual([]); // single class: nothing to check
+  });
+  it('hit dice pool by die type across classes', () => {
+    const pools = hitDicePools(mc([{ name: 'Cleric', level: 5 }, { name: 'Paladin', level: 5 }, { name: 'Fighter', level: 2 }]));
+    expect(pools.map((p) => [p.die, p.max])).toEqual([[10, 7], [8, 5]]);
+  });
+  it('spell slots: full levels + half (rounded UP) of Paladin/Ranger — SRD 5.2.1 example (Ranger 4 / Sorcerer 3 = 5)', () => {
+    const slots = computeSpellSlots(mc([{ name: 'Ranger', level: 4 }, { name: 'Sorcerer', level: 3 }]));
+    expect(slots.map((s) => [s.level, s.max])).toEqual([[1, 4], [2, 3], [3, 2]]); // caster level 5
+    // Paladin 3 = 2 (rounded up) + Wizard 1 = caster level 3
+    expect(computeSpellSlots(mc([{ name: 'Paladin', level: 3 }, { name: 'Wizard', level: 1 }])).map((s) => s.level)).toEqual([1, 2]);
+  });
+  it('each spell uses its own class ability + PB total level', () => {
+    const s = mc([{ name: 'Wizard', level: 3 }, { name: 'Cleric', level: 2 }], { abilities: { str: 10, dex: 10, con: 10, int: 18, wis: 12, cha: 10 }, proficiencyBonus: 3 });
+    expect(spellSaveDc(s, { castingClass: 'Wizard' })).toBe(8 + 3 + 4);
+    expect(spellSaveDc(s, { castingClass: 'Cleric' })).toBe(8 + 3 + 1);
+    expect(spellAttackBonus(s, { castingClass: 'Cleric' })).toBe(3 + 1);
+  });
+  it('unarmed riders ride unarmed strikes only', () => {
+    const s = sheet({ damageRiders: [{ id: 'r', name: 'Fists', dice: '1d4', type: 'fire', enabled: true, scope: 'unarmed' }] });
+    expect(riderParts(s, 'weapon').length).toBe(0);
+    expect(riderParts(s, 'weapon', { unarmed: true }).map((p) => p.label)).toEqual(['Fists']);
+    expect(riderParts(s, 'spell', { unarmed: true }).length).toBe(0);
+    expect(isUnarmedAction({ id: 'unarmed' })).toBe(true);
+    expect(isUnarmedAction({ id: 'weapon:x' })).toBe(false);
   });
 });

@@ -6,6 +6,31 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-09-22
+
+### Added
+
+- **Delete a character sheet**: "🗑 Xóa" in the sheet dock (with confirmation; owner or DM).
+- **Multiclass, end to end** (SRD 5.2.1 rules):
+  - The class list (name / subclass / level per class) now lives in the Basic header — "+ nghề phụ" turns a
+    single-class sheet into a multiclass one; total level and proficiency bonus follow it.
+  - Multiclass prerequisites: warns when any class' primary ability is below 13 (Fighter: STR or DEX;
+    Monk / Ranger: DEX + WIS; Paladin: STR + CHA…), and that Extra Attack from several classes does not stack.
+  - **Per-spell casting class**: each spell can be tied to one of the sheet's casting classes and then uses that
+    class' spellcasting ability for its save DC / attack bonus / damage modifier (`Spell.castingClass`,
+    `spellSaveDc(sheet, spell)`, `spellAttackBonus(sheet, spell)`). Spells added from the SRD list are tagged
+    automatically when there are two or more casting classes.
+  - "Điền theo class" adds the features of **every** class up to that class' own level (saves / starting skills
+    still come from the first class only; recommended HP already covered all classes).
+- **Damage rider scope "đánh tay không"** — a rider that applies to unarmed strikes only (weapon-scope riders keep
+  applying to them too, so nothing is counted twice).
+
+### Fixed
+
+- Multiclass spell slots: Paladin / Ranger levels count **half rounded up** (was rounded down), per SRD 5.2.1
+  (Ranger 4 / Sorcerer 3 = caster level 5).
+- The "+ rider" button was centred and borderless; it is now a left-aligned bordered button.
+
 ## [0.49.0] - 2026-09-22
 
 ### Added
@@ -1127,7 +1152,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...HEAD
+[0.50.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...v0.47.1
