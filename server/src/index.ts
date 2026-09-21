@@ -28,7 +28,14 @@ const app = express();
 app.use(express.json({ limit: '12mb' }));
 
 mkdirSync(UPLOADS_DIR, { recursive: true });
-app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '1y', immutable: true }));
+app.use(
+  '/uploads',
+  express.static(UPLOADS_DIR, {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  }),
+);
 
 const IMG_EXT: Record<string, string> = {
   'image/png': 'png',
@@ -65,7 +72,7 @@ if (existsSync(clientDist)) {
 }
 
 const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+const wss = new WebSocketServer({ server: httpServer, path: '/ws', maxPayload: 2 * 1024 * 1024 });
 
 const sockets = new Map<WebSocket, string>(); // socket -> participantId
 

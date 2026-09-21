@@ -16,14 +16,14 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> [1/5] Docker + git"
+echo "==> [1/6] Docker + git"
 command -v git >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq git; }
 if ! command -v docker >/dev/null 2>&1; then
   curl -fsSL https://get.docker.com | sh
 fi
 docker compose version >/dev/null 2>&1 || { echo "Thiếu 'docker compose'."; exit 1; }
 
-echo "==> [2/5] Swap (nếu RAM thấp)"
+echo "==> [2/6] Swap (nếu RAM thấp)"
 if ! swapon --show | grep -q . && \
    [ "$(awk '/MemTotal/{print $2}' /proc/meminfo)" -lt 2000000 ]; then
   fallocate -l 2G /swapfile
@@ -34,7 +34,7 @@ if ! swapon --show | grep -q . && \
   echo "    + đã tạo 2G swap"
 fi
 
-echo "==> [3/5] Lấy mã nguồn"
+echo "==> [3/6] Lấy mã nguồn"
 mkdir -p "$DIR"
 if [ -d "$SRC/.git" ]; then
   git -C "$SRC" fetch --depth 1 origin main -q
@@ -43,7 +43,7 @@ else
   git clone --depth 1 "$REPO" "$SRC" -q
 fi
 
-echo "==> [4/5] Cấu hình phòng"
+echo "==> [4/6] Cấu hình phòng"
 [ -f "$ENVFILE" ] && { set -a; . "$ENVFILE"; set +a; }
 
 IP="$(curl -fsS4 https://api.ipify.org || curl -fsS4 https://ifconfig.me)"
@@ -54,8 +54,8 @@ if [ -z "${BASIC_HASH:-}" ]; then
   # read from the real terminal so this works even via `curl … | sudo bash`
   while :; do
     read -rsp "Đặt mật khẩu cho phòng (người chơi nhập 1 lần): " PW </dev/tty; echo
-    [ -n "$PW" ] && break
-    echo "  không được để trống."
+    [ "${#PW}" -ge 12 ] && break
+    echo "  mật khẩu tối thiểu 12 ký tự (chống dò mật khẩu)."
   done
   BASIC_HASH="$(docker run --rm caddy:2-alpine caddy hash-password --plaintext "$PW")"
   PLAIN_NOTE="$PW"
@@ -73,7 +73,10 @@ sed -e "s|__SITE__|$SITE|" \
     -e "s|__HASH__|$BASIC_HASH|" \
     "$SRC/deploy/Caddyfile.template" > "$SRC/deploy/Caddyfile"
 
-echo "==> [5/5] Build & khởi động (lần đầu ~3–5 phút)"
+echo "==> [5/6] Bảo mật máy chủ"
+bash "$SRC/deploy/harden.sh"
+
+echo "==> [6/6] Build & khởi động (lần đầu ~3–5 phút)"
 cd "$SRC/deploy"
 docker compose up -d --build
 docker image prune -f >/dev/null 2>&1 || true

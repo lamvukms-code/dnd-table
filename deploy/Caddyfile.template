@@ -2,6 +2,16 @@
 # Automatic HTTPS via Let's Encrypt; one shared password for the whole group.
 __SITE__ {
 	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+	request_body {
+		max_size 13MB
+	}
 	basic_auth {
 		__USER__ __HASH__
 	}

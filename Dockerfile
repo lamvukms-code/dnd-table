@@ -24,7 +24,10 @@ ENV NODE_ENV=production \
     BESTIARY_FILE=/data/bestiary.json \
     UPLOADS_DIR=/data/uploads
 
+# Run unprivileged: a compromised app process cannot touch the host as root.
+RUN mkdir -p /data/uploads && chown -R node:node /data
 VOLUME ["/data"]
+USER node
 EXPOSE 8787
 
 CMD ["npm", "run", "start", "--silent"]

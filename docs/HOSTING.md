@@ -108,3 +108,21 @@ Mặc định máy chủ tự build từ mã nguồn (đơn giản, không cần
 nhật chỉ trong vài giây thay vì vài phút, xem hướng dẫn trong
 `deploy/optional-ghcr-workflow.yml` để bật GitHub Actions build ảnh và đổi
 `deploy/docker-compose.yml` sang dùng ảnh đó.
+
+## Bảo mật (đã cài sẵn trong `setup.sh`)
+
+| Lớp | Việc đã làm |
+|---|---|
+| Firewall máy chủ | `ufw` chặn mọi cổng vào, chỉ mở 22 / 80 / 443. Cổng app 8787 **không** publish ra ngoài, chỉ Caddy nói chuyện được. |
+| Cổng vào | Caddy Basic-Auth + HTTPS tự động; mật khẩu tối thiểu 12 ký tự; header HSTS/nosniff/DENY-frame; giới hạn body 13MB. |
+| SSH | `fail2ban` khoá IP dò mật khẩu; tự tắt đăng nhập bằng mật khẩu **nếu đã có SSH key** (không bao giờ tự khoá bạn ra ngoài). |
+| Container | App chạy user `node` (không root), `cap_drop ALL`, `no-new-privileges`, giới hạn 768MB RAM / 1 CPU / 256 tiến trình (khó bị lợi dụng đào coin / DoS), log xoay vòng. |
+| Vá lỗi | `unattended-upgrades` tự cập nhật bản vá bảo mật của Ubuntu. |
+| App | WebSocket giới hạn 2MB/tin; ảnh upload chỉ nhận PNG/JPEG/WebP/GIF (không SVG), tối đa 6MB, phục vụ kèm `nosniff`. |
+
+### Bạn cần tự làm thêm
+1. **DigitalOcean → Networking → Firewalls**: tạo Cloud Firewall (inbound: 22, 80, 443) gắn vào Droplet — lớp thứ hai ngoài `ufw`.
+2. **Bật 2FA** cho tài khoản DigitalOcean *và* GitHub (`setup.sh` kéo code từ `main`; ai chiếm GitHub của bạn là chiếm luôn server).
+3. Dùng **SSH key**, đừng dùng mật khẩu root. Bật **Backups** của Droplet (~20%/tháng) nếu muốn.
+4. Đừng đưa mật khẩu phòng qua kênh công khai; đổi mật khẩu = xoá `/opt/dndtable/.dnd-setup.env` rồi chạy lại `setup.sh`.
+5. Thỉnh thoảng `docker compose logs caddy` xem có dòng 401 lặp lại (kẻ dò mật khẩu).
