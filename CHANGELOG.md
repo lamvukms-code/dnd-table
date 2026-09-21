@@ -6,6 +6,20 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-09-21
+
+### Added
+
+- **✨ Điền theo class** (Cơ bản tab). For players who only wrote down ability scores: once
+  class + level are set, one dialog fills in the class saving-throw proficiencies, lets
+  you tick the class's skill picks (right count and list per class), suggests HP (max
+  die at level 1, average after, + CON each level) and adds the class features of every
+  level up to the character's from the SRD. Save / skill totals were already computed
+  from ability scores + proficiency; this supplies the missing proficiencies.
+  `shared/src/classDefaults.ts` (SRD 5.2.1 hit die / saves / skill lists) + tests.
+- PDF import now also fills the class saving-throw proficiencies.
+- `classes.json` marks subclass entries (`sub: true`).
+
 ## [0.41.0] - 2026-09-21
 
 ### Added
@@ -962,7 +976,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...v0.39.0

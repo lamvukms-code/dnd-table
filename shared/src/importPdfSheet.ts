@@ -1,6 +1,7 @@
 import { SKILLS } from './types.js';
 import type { Ability, CharacterSheet, Feature, InventoryItem, SheetAction, Spell } from './types.js';
 import { computeSpellSlots, abilityMod, emptyCurrency } from './rules.js';
+import { withClassSaves } from './classDefaults.js';
 import { SRD_SPELLS, spellFromCantrip } from './cantrips.js';
 
 /**
@@ -242,6 +243,13 @@ export function sheetFromPdfFields(
     return v.startsWith(a) || v.startsWith({ str: 'strength', dex: 'dexterity', con: 'constitution', int: 'intelligence', wis: 'wisdom', cha: 'charisma' }[a]);
   });
   if (ab) sheet.spellcastingAbility = ab;
+
+  // Players rarely tick their saves: the class defines them, so fill those in.
+  const withSaves = withClassSaves(sheet);
+  if (withSaves.length !== sheet.saveProficiencies.length) {
+    sheet.saveProficiencies = withSaves;
+    report.push("Save thành thạo lấy theo class: " + withSaves.map((a) => a.toUpperCase()).join(", "));
+  }
 
   // --- spells ---
   const addSpell = (spellName: string, lvl: number) => {

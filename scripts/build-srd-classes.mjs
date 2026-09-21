@@ -52,14 +52,19 @@ for (let k = 0; k < heads.length; k++) {
     if (e > t) chunk = [...chunk.slice(0, t), ...chunk.slice(e + 1)];
   }
 
-  let cur = { name: 'Core Traits', level: 0, body: [] };
+  let cur = { name: "Core Traits", level: 0, body: [] };
+  let prevLevel = 0;
+  let inSub = false;
   const push = () => {
-    if (cur.body.length) entries.push({ class: c, level: cur.level, name: cur.name, text: tidy(cur.body) });
+    if (cur.body.length) entries.push({ class: c, level: cur.level, name: cur.name, text: tidy(cur.body), ...(inSub ? { sub: true } : {}) });
   };
   for (const l of chunk) {
     const m = /^Level (\d+): (.+)$/.exec(l);
     if (m) {
       push();
+      const lv = Number(m[1]);
+      if (lv < prevLevel) inSub = true; // levels restart after the base class list: subclass section
+      prevLevel = lv;
       cur = { name: m[2], level: Number(m[1]), body: [] };
     } else cur.body.push(l);
   }

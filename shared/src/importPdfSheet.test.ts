@@ -41,7 +41,7 @@ describe('sheetFromPdfFields', () => {
     expect(s.currency.gp).toBe(15);
   });
   it('infers proficiencies from bonuses / check boxes', () => {
-    expect(s.saveProficiencies).toEqual(['wis']); // +5 = WIS +3 + PB 2
+    expect([...s.saveProficiencies].sort()).toEqual(['int', 'wis']); // WIS from the +5 bonus, INT added from the Druid class
     expect(s.skillProficiencies.sort()).toEqual(['perception', 'religion']);
   });
   it('reads attacks and features', () => {

@@ -64,6 +64,7 @@ import { SUBCLASS_DEFS } from '../subclassData.js';
 import { FormulaHint } from './FormulaHint.js';
 import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
+import { ClassSetup } from './sheet/ClassSetup.js';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'STR',
@@ -413,6 +414,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
   );
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
   const [rollMode, setRollMode] = useState<RollMode>('normal');
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
 
@@ -476,6 +478,16 @@ function BasicTab({ draft, commit }: EditorCtx) {
               />
             </label>
             <span className="bt-prof">Thành thạo {fmtMod(draft.proficiencyBonus)}</span>
+            <button
+              className="bt-setup"
+              title="Tự điền save, kỹ năng class, HP và feature theo class + cấp"
+              onClick={() => setShowSetup(true)}
+            >
+              ✨ Điền theo class
+            </button>
+            {showSetup && (
+              <ClassSetup draft={draft} commit={commit} onClose={() => setShowSetup(false)} />
+            )}
           </div>
           <label className="bt-tokenlink">
             Token đại diện

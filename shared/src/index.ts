@@ -7,3 +7,4 @@ export * from './cantrips.js';
 export * from './import5etools.js';
 export * from './aoe.js';
 export * from './importPdfSheet.js';
+export * from './classDefaults.js';

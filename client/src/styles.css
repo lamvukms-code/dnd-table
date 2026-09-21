@@ -1095,3 +1095,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
   background: var(--panel-2);
   cursor: pointer;
 }
+.bt-setup { font-size: 12px; padding: 3px 8px; }
+.class-setup { width: min(520px, 94vw); display: flex; flex-direction: column; gap: 8px; }
+.class-setup .chk { flex-direction: row; align-items: center; gap: 8px; }
+.cs-skills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; padding-left: 22px; }
+.cs-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
