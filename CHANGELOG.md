@@ -6,6 +6,14 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/extract-monsters.mjs`: PDF → bestiary JSON for 2024-format stat blocks
+  (AC/HP/Speed, ability scores + save proficiencies, skills, resistances/immunities,
+  traits, actions / bonus / reactions / legendary with parsed attack bonus, damage,
+  extra damage and save DC). Output is imported through the Bestiary panel
+  ("Nhập file"); keep book-derived output out of the repo.
+
 ## [0.37.0] - 2026-09-21
 
 ### Added
