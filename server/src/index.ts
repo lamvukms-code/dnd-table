@@ -10,6 +10,7 @@ import {
   PROTOCOL_VERSION,
   type ClientEnvelope,
   type Participant,
+  type RoomState,
   type ServerEvent,
 } from '@dnd-table/shared';
 
@@ -96,11 +97,18 @@ function send(ws: WebSocket, event: ServerEvent): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
 }
 
+/** The bestiary is DM-only and can be huge (hundreds of stat blocks) — players never get it. */
+function stateFor(isDm: boolean): RoomState {
+  return isDm ? room.state : { ...room.state, bestiary: [] };
+}
+
 function broadcastState(): void {
-  const event: ServerEvent = { t: 'state', state: room.state };
-  const payload = JSON.stringify(event);
-  for (const ws of sockets.keys()) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(payload);
+  const dmPayload = JSON.stringify({ t: 'state', state: stateFor(true) } satisfies ServerEvent);
+  let playerPayload: string | null = null;
+  for (const [ws, pid] of sockets) {
+    if (ws.readyState !== WebSocket.OPEN) continue;
+    if (getParticipant(pid)?.role === 'dm') ws.send(dmPayload);
+    else ws.send((playerPayload ??= JSON.stringify({ t: 'state', state: stateFor(false) } satisfies ServerEvent)));
   }
 }
 
@@ -160,7 +168,7 @@ wss.on('connection', (ws) => {
         t: 'welcome',
         participantId: participant.id,
         protocol: PROTOCOL_VERSION,
-        state: room.state,
+        state: stateFor(participant.role === 'dm'),
       });
       broadcastState();
       scheduleSave();

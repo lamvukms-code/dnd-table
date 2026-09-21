@@ -99,6 +99,9 @@ interface StoreState {
   castingSpell: { sheetId: string; spell: Spell } | null;
   beginCast: (sheetId: string, spell: Spell) => void;
   cancelCast: () => void;
+  /** Bestiary entry the DM asked to open from a token (null = none). */
+  bestiaryFocus: string | null;
+  openBestiary: (id: string | null) => void;
   resolveCastOnToken: (targetTokenId: string) => Promise<void>;
   /** Roll initiative (via dddice) and put the result on the top initiative bar. */
   rollInitiativeForMe: (
@@ -364,6 +367,8 @@ export const useStore = create<StoreState>((set, get) => {
 
     beginCast: (sheetId, spell) => set({ castingSpell: { sheetId, spell } }),
     cancelCast: () => set({ castingSpell: null }),
+    bestiaryFocus: null,
+    openBestiary: (id) => set({ bestiaryFocus: id }),
     resolveCastOnToken: async (targetTokenId) => {
       const cast = get().castingSpell;
       const room = get().room;

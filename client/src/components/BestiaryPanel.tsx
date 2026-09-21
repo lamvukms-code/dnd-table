@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ABILITIES,
   abilityMod,
@@ -20,7 +20,11 @@ const SIZES: TokenSize[] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargant
 export function BestiaryPanel({ onClose }: { onClose: () => void }) {
   const send = useStore((s) => s.send);
   const bestiary = useStore((s) => s.room?.bestiary ?? []);
-  const [selId, setSelId] = useState<string | null>(bestiary[0]?.id ?? null);
+  const focus = useStore((s) => s.bestiaryFocus);
+  const [selId, setSelId] = useState<string | null>(focus ?? bestiary[0]?.id ?? null);
+  useEffect(() => {
+    if (focus) setSelId(focus);
+  }, [focus]);
   const [q, setQ] = useState('');
   const [note, setNote] = useState<string | null>(null);
   const [paste, setPaste] = useState('');

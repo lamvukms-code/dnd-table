@@ -13,6 +13,7 @@ import {
   statblockDamageParts,
   tokenIsGrappled,
   tokenSaveBonus,
+  tokenStatblockFrom,
   walkSpeed,
   type ActiveEffect,
   type CharacterSheet,
@@ -23,6 +24,7 @@ import {
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { uploadImage } from '../upload.js';
+import { statblockFromToken } from '../statblock.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
@@ -178,12 +180,18 @@ export function BattleMap() {
   }
 
   function onBoardDrop(e: React.DragEvent) {
+    if (!boardRef.current) return;
+    const sbId = e.dataTransfer.getData('text/statblock-id');
     const id = e.dataTransfer.getData('text/token-id');
-    if (!id || !boardRef.current) return;
+    if (!id && !sbId) return;
     e.preventDefault();
     const rect = boardRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.round((e.clientX - rect.left) / CELL - 0.5));
     const y = Math.max(0, Math.round((e.clientY - rect.top) / CELL - 0.5));
+    if (sbId) {
+      if (isDm) send({ t: 'spawnStatblock', id: sbId, x, y, rollHp: e.shiftKey });
+      return;
+    }
     send({ t: 'copyToken', id, x, y });
   }
 
@@ -215,6 +223,8 @@ export function BattleMap() {
           </button>
         )}
       </div>
+
+      {isDm && <BestiaryPalette />}
 
       {tokens.length > 0 && (
         <details className="token-palette">
@@ -775,6 +785,8 @@ function TokenInspector({
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
   const rollDice = useStore((s) => s.rollDice);
+  const bestiary = useStore((s) => s.room?.bestiary ?? []);
+  const openBestiary = useStore((s) => s.openBestiary);
   const resetTokenMove = useStore((s) => s.resetTokenMove);
   const tokenDash = useStore((s) => s.tokenDash);
   const isDm = useStore((s) => s.isDm());
@@ -809,6 +821,17 @@ function TokenInspector({
     ? gridFeet(token.turnAnchor, { x: token.x, y: token.y })
     : 0;
 
+  const linkedEntry = token.statblock?.fromId
+    ? (bestiary.find((s) => s.id === token.statblock!.fromId) ?? null)
+    : null;
+
+  function saveToBestiary() {
+    const next = statblockFromToken(token, linkedEntry ?? undefined);
+    send({ t: 'bestiaryUpsert', statblock: next });
+    if (!linkedEntry) send({ t: 'updateToken', id: token.id, patch: { statblock: tokenStatblockFrom(next) } });
+    openBestiary(next.id);
+  }
+
   function patch(p: Partial<Token>) {
     send({ t: 'updateToken', id: token.id, patch: p });
   }
@@ -841,6 +864,25 @@ function TokenInspector({
           ✕
         </button>
       </div>
+      {isDm && (
+        <div className="insp-sb-link">
+          {linkedEntry && (
+            <button title="Mở stat block gốc trong Bestiary" onClick={() => openBestiary(linkedEntry.id)}>
+              📖 Mở statblock
+            </button>
+          )}
+          <button
+            title={
+              linkedEntry
+                ? 'Ghi chỉnh sửa của token này ngược lại vào stat block gốc'
+                : 'Tạo stat block mới trong Bestiary từ token này'
+            }
+            onClick={saveToBestiary}
+          >
+            {linkedEntry ? '💾 Cập nhật statblock' : '💾 Lưu vào Bestiary'}
+          </button>
+        </div>
+      )}
       {isDm && (
         <label className="chk insp-group">
           <input type="checkbox" checked={inGroup} onChange={onToggleGroup} />
@@ -1188,5 +1230,49 @@ function TokenInspector({
         </button>
       </fieldset>
     </div>
+  );
+}
+
+/** DM-only: drag a stat block from the bestiary straight onto the map to spawn its token. */
+function BestiaryPalette() {
+  const bestiary = useStore((s) => s.room?.bestiary ?? []);
+  const [q, setQ] = useState('');
+  if (bestiary.length === 0) return null;
+  const term = q.trim().toLowerCase();
+  const list = bestiary
+    .filter((s) => !term || `${s.name} ${s.cr} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(term))
+    .slice(0, 40);
+  return (
+    <details className="token-palette bestiary-palette">
+      <summary>⚔ Kéo quái vào bản đồ ({bestiary.length})</summary>
+      <input
+        className="bp-search"
+        value={q}
+        placeholder="Tìm quái… (giữ Shift khi thả = tung HP)"
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <div className="tp-list">
+        {list.map((s) => (
+          <div
+            key={s.id}
+            className="tp-chip"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/statblock-id', s.id);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={`Kéo "${s.name}" (CR ${s.cr || '?'}, AC ${s.ac}, HP ${s.maxHp}) vào bản đồ`}
+          >
+            <span
+              className="tp-dot"
+              style={s.imageUrl ? { background: `center/cover url(${s.imageUrl})` } : { background: s.color }}
+            />
+            {s.name}
+            {s.cr ? <small> · CR {s.cr}</small> : null}
+          </div>
+        ))}
+        {list.length === 0 && <span className="hint">Không thấy.</span>}
+      </div>
+    </details>
   );
 }

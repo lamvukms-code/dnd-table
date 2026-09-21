@@ -18,9 +18,15 @@ export function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
+  const bestiaryFocus = useStore((s) => s.bestiaryFocus);
+  const openBestiary = useStore((s) => s.openBestiary);
   const [refOpen, setRefOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
+
+  useEffect(() => {
+    if (bestiaryFocus) setBestiaryOpen(true);
+  }, [bestiaryFocus]);
 
   useEffect(() => {
     if (!error) return;
@@ -76,7 +82,12 @@ export function App() {
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
-      {bestiaryOpen && isDm && <BestiaryPanel onClose={() => setBestiaryOpen(false)} />}
+      {bestiaryOpen && isDm && <BestiaryPanel
+          onClose={() => {
+            setBestiaryOpen(false);
+            openBestiary(null);
+          }}
+        />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

@@ -1071,3 +1071,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .lore-tp { margin: 4px 0 4px 10px; }
 .srd-attr { margin-top: 12px; font-size: 10px; opacity: 0.7; }
 .srd-text { white-space: pre-wrap; }
+
+.bestiary-palette .bp-search { width: calc(100% - 12px); margin: 4px 6px; font-size: 11px; }
+.bestiary-palette small { opacity: 0.65; }
+.insp-sb-link { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+.insp-sb-link button { font-size: 11px; padding: 2px 6px; }
+.bestiary-palette { left: 215px; }

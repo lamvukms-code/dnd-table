@@ -1,4 +1,4 @@
-import { emptyDefenses, type Statblock } from '@dnd-table/shared';
+import { emptyDefenses, type Statblock, type Token } from '@dnd-table/shared';
 import { nanoIdish } from './util.js';
 
 export function blankStatblock(): Statblock {
@@ -52,4 +52,32 @@ export function mergeBestiary(current: Statblock[], incoming: Statblock[]): Stat
   const map = new Map(current.map((s) => [s.id, s]));
   for (const sb of incoming) map.set(sb.id, normalizeStatblock(sb));
   return [...map.values()];
+}
+
+/**
+ * Build / refresh a bestiary stat block from a token on the map (the reverse of spawning).
+ * With `existing` (the token's source entry) it updates that entry; otherwise it creates a new one.
+ */
+export function statblockFromToken(t: Token, existing?: Statblock): Statblock {
+  const base = existing ?? blankStatblock();
+  const tsb = t.statblock;
+  return {
+    ...base,
+    name: existing ? base.name : t.label,
+    meta: tsb?.meta ?? base.meta,
+    size: t.size,
+    color: t.color,
+    imageUrl: t.imageUrl ?? base.imageUrl,
+    ac: t.armorClass ?? base.ac,
+    maxHp: t.maxHp ?? base.maxHp,
+    speed: tsb?.speed ?? base.speed,
+    abilities: tsb ? { ...tsb.abilities } : base.abilities,
+    proficiencyBonus: tsb?.proficiencyBonus ?? base.proficiencyBonus,
+    saveProficiencies: tsb ? [...tsb.saveProficiencies] : base.saveProficiencies,
+    skills: tsb ? tsb.skills.map((s) => ({ ...s })) : base.skills,
+    actions: tsb ? tsb.actions.map((a) => ({ ...a })) : base.actions,
+    traits: tsb ? tsb.traits.map((x) => ({ ...x })) : base.traits,
+    defenses: t.defenses ?? tsb?.defenses ?? base.defenses,
+    notes: tsb?.notes ?? base.notes,
+  };
 }

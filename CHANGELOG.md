@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-09-21
+
+### Added
+
+- **Stat block ⇄ token wiring.**
+  - Drag a monster from the new **⚔ Kéo quái vào bản đồ** palette (DM, searchable)
+    onto the map to spawn its fully-stat'd token there (`spawnStatblock`; hold
+    Shift while dropping to roll HP from the formula instead of the average).
+  - Token inspector (DM): **📖 Mở statblock** jumps to the token's source entry in the
+    Bestiary; **💾 Cập nhật statblock** writes the token's edits back to that entry;
+    on a plain token **💾 Lưu vào Bestiary** creates a new entry and links the token to it.
+
+### Changed
+
+- The bestiary is DM-only and can be very large (SRD import = 330 blocks), so the
+  server no longer sends it to players in `welcome` / `state` broadcasts.
+
 ## [0.38.0] - 2026-09-21
 
 ### Added
@@ -912,7 +929,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...v0.36.0
