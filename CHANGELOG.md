@@ -6,6 +6,18 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.47.1] - 2026-09-22
+
+### Added
+
+- **SRD 5.2.1 monsters: the last 6 stat blocks** — 336 in `client/public/srd/monsters.json`
+  (was 330). These are the ones that live outside the Monsters chapter and depend on the
+  caster / spell level: Animated Object (Animate Objects), Otherworldly Steed (Find Steed),
+  Giant Insect, Draconic Spirit (Summon Dragon), plus Giant Fly (Figurine of Wondrous Power)
+  and Avatar of Death (Deck of Many Things). Tagged `variable`; their formulas ("AC 11 + the
+  spell's level") are kept in the description / notes.
+- `extract-monsters.mjs` now reads summon-style blocks ("CR None", "HP" without a number).
+
 ## [0.47.0] - 2026-09-22
 
 ### Added
@@ -1081,7 +1093,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...HEAD
+[0.47.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...v0.45.0

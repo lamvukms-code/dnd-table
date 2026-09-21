@@ -118,9 +118,14 @@ for (const b of blocks) {
   try {
     // header
     const ac = /\bAC\s+(\d+)/.exec(text);
-    const hp = /\bHP\s+(\d+)\s*\(([^)]+)\)/.exec(text);
+    let hp = /\bHP\s+(\d+)(?:\s*\(([^)]+)\))?/.exec(text);
+    let hpText = ''; // summons: "HP Half the HP maximum of its summoner"
+    if (!hp) {
+      hpText = /\bHP\s+([^\n]+)/.exec(text)?.[1] ?? '';
+      if (hpText) hp = [hpText, '1', ''];
+    }
     const spd = /\bSpeed\s+([^\n]+)/.exec(text);
-    const cr = /\bCR\s+([\d/]+)\s*\([^)]*?PB\s*\+(\d+)\)/.exec(text);
+    const cr = /\bCR\s+(None|[\d/]+)\s*\(([^)]*)\)/.exec(text); // "CR None (XP 0; PB equals your Proficiency Bonus)" for summons
     if (!ac || !hp || !cr) throw new Error('missing AC/HP/CR');
 
     // header block up to first meta line
@@ -194,6 +199,7 @@ for (const b of blocks) {
     }
     flush();
     if (condImm) traits.push({ name: 'Condition Immunities', description: condImm });
+    if (hpText) traits.unshift({ name: 'HP', description: hpText });
 
     const walk = spd ? Number(/(\d+)/.exec(spd[1])?.[1] ?? 30) : 30;
     const sizeWord = b.size.split(' ')[0].toLowerCase();
@@ -216,15 +222,15 @@ for (const b of blocks) {
       id: `${slug(tag)}-${slug(name)}`,
       name,
       meta: b.size,
-      cr: cr[1],
+      cr: cr[1] === "None" ? "" : cr[1],
       size: ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'].includes(sizeWord) ? sizeWord : 'medium',
       ac: Number(ac[1]),
       maxHp: Number(hp[1]),
-      hpFormula: hp[2].replace(/\s+/g, ''),
+      hpFormula: /\d+d\d+/.test(hp[2] ?? '') ? hp[2].replace(/\s+/g, '') : '',
       speed: walk,
       speedNote: spd && /[,;]/.test(spd[1]) ? spd[1].split(/[,;]/).slice(1).join(',').trim() : undefined,
       abilities,
-      proficiencyBonus: Number(cr[2]),
+      proficiencyBonus: Number(/PB\s*\+(\d+)/.exec(cr[2])?.[1] ?? 2),
       saveProficiencies,
       skills,
       senses: /Senses\s+(.*?)(?=\s+(?:Languages|Gear|CR)\s)/.exec(metaText)?.[1]?.trim(),
