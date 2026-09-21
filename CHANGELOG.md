@@ -6,6 +6,27 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-09-21
+
+### Added
+
+- **SRD 5.2.1 spell database is now complete for cantrips, level 1 and level 2** (checked
+  against the SRD's own spell list; a test fails if any is missing): +19 level-1 spells
+  (Alarm, Animal Friendship, Dissonant Whispers, **Divine Smite**, Ensnaring Strike,
+  Searing Smite, Ice Knife, Identify, Fog Cloud, …) and +24 level-2 spells (**Barkskin**,
+  **Spike Growth**, Gust of Wind, Mind Spike, Shining Smite, Flame Blade, Find Steed,
+  Phantasmal Force, Alter Self, …). Combat ones are wired for semi-automatic casting
+  (damage / save / smite), the rest carry a Vietnamese summary. 2014 ↔ 2024 names work
+  through `aliases` (Acid Arrow / Melf's Acid Arrow, Hideous Laughter, Tiny Hut).
+- `client/public/srd/spells.json`: SRD spell index (name, level, school, classes).
+
+### Changed
+
+- **Spell pickers are searchable dropdowns, one per level** (cantrip / 1 / 2 / 3), like the
+  per-level boxes on the paper sheet: type to filter (name, alias, school, class), click or
+  Enter to add. A picker only ever lists spells of its own level; the caster's class list
+  comes first. PDF import understands aliases too.
+
 ## [0.42.0] - 2026-09-21
 
 ### Added
@@ -976,7 +997,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.39.0...v0.40.0

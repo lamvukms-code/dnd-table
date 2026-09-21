@@ -1116,3 +1116,31 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
   white-space: normal;
   line-height: 1.35;
 }
+
+/* searchable per-level spell picker */
+.spell-picker { position: relative; display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.spell-picker .sp-label { flex: none; min-width: 130px; font-size: 12px; color: var(--muted); }
+.spell-picker input { flex: 1; min-width: 0; }
+.sp-list {
+  position: absolute;
+  left: 138px;
+  right: 0;
+  top: 100%;
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+.sp-list li { margin: 0; }
+.sp-group { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 4px 6px 2px; }
+.sp-empty { padding: 6px; font-size: 12px; color: var(--muted); }
+.sp-opt { display: flex; gap: 6px; align-items: baseline; width: 100%; text-align: left; border: none; background: none; padding: 3px 6px; border-radius: 4px; }
+.sp-opt:hover { background: var(--panel-2); }
+.sp-opt .sp-name { font-weight: 600; }
+.sp-opt .sp-hint { color: var(--muted); font-size: 11px; margin-left: auto; text-align: right; }

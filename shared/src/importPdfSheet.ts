@@ -71,7 +71,7 @@ function findSpellDef(name: string, level: number) {
   if (!key) return undefined;
   const tol = Math.max(2, Math.floor(key.length * 0.2));
   const best = (pool: typeof SRD_SPELLS) => {
-    const exact = pool.find((s) => norm(s.name) === key);
+    const exact = pool.find((s) => [s.name, ...(s.aliases ?? [])].some((n) => norm(n) === key));
     if (exact) return exact;
     const near = pool.map((s) => ({ s, d: lev(norm(s.name), key) })).sort((a, b) => a.d - b.d)[0];
     return near && near.d <= tol ? near.s : undefined;

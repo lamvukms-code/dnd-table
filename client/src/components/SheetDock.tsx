@@ -1795,6 +1795,11 @@ const SPELL_DEF_HINT = (c: {
   return `${c.save ? ` (save ${c.save.toUpperCase()})` : ''}${aoe}`;
 };
 
+/**
+ * Searchable spell dropdown for ONE spell level (cantrip / 1 / 2 / 3): type to filter, click or
+ * press Enter to add. Spells of other levels never appear here, mirroring the per-level boxes
+ * of the paper character sheet. The caster's own class list is shown first.
+ */
 function SpellDefPicker({
   draft,
   spells,
@@ -1808,35 +1813,71 @@ function SpellDefPicker({
   list: ReturnType<typeof cantripsForSheet>;
   label: string;
 }) {
-  const { own, others } = list;
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
   const have = new Set(spells.map((s) => s.name.toLowerCase()));
-  const opt = (defs: typeof own) =>
-    defs
-      .filter((c) => !have.has(c.name.toLowerCase()))
-      .map((c) => (
-        <option key={c.id} value={c.id}>
-          {c.combat ? '⚔ ' : '• '}
-          {c.name}
-          {SPELL_DEF_HINT(c)}
-        </option>
-      ));
-  return (
-    <label className="cantrip-picker">
-      {label}
-      <select
-        value=""
-        onChange={(e) => {
-          const def = [...own, ...others].find((c) => c.id === e.target.value);
-          if (def) onAdd(spellFromCantrip(def, draft, nanoIdish()));
-        }}
+  const term = q.trim().toLowerCase();
+  const match = (c: (typeof list.own)[number]) =>
+    !have.has(c.name.toLowerCase()) &&
+    (!term ||
+      [c.name, ...(c.aliases ?? []), c.school, ...c.classes].some((x) => x.toLowerCase().includes(term)));
+  const own = list.own.filter(match);
+  const others = list.others.filter(match);
+  const total = own.length + others.length;
+
+  function pick(c: (typeof own)[number]) {
+    onAdd(spellFromCantrip(c, draft, nanoIdish()));
+    setQ('');
+    setOpen(false);
+  }
+  const item = (c: (typeof own)[number]) => (
+    <li key={c.id}>
+      <button
+        type="button"
+        className="sp-opt"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => pick(c)}
+        title={c.guidance}
       >
-        <option value="">— chọn —</option>
-        <optgroup label="Theo nghề — combat (bán tự động)">{opt(own.filter((c) => c.combat))}</optgroup>
-        <optgroup label="Theo nghề — tiện ích">{opt(own.filter((c) => !c.combat))}</optgroup>
-        <optgroup label="Khác — combat">{opt(others.filter((c) => c.combat))}</optgroup>
-        <optgroup label="Khác — tiện ích">{opt(others.filter((c) => !c.combat))}</optgroup>
-      </select>
-    </label>
+        <span className="sp-mark">{c.combat ? '⚔' : '•'}</span>
+        <span className="sp-name">{c.name}</span>
+        <span className="sp-hint">
+          {c.school}
+          {SPELL_DEF_HINT(c)}
+        </span>
+      </button>
+    </li>
+  );
+  return (
+    <div className="spell-picker">
+      <span className="sp-label">{label}</span>
+      <input
+        value={q}
+        placeholder={`Tìm hoặc chọn… (${list.own.length + list.others.length})`}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Enter') {
+            const first = own[0] ?? others[0];
+            if (first) pick(first);
+          }
+        }}
+      />
+      {open && (
+        <ul className="sp-list">
+          {total === 0 && <li className="sp-empty">Không thấy phép nào.</li>}
+          {own.length > 0 && <li className="sp-group">Theo nghề của bạn</li>}
+          {own.map(item)}
+          {others.length > 0 && <li className="sp-group">Nghề khác</li>}
+          {others.map(item)}
+        </ul>
+      )}
+    </div>
   );
 }
 
