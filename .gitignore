@@ -20,3 +20,4 @@ coverage/
 server/data/*.backup.json
 client/public/theme/
 client/src/data/species.local.json
+server/data/maps/

@@ -1,11 +1,13 @@
 import {
   applySpecies,
+  derivedSubclassFeatures,
   matchSpecies,
   sheetFromPdfFields,
   type PdfField,
   type PdfSheetResult,
 } from '@dnd-table/shared';
 import { SPECIES_DEFS } from './speciesData.js';
+import { SUBCLASS_DEFS } from './subclassData.js';
 
 /**
  * Read a fillable character-sheet PDF in the browser (nothing is uploaded) and turn it into a
@@ -51,6 +53,12 @@ export async function importPdfSheet(
   }
   const res = sheetFromPdfFields(fields, ownerId, newId);
   if (!res) throw new Error('Không nhận ra mẫu phiếu này — hiện chỉ đọc được mẫu "Sirindoodles" 5e.');
+  // Snap the typed subclass ("Circle of the old way") to the official name in the local subclass data.
+  const known = derivedSubclassFeatures({ ...res.sheet, level: 20 }, SUBCLASS_DEFS)[0]?.subclass;
+  if (known && known !== res.sheet.subclass) {
+    res.report.push(`Subclass: ${known} (từ "${res.sheet.subclass}") — features tự hiện`);
+    res.sheet.subclass = known;
+  }
   // The sheet's RACE box: if it names a species we have data for (typos forgiven), apply it.
   const race = /Chủng tộc: (.+)/.exec(res.sheet.notes)?.[1]?.trim();
   const def = matchSpecies(SPECIES_DEFS, race);

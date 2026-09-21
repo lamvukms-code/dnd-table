@@ -22,7 +22,7 @@ ENV NODE_ENV=production \
     CLIENT_DIST=/app/client/dist \
     ROOM_FILE=/data/room.json \
     BESTIARY_FILE=/data/bestiary.json \
-    UPLOADS_DIR=/data/uploads
+    UPLOADS_DIR=/data/uploads \n    MAPS_DIR=/data/maps
 
 # Run unprivileged: a compromised app process cannot touch the host as root.
 RUN mkdir -p /data/uploads && chown -R node:node /data

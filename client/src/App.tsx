@@ -8,6 +8,7 @@ import { SheetDock } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
 import { ReferencePanel } from './components/ReferencePanel.js';
+import { MapLibrary } from './components/MapLibrary.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -21,6 +22,7 @@ export function App() {
   const bestiaryFocus = useStore((s) => s.bestiaryFocus);
   const openBestiary = useStore((s) => s.openBestiary);
   const [refOpen, setRefOpen] = useState(false);
+  const [mapsOpen, setMapsOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
 
@@ -47,6 +49,11 @@ export function App() {
           {me.name} · {me.role === 'dm' ? 'DM' : 'Người chơi'}
           {status !== 'open' ? ' · mất kết nối…' : ''}
         </span>
+        {isDm && (
+          <button title="Thư viện bản đồ theo chương" onClick={() => setMapsOpen(true)}>
+            🗺 Bản đồ
+          </button>
+        )}
         {isDm && (
           <button title="Bestiary" onClick={() => setBestiaryOpen(true)}>
             Bestiary
@@ -88,6 +95,7 @@ export function App() {
             openBestiary(null);
           }}
         />}
+      {mapsOpen && isDm && <MapLibrary onClose={() => setMapsOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

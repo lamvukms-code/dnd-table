@@ -26,6 +26,8 @@ const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(__dirname, '..', 'data', 'up
 const LOREBOOK_FILE =
   process.env.LOREBOOK_FILE ??
   join(__dirname, '..', '..', 'client', 'src', 'data', 'lorebook.local.json');
+// Imported map pack (scripts/import-maps.mjs): images + index.json, read-only, never bundled.
+const MAPS_DIR = process.env.MAPS_DIR ?? join(__dirname, '..', 'data', 'maps');
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);
@@ -48,6 +50,16 @@ const IMG_EXT: Record<string, string> = {
   'image/webp': 'webp',
   'image/gif': 'gif',
 };
+
+if (existsSync(MAPS_DIR)) {
+  app.use(
+    '/maps',
+    express.static(MAPS_DIR, {
+      maxAge: '7d',
+      setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+    }),
+  );
+}
 
 /** Player/DM image upload (token portraits, map backgrounds). Kept on the server. */
 app.post('/upload', (req, res) => {

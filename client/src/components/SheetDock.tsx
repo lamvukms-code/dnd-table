@@ -476,6 +476,29 @@ function BasicTab({ draft, commit }: EditorCtx) {
               value={draft.className}
               onChange={(e) => set('className', e.target.value)}
             />
+            {!draft.classes?.length && (
+              <>
+                <input
+                  className="bt-subclass"
+                  list={`subclass-list-${draft.id}`}
+                  placeholder="Subclass"
+                  title="Subclass — features của subclass tự hiện bên dưới (gõ hoặc chọn từ gợi ý)"
+                  value={draft.subclass ?? ''}
+                  onChange={(e) => set('subclass', e.target.value || undefined)}
+                />
+                <datalist id={`subclass-list-${draft.id}`}>
+                  {Array.from(
+                    new Set(
+                      SUBCLASS_DEFS.filter(
+                        (d) => d.class.toLowerCase() === draft.className.trim().toLowerCase(),
+                      ).map((d) => d.subclass),
+                    ),
+                  ).map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </>
+            )}
             {SPECIES_DEFS.length > 0 && (
               <select
                 className="bt-species"

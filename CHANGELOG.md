@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-09-22
+
+### Added
+
+- **🗺 Map library (DM)**. `scripts/import-maps.mjs "<pack folder>"` copies a purchased map pack
+  into the server's `data/maps/` (light **gridless WebP** by default, plus region maps and
+  cutaways) and writes `index.json`, grouping every map by **chapter** (titles via `--titles`).
+  A **🗺 Bản đồ** button in the top bar opens the library: chapters as collapsible groups,
+  search, 👁 preview, **Dùng cho cảnh này** (swap the current scene's background, tokens
+  stay) or **+ Cảnh mới** (new scene). The board is sized from the map's `W×H` grid squares in
+  its file name, so tokens land on the printed squares. The server serves `/maps` (env
+  `MAPS_DIR`, `/data/maps` in Docker); images are git-ignored, never bundled.
+- **Subclass field on single-class sheets** (next to the class): free text with autocomplete
+  from the local subclass data — previously it could only be set through the multiclass editor
+  or a PDF import. PDF import now snaps a typed subclass ("Circle of the old way") to the official
+  name in the local data.
+
 ## [0.46.0] - 2026-09-22
 
 ### Added
@@ -1064,7 +1081,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...v0.44.0
