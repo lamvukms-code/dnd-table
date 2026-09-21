@@ -189,3 +189,33 @@ button { border-radius: 4px; }
 .sheet-dock, .inspector, .modal, .reference-panel, .dice-window, .token-palette, .join-card { --muted: #63523c; }
 .dice-window { background-size: 34px 34px, 34px 34px, 34px 34px, 34px 34px, 600px auto; }
 .dice-window .dw-head, .dice-window > :first-child { padding-left: 22px; }
+
+/* fonts (self-hosted Alegreya / Alegreya SC, OFL) and higher-contrast ink */
+:root {
+  --serif: 'Alegreya SC', 'Alegreya', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --serif-body: 'Alegreya', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+}
+body { font-size: 16px; }
+.sheet-dock, .inspector, .modal, .reference-panel, .dice-window, .dice-window-fab, .token-palette, .join-card {
+  --text: #1f160d;
+  --muted: #55442f;
+  --line: #a8977c;
+  color: #1f160d;
+}
+.sheet-dock, .inspector { font-size: 15px; }
+.sheet-dock button, .inspector button, .modal button, .reference-panel button,
+.dice-window button, .token-palette button, .join-card button { background: #f0e7d3; color: #1f160d; border-color: #a8977c; }
+.sheet-dock button.primary, .inspector button.primary, .modal button.primary, .join-card button.primary,
+.sheet-dock button.on, .inspector button.on, .modal button.on, .reference-panel button.on,
+.dice-window button.on, .sheet-dock .roll-btn.strong, .inspector .roll-btn.strong { color: #fff6e6; }
+.sheet-dock input, .sheet-dock select, .sheet-dock textarea,
+.inspector input, .inspector select, .inspector textarea,
+.modal input, .modal select, .modal textarea,
+.reference-panel input, .reference-panel select, .reference-panel textarea,
+.dice-window input, .dice-window select, .join-card input, .token-palette input {
+  background: rgba(255, 253, 247, 0.85);
+  color: #1f160d;
+  border-color: #a8977c;
+}
+.modal h1, .modal h2, .modal h3, .inspector h3, .join-card h1, .join-card h2, .sheet-dock h3, .sheet-dock h4 { color: #2c1e10; font-weight: 700; }
+label { color: var(--muted); }
