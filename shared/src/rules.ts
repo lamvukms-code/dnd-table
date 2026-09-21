@@ -18,6 +18,8 @@ import type {
 } from './types.js';
 import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
+import { regainHitDice } from './derived.js';
+
 export function abilityMod(score: number): number {
   return Math.floor((score - 10) / 2);
 }
@@ -936,6 +938,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     wildShapeUsed: 0,
     subclassUses: {},
     speciesUses: {},
+    hitDiceUsed: regainHitDice(sheet).hitDiceUsed,
     features: sheet.features.map((f) =>
       f.uses && f.uses.recharge !== 'other' ? { ...f, uses: { ...f.uses, used: 0 } } : f,
     ),
@@ -957,10 +960,26 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
 
   const armor = sheet.inventory.find((it) => it.type === 'armor' && it.equipped);
   if (!armor) {
-    return {
-      ac: 10 + dexMod + shieldBonus,
-      source: shield ? 'không giáp + khiên' : 'không giáp',
-    };
+    // Unarmored Defense: Barbarian 10 + DEX + CON (shield allowed), Monk 10 + DEX + WIS (no shield).
+    let ac = 10 + dexMod + shieldBonus;
+    let source = shield ? 'không giáp + khiên' : 'không giáp';
+    for (const c of sheetClasses(sheet)) {
+      const name = (c.name ?? '').trim().toLowerCase();
+      if (name === 'barbarian') {
+        const v = 10 + dexMod + abilityMod(sheet.abilities.con) + shieldBonus;
+        if (v > ac) {
+          ac = v;
+          source = 'Unarmored Defense (Barbarian)' + (shield ? ' + khiên' : '');
+        }
+      } else if (name === 'monk' && !shield) {
+        const v = 10 + dexMod + abilityMod(sheet.abilities.wis);
+        if (v > ac) {
+          ac = v;
+          source = 'Unarmored Defense (Monk)';
+        }
+      }
+    }
+    return { ac, source };
   }
   const base = armor.armorBase ?? 10;
   let dexPart = dexMod;

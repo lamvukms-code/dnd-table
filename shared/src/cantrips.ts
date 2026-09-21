@@ -48,7 +48,20 @@ export interface CantripDef {
   halfOnSave?: boolean;
   concentration?: boolean;
   /** Effect placed on the target (advisory badge unless the condition is wired). */
-  effect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
+  effect?: {
+    name: string;
+    condition?: ConditionType;
+    note?: string;
+    expiresInRounds?: number;
+    /** AC changes: bonus (Shield of Faith), floor (Barkskin), alternative base (Mage Armor). */
+    acBonus?: number;
+    acMin?: number;
+    acBase?: number;
+    /** Melee attackers take this while the bearer has temp HP (Armor of Agathys). */
+    retaliate?: { dice: string; type: string };
+  };
+  /** Temp HP granted to the target ('2d4+4', '5'); doesn't stack. */
+  tempHp?: string;
   /** One-shot d20 bonus die placed on the target (Guidance +1d4 to an ability check). */
   rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
   /** Casting range: how far the target / target point can be ("150ft", "Chạm", "Bản thân"). */
@@ -272,11 +285,11 @@ const L1: CantripDef[] = [
     { combat: true, castKind: 'save', save: 'cha', concentration: true, range: '30ft',
       effect: { name: 'Bane (−1d4 đòn đánh & save)', note: 'Trừ 1d4 vào mọi đòn tấn công và saving throw', expiresInRounds: 10 } }),
   S1('shield-spell', 'Shield', 'Abjuration', ['sorcerer', 'wizard'],
-    'Reaction khi bị đánh trúng / dính Magic Missile: +5 AC tới đầu lượt sau, và miễn Magic Missile. App: chỉnh "AC ghi đè" tạm hoặc ghi chú.',
-    { range: 'Bản thân' }),
+    'Reaction khi bị đánh trúng / dính Magic Missile: +5 AC tới đầu lượt sau, và miễn Magic Missile. App: tự cộng +5 AC 1 vòng.',
+    { combat: true, castKind: 'utility', actionType: 'reaction', range: 'Bản thân', effect: { name: 'Shield (+5 AC)', acBonus: 5, expiresInRounds: 1 } }),
   S1('mage-armor', 'Mage Armor', 'Abjuration', ['sorcerer', 'wizard'],
-    'Chạm 1 mục tiêu không mặc giáp: AC = 13 + DEX mod, 8 giờ. App: đặt "AC ghi đè".',
-    { range: 'Chạm' }),
+    'Chạm 1 mục tiêu không mặc giáp: AC = 13 + DEX mod, 8 giờ. App: tự tính AC (khi không mặc giáp).',
+    { combat: true, castKind: 'utility', range: 'Chạm', effect: { name: 'Mage Armor (AC 13 + DEX)', acBase: 13, note: 'Chỉ khi không mặc giáp' } }),
   // --- more level-1 damage / control ---
   S1('inflict-wounds', 'Inflict Wounds', 'Necromancy', ['cleric'],
     '2024: đòn đánh phép chạm, trúng 2d10 hoại tử. Nâng ô: +2d10 (sửa ô sát thương).',
@@ -317,8 +330,8 @@ const L1: CantripDef[] = [
     '2024: kéo dài cả trận, không tập trung. Đòn vũ khí của bạn +1d6 thánh. App: thêm 1 rider (+1d6 radiant, phạm vi “đòn vũ khí”).',
     { range: 'Bản thân' }),
   S1('shield-of-faith', 'Shield of Faith', 'Abjuration', ['cleric', 'paladin'],
-    'Bonus action, tập trung 10 phút, tầm 60ft: mục tiêu +2 AC. App: +2 vào "AC ghi đè" tạm.',
-    { actionType: 'bonus', concentration: true, range: '60ft' }),
+    'Bonus action, tập trung 10 phút, tầm 60ft: mục tiêu +2 AC. App: tự cộng +2 vào AC của mục tiêu.',
+    { combat: true, castKind: 'utility', actionType: 'bonus', concentration: true, range: '60ft', effect: { name: 'Shield of Faith (+2 AC)', acBonus: 2 } }),
   S1('sanctuary', 'Sanctuary', 'Abjuration', ['cleric'],
     'Bonus action, tầm 30ft. Ai muốn đánh mục tiêu này phải save WIS trước, fail thì mất đòn/phép đó. Hết nếu mục tiêu tấn công / ra phép hại.',
     { actionType: 'bonus', range: '30ft' }),
@@ -359,6 +372,10 @@ const L1: CantripDef[] = [
   S1('find-familiar', 'Find Familiar', 'Conjuration', ['wizard'],
     'Nghi lễ 1 giờ: triệu 1 linh thú (familiar) hỗ trợ trinh sát, Help, chuyển chạm-phép. Dùng stat block quái nhỏ từ Bestiary.',
     { range: '10ft' }),
+  S1('armor-of-agathys', 'Armor of Agathys', 'Abjuration', ['warlock'],
+    'Bản thân, 1 giờ. Nhận 5 HP tạm; khi còn HP tạm này, sinh vật đánh cận chiến trúng bạn nhận 5 lạnh. Nâng ô: +5 HP tạm và +5 lạnh mỗi cấp. App: tự cấp HP tạm và tự phản 5 lạnh khi bị đánh cận chiến (kẻ đánh đứng sát bạn).',
+    { combat: true, castKind: 'utility', range: 'Bản thân', tempHp: '5',
+      effect: { name: 'Armor of Agathys', retaliate: { dice: '5', type: 'cold' }, note: 'Phản 5 lạnh cho kẻ đánh cận chiến trúng bạn khi còn HP tạm' } }),
   // --- SRD completion: remaining level-1 spells ---
   S1('alarm', 'Alarm', 'Abjuration', ['ranger', 'wizard'],
     'Đúc 1 phút (Ritual), tầm 30ft, 8 giờ. Đặt báo động lên cửa / cửa sổ / vùng ≤ khối 20ft: báo cho bạn (tiếng động hoặc trong đầu) khi có sinh vật chạm hoặc bước vào.',
@@ -393,8 +410,8 @@ const L1: CantripDef[] = [
     'Bonus action, bản thân, tập trung 10 phút. Dash ngay khi ra phép và có thể Dash lại bằng Bonus Action mỗi lượt sau.',
     { concentration: true, actionType: 'bonus', range: 'Bản thân' }),
   S1('false-life', 'False Life', 'Necromancy', ['sorcerer', 'wizard'],
-    'Bản thân. Nhận 2d4 + 4 HP tạm. Nâng ô: +5 HP tạm mỗi cấp trên 1.',
-    { range: 'Bản thân' }),
+    'Bản thân. Nhận 2d4 + 4 HP tạm (không cộng dồn — lấy số cao hơn). App: tự tung và cộng HP tạm. Nâng ô: +5 mỗi cấp trên 1.',
+    { combat: true, castKind: 'utility', range: 'Bản thân', tempHp: '2d4+4' }),
   S1('floating-disk', 'Floating Disk', 'Conjuration', ['wizard'],
     'Tầm 30ft, 1 giờ (Ritual). Đĩa lực đường kính 3ft lơ lửng cách đất 3ft, chở tới 500 lb, đi theo bạn (tối đa 20ft từ bạn); tan nếu quá tải.',
     { range: '30ft' }),
@@ -577,7 +594,7 @@ const L2: CantripDef[] = [
   S2('barkskin', 'Barkskin', 'Transmutation', ['druid', 'ranger'],
     'Bonus action, chạm 1 sinh vật tự nguyện, 1 giờ. Da như vỏ cây: AC của mục tiêu = 17 nếu AC thấp hơn.',
     { combat: true, castKind: 'utility', actionType: 'bonus', range: 'Chạm',
-      effect: { name: 'Barkskin (AC tối thiểu 17)', note: 'AC = 17 nếu AC hiện tại thấp hơn' } }),
+      effect: { name: 'Barkskin (AC tối thiểu 17)', acMin: 17, note: 'AC = 17 nếu AC hiện tại thấp hơn' } }),
   S2('continual-flame', 'Continual Flame', 'Evocation', ['cleric', 'druid', 'wizard'],
     'Chạm, vĩnh viễn tới khi giải. Ngọn lửa lạnh không tiêu hao: sáng rực 20ft + mờ thêm 20ft. Che được nhưng không dập được.',
     { range: 'Chạm' }),
@@ -938,6 +955,7 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
       : def.effect
         ? { ...def.effect }
         : undefined,
+    tempHp: def.tempHp,
     range: def.range,
     area: def.area,
     notes: def.guidance,

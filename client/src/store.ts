@@ -13,6 +13,8 @@ import {
   spellAttackParts,
   spellcastingAbilityOf,
   spellSaveDc,
+  effectiveArmorClass,
+  npcArmorClass,
   parseArea,
   defaultAnchor,
   parseRangeFeet,
@@ -347,7 +349,9 @@ export const useStore = create<StoreState>((set, get) => {
 
       const token = room?.tokens.find((tk) => tk.id === targetTokenId);
       const linked = room?.sheets.find((s) => s.tokenId === targetTokenId);
-      const ac = (token?.armorClass ?? 10) + coverAcBonus(token?.cover);
+      const ac =
+        (linked ? effectiveArmorClass(linked, token?.effects).ac : npcArmorClass(token?.armorClass ?? 10, token?.effects)) +
+        coverAcBonus(token?.cover);
       const def = mergeDefenses(
         token?.defenses,
         linked ? derivedDefenses(linked) : undefined,
@@ -536,7 +540,16 @@ export const useStore = create<StoreState>((set, get) => {
         });
         return;
       }
-      // utility: drop a plain effect if the spell defines one
+      // utility: temp HP (False Life, Armor of Agathys) and/or a plain effect (Mage Armor, Shield of Faith…)
+      if (spell.tempHp) {
+        rawSend({
+          t: 'grantTempHp',
+          targetTokenId,
+          notation: spell.tempHp,
+          label: `${label} (HP tạm)`,
+          sourceSheetId: sheetId,
+        });
+      }
       if (spell.effect) {
         rawSend({
           t: 'applyEffect',
@@ -549,6 +562,10 @@ export const useStore = create<StoreState>((set, get) => {
             condition: spell.effect.condition,
             note: spell.effect.note,
             rollBonus: spell.effect.rollBonus,
+            acBonus: spell.effect.acBonus,
+            acMin: spell.effect.acMin,
+            acBase: spell.effect.acBase,
+            retaliate: spell.effect.retaliate,
           },
         });
       }

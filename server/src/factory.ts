@@ -126,6 +126,8 @@ export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
       .map((c) => `${c.name || '?'} ${c.level}`)
       .join(' / ');
   }
+  // Proficiency bonus is always derived from total level (never typed in).
+  next.proficiencyBonus = proficiencyByLevel(next.level);
   // Auto spell-slot progression (5e 2024) — keeps `used`, recomputes the maxima.
   return applySpellProgression(next);
 }

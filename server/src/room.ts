@@ -24,6 +24,15 @@ import {
   tokenIsGrappled,
   walkSpeed,
   resolveDamageParts,
+  damageWithTempHp,
+  effectiveArmorClass,
+  npcArmorClass,
+  computeSpeed,
+  grantTempHp,
+  hitDicePools,
+  spendHitDie,
+  gridFeet,
+  abilityMod as abilityModOf,
   rollNotation,
   targetRiderParts,
   tokenConditions,
@@ -117,7 +126,120 @@ export class Room {
   }
 
   private touch(): void {
+    this.syncLinkedAc();
     this.state.rev++;
+  }
+
+  private linkedSheet(token: Token) {
+    return this.state.sheets.find((s) => s.tokenId === token.id);
+  }
+
+  /** Effective AC of a token: linked sheet (armor, unarmored defense, spell effects) or NPC AC + effects. */
+  private tokenAc(token: Token): number {
+    const sheet = this.linkedSheet(token);
+    return sheet
+      ? effectiveArmorClass(sheet, token.effects).ac
+      : npcArmorClass(token.armorClass ?? 10, token.effects);
+  }
+
+  /** Keep the printed AC of sheet-linked tokens in step with their sheet (derived, never typed). */
+  private syncLinkedAc(): void {
+    for (const sheet of this.state.sheets) {
+      if (!sheet.tokenId) continue;
+      const tk = this.tokenAnywhere(sheet.tokenId);
+      if (tk) tk.armorClass = effectiveArmorClass(sheet, tk.effects).ac;
+    }
+  }
+
+  /** Copy a linked sheet's HP pools onto its token (sheet is the source of truth). */
+  private mirrorSheetToToken(sheet: { tokenId?: string; currentHp: number; maxHp: number; tempHp: number }): void {
+    if (!sheet.tokenId) return;
+    const tk = this.tokenAnywhere(sheet.tokenId);
+    if (!tk) return;
+    tk.currentHp = sheet.currentHp;
+    tk.maxHp = sheet.maxHp;
+    tk.tempHp = sheet.tempHp;
+  }
+
+  private tempOf(token: Token): number {
+    return this.linkedSheet(token)?.tempHp ?? token.tempHp ?? 0;
+  }
+
+  /** Damage lands on temp HP first, then HP. Sheet-linked tokens are handled on the sheet. */
+  private applyDamage(token: Token, amount: number): { applied: number; absorbed: number } {
+    const sheet = this.linkedSheet(token);
+    let r: { hp: number; temp: number; absorbed: number; applied: number };
+    if (sheet) {
+      r = damageWithTempHp(sheet.currentHp, sheet.tempHp ?? 0, amount);
+      sheet.currentHp = r.hp;
+      sheet.tempHp = r.temp;
+      this.mirrorSheetToToken(sheet);
+    } else if (typeof token.currentHp === 'number') {
+      r = damageWithTempHp(token.currentHp, token.tempHp ?? 0, amount);
+      token.currentHp = r.hp;
+      token.tempHp = r.temp;
+    } else {
+      return { applied: 0, absorbed: 0 };
+    }
+    // Armor of Agathys-style effects end with the temp HP that fuel them.
+    if (r.temp <= 0 && token.effects?.some((e) => e.retaliate)) {
+      token.effects = token.effects.filter((e) => !e.retaliate);
+    }
+    return { applied: r.applied, absorbed: r.absorbed };
+  }
+
+  private applyHeal(token: Token, heal: number): number {
+    const sheet = this.linkedSheet(token);
+    if (sheet) {
+      const before = sheet.currentHp;
+      sheet.currentHp = Math.min(sheet.maxHp, sheet.currentHp + heal);
+      this.mirrorSheetToToken(sheet);
+      return sheet.currentHp - before;
+    }
+    if (typeof token.currentHp !== 'number') return 0;
+    const before = token.currentHp;
+    token.currentHp =
+      typeof token.maxHp === 'number' ? Math.min(token.maxHp, token.currentHp + heal) : token.currentHp + heal;
+    return token.currentHp - before;
+  }
+
+  /** Armor of Agathys: a creature adjacent to the bearer that hit it takes the retaliation damage. */
+  private retaliate(
+    target: Token,
+    attackerId: string | undefined,
+    hadTemp: number,
+    eff: ActiveEffect | undefined,
+    actor: Participant,
+  ): void {
+    if (!attackerId || hadTemp <= 0 || !eff?.retaliate) return;
+    const attacker = this.state.tokens.find((t) => t.id === attackerId);
+    if (!attacker || attacker.id === target.id) return;
+    const span = (t: Token) => ({ tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 })[t.size] ?? 1;
+    if (gridFeet(attacker, target) > 5 * Math.max(span(attacker), span(target))) return; // not a melee hit
+    let rolled: number;
+    try {
+      rolled = rollNotation(eff.retaliate.dice).total;
+    } catch {
+      return;
+    }
+    const out = resolveDamageParts([{ part: { dice: eff.retaliate.dice, type: eff.retaliate.type }, raw: rolled }], this.effectiveDefenses(attacker));
+    const dealt = this.applyDamage(attacker, out.totalFinal);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor.id,
+      actorName: actor.name,
+      label: `${eff.name}: ${attacker.label} bị phản ${out.totalFinal} ${eff.retaliate.type}`,
+      result: externalRollResult(eff.retaliate.dice, { total: rolled, faces: [] }),
+      damage: {
+        targetTokenId: attacker.id,
+        targetName: attacker.label,
+        amount: dealt.applied,
+        raw: out.totalRaw,
+        damageType: eff.retaliate.type,
+        notes: damageBreakdownNotes(out),
+      },
+    });
   }
 
   private facesOf(result: ReturnType<typeof rollNotation>): number[] {
@@ -324,7 +446,7 @@ export class Room {
   /** A token's walking speed (ft): linked sheet, else stat block, else 30. Grappled → 0. */
   private tokenSpeed(token: Token): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-    return walkSpeed(sheet?.speed, token.statblock?.speed, tokenIsGrappled(token));
+    return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token));
   }
 
   /** After an initiative change: anchor the active token's position for the move tracker. */
@@ -446,11 +568,8 @@ export class Room {
           return (err as Error).message;
         }
         const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
-        let amount = 0;
-        if (typeof target.currentHp === 'number') {
-          amount = Math.min(target.currentHp, out.totalFinal);
-          target.currentHp -= amount;
-        }
+        const took = this.applyDamage(target, out.totalFinal);
+        const amount = took.applied;
         this.maybeBreakConcentration(target, out.totalFinal);
         this.pushRoll({
           id: nanoid(8),
@@ -465,7 +584,7 @@ export class Room {
             amount,
             raw: out.totalRaw,
             damageType: damagePartsSummary(dmgParts),
-            notes: damageBreakdownNotes(out),
+            notes: [...(damageBreakdownNotes(out) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
           },
         });
         this.touch();
@@ -486,21 +605,77 @@ export class Room {
           }
         }
         const heal = Math.max(0, result.total);
-        let restored = 0;
-        if (typeof target.currentHp === 'number' && typeof target.maxHp === 'number') {
-          const before = target.currentHp;
-          target.currentHp = Math.min(target.maxHp, target.currentHp + heal);
-          restored = target.currentHp - before;
-        } else if (typeof target.currentHp === 'number') {
-          target.currentHp += heal;
-          restored = heal;
-        }
+        const restored = this.applyHeal(target, heal);
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
           label: `${action.label} → ${target.label}: +${restored} HP`,
+          result,
+        });
+        this.touch();
+        break;
+      }
+
+      case 'grantTempHp': {
+        const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        let result: RollResult;
+        try {
+          result =
+            typeof action.external === 'number'
+              ? externalRollResult(action.notation, { total: action.external, faces: [] })
+              : rollNotation(action.notation);
+        } catch (err) {
+          return (err as Error).message;
+        }
+        const amount = Math.max(0, result.total);
+        const sheet = this.linkedSheet(target);
+        const before = this.tempOf(target);
+        const next = grantTempHp(before, amount);
+        if (sheet) {
+          sheet.tempHp = next;
+          this.mirrorSheetToToken(sheet);
+        } else {
+          target.tempHp = next;
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${action.label} → ${target.label}: ${next > before ? `HP tạm ${before} → ${next}` : `giữ ${before} HP tạm (không cộng dồn)`}`,
+          result,
+        });
+        this.touch();
+        break;
+      }
+
+      case 'spendHitDie': {
+        const sheet = this.state.sheets.find((s) => s.id === action.sheetId);
+        if (!sheet) return 'Không tìm thấy nhân vật';
+        if (sheet.ownerId !== actor.id && !isDm) return 'Bạn không sở hữu nhân vật này';
+        const spent = spendHitDie(sheet, action.die);
+        if (!spent) return `Hết Hit Die d${action.die}`;
+        const conMod = abilityModOf(sheet.abilities.con);
+        let result: RollResult;
+        try {
+          result = rollNotation(`1d${action.die}${conMod >= 0 ? '+' : ''}${conMod}`);
+        } catch (err) {
+          return (err as Error).message;
+        }
+        sheet.hitDiceUsed = spent.hitDiceUsed;
+        const before = sheet.currentHp;
+        sheet.currentHp = Math.min(sheet.maxHp, sheet.currentHp + Math.max(0, result.total));
+        this.mirrorSheetToToken(sheet);
+        const pool = hitDicePools(sheet).find((p) => p.die === action.die);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${sheet.name}: dùng Hit Die d${action.die} → +${sheet.currentHp - before} HP (còn ${pool?.left ?? 0}/${pool?.max ?? 0})`,
           result,
         });
         this.touch();
@@ -542,7 +717,7 @@ export class Room {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
         // Cover benefit is added to the target's AC automatically (homebrew).
-        const baseAc = target.armorClass ?? 10;
+        const baseAc = this.tokenAc(target);
         const cover = target.cover ?? 'none';
         const ac = baseAc + coverAcBonus(cover);
         let attackRoll: RollResult;
@@ -611,11 +786,11 @@ export class Room {
           },
         });
         if (damageResult && outcome) {
-          const applied = typeof target.currentHp === 'number' ? outcome.totalFinal : 0;
-          if (typeof target.currentHp === 'number') {
-            target.currentHp = Math.max(0, target.currentHp - applied);
-          }
-          this.maybeBreakConcentration(target, applied);
+          const hadTemp = this.tempOf(target);
+          const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
+          const took = this.applyDamage(target, outcome.totalFinal);
+          const applied = took.applied;
+          this.maybeBreakConcentration(target, outcome.totalFinal);
           const critTag = effectiveCrit
             ? autoCrit && !res.crit
               ? ' (chí mạng — mục tiêu tê liệt/bất tỉnh)'
@@ -636,9 +811,10 @@ export class Room {
               amount: applied,
               raw: outcome.totalRaw,
               damageType: damagePartsSummary(dmgParts),
-              notes: damageBreakdownNotes(outcome),
+              notes: [...(damageBreakdownNotes(outcome) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
             },
           });
+          this.retaliate(target, action.attackerTokenId, hadTemp, retEff, actor);
         }
         this.touch();
         break;
@@ -784,7 +960,14 @@ export class Room {
           patch.x = gate.pos.x;
           patch.y = gate.pos.y;
         }
+        const linked = this.linkedSheet(token);
+        if (linked) delete patch.armorClass; // derived from the sheet
         Object.assign(token, patch);
+        if (linked) {
+          if (typeof patch.currentHp === 'number') linked.currentHp = patch.currentHp;
+          if (typeof patch.maxHp === 'number') linked.maxHp = patch.maxHp;
+          if (typeof patch.tempHp === 'number') linked.tempHp = patch.tempHp;
+        }
         this.touch();
         break;
       }
@@ -1027,11 +1210,8 @@ export class Room {
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
           const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
-          let applied = 0;
-          if (typeof target.currentHp === 'number') {
-            applied = Math.min(target.currentHp, dealt);
-            target.currentHp -= applied;
-          }
+          const took = this.applyDamage(target, dealt);
+          const applied = took.applied;
           this.pushRoll({
             id: nanoid(8),
             ts: Date.now(),
@@ -1045,7 +1225,7 @@ export class Room {
               amount: applied,
               raw: out.totalRaw,
               damageType: damagePartsSummary(action.damageOnFail!),
-              notes: damageBreakdownNotes(out),
+              notes: [...(damageBreakdownNotes(out) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
             },
           });
           this.maybeBreakConcentration(target, dealt);
@@ -1194,6 +1374,7 @@ export class Room {
         this.state.sheets = existing
           ? this.state.sheets.map((s) => (s.id === incoming.id ? incoming : s))
           : [...this.state.sheets, incoming];
+        this.mirrorSheetToToken(incoming);
         this.touch();
         break;
       }

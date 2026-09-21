@@ -8,7 +8,9 @@ import {
   applyLongRest,
   applyShortRest,
   barbarianLevel,
-  computeArmorClass,
+  effectiveArmorClass,
+  computeSpeed,
+  hitDicePools,
   d20Check,
   derivedClassFeatures,
   emptyCurrency,
@@ -434,7 +436,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
     });
   }
 
-  const ac = computeArmorClass(draft);
+  const ac = effectiveArmorClass(draft, linkedToken?.effects);
+  const speedInfo = computeSpeed(draft);
   const actions = allActions(draft);
   const modeTag =
     rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
@@ -666,6 +669,11 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 value={draft.speed}
                 onChange={(e) => set('speed', Number(e.target.value))}
               />
+              {speedInfo.notes.length > 0 && (
+                <span className="hint" title={speedInfo.notes.join(', ')}>
+                  = {speedInfo.speed} ft ({speedInfo.notes.join(', ')})
+                </span>
+              )}
             </label>
             <button
               className="roll-btn"
@@ -687,6 +695,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
             </button>
           </div>
 
+          <HitDice draft={draft} />
           <Resources draft={draft} commit={commit} />
         </div>
       </div>
@@ -1370,6 +1379,35 @@ function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): Charac
     }
   }
   return changed ? { ...sheet, subclassUses: used } : sheet;
+}
+
+/** Hit dice per die size; on a short rest the player spends one to roll + CON and heal. */
+function HitDice({ draft }: { draft: CharacterSheet }) {
+  const send = useStore((s) => s.send);
+  const pools = hitDicePools(draft);
+  if (pools.length === 0) return null;
+  return (
+    <div className="hit-dice">
+      <span className="hd-label" title="Nghỉ dài: hồi tối đa một nửa tổng số Hit Dice (làm tròn xuống, tối thiểu 1)">
+        Hit Dice
+      </span>
+      {pools.map((p) => (
+        <span key={p.die} className="hd-pool">
+          <strong>
+            d{p.die} {p.left}/{p.max}
+          </strong>
+          <button
+            className="roll-btn"
+            disabled={p.left <= 0 || draft.currentHp >= draft.maxHp}
+            title="Dùng 1 Hit Die: tung dX + CON và hồi máu (nghỉ ngắn)"
+            onClick={() => send({ t: 'spendHitDie', sheetId: draft.id, die: p.die })}
+          >
+            ♥ dùng
+          </button>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 /** Reset species-trait use pools that recharge on the given rest. */

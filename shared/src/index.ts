@@ -9,3 +9,4 @@ export * from './aoe.js';
 export * from './importPdfSheet.js';
 export * from './classDefaults.js';
 export * from './species.js';
+export * from './derived.js';

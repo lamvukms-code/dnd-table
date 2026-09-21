@@ -6,6 +6,36 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-09-22
+
+### Added
+
+- **Temporary hit points, end to end.** Temp HP now absorb damage before HP (attacks, direct
+  damage and AoE saves), never stack (a new grant only replaces a smaller pool), and show in
+  the damage log ("HP tạm hấp thụ N"). New `grantTempHp` action; spells can declare
+  `tempHp` (**False Life** 2d4+4, new **Armor of Agathys** 5). Armor of Agathys also
+  **retaliates**: while its temp HP last, an adjacent creature that hits the bearer takes
+  5 cold, and the effect ends when the temp HP run out.
+- **Automatic AC** (`effectiveArmorClass`): armor / shield, plus **Unarmored Defense** for
+  Barbarian (10 + DEX + CON) and Monk (10 + DEX + WIS), plus spell effects — **Mage Armor**
+  (13 + DEX, no armor), **Shield of Faith** (+2), **Shield** (+5, one round), **Barkskin**
+  (at least 17). NPC tokens get the same effects.
+- **Automatic speed** (`computeSpeed`): species base speed + Barbarian Fast Movement (+10,
+  not in heavy armor) + Monk Unarmored Movement; the movement tracker uses it.
+- **Hit Dice**: pools per die size from class levels, a "♥ dùng" button spends one (server
+  rolls dX + CON and heals), and a **long rest regains half the total** (min 1, largest
+  first). Multiclass keeps separate die sizes.
+- **Proficiency bonus is always derived from level** (server normalises every sheet, incl.
+  PDF imports).
+
+### Changed
+
+- **Sheet-linked tokens now share HP with their sheet** (previously the token and the sheet
+  kept two separate HP values, so damage on the map never reached the sheet): damage / heal /
+  temp HP / hit dice go through the sheet and are mirrored onto the token, editing the
+  token's HP edits the sheet, and the token's AC is derived from the sheet (and can no
+  longer be typed over).
+
 ## [0.44.0] - 2026-09-21
 
 ### Added
@@ -1014,7 +1044,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.41.0...v0.42.0

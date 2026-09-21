@@ -91,6 +91,17 @@ export type ClientAction =
       external?: number;
       sourceSheetId?: string;
     }
+  // grant temporary HP (dice or a number); temp HP never stack — the larger pool wins
+  | {
+      t: 'grantTempHp';
+      targetTokenId: string;
+      notation: string;
+      label: string;
+      external?: number;
+      sourceSheetId?: string;
+    }
+  // spend one hit die (Short Rest): the server rolls 1dX + CON and heals the sheet
+  | { t: 'spendHitDie'; sheetId: string; die: number }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }
   // scenes (DM)

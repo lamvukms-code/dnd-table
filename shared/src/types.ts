@@ -202,6 +202,8 @@ export interface CharacterSheet {
   wildShapeUsed?: number;
   /** Subclass-feature limited-use pools spent, keyed by feature id. */
   subclassUses?: Record<string, number>;
+  /** Hit dice spent, keyed by die size ('d8'). */
+  hitDiceUsed?: Record<string, number>;
   /** Chosen species (name); its traits are derived from the local species data. */
   species?: string;
   /** Limited-use species traits spent, keyed by trait id. */
@@ -332,6 +334,14 @@ export interface ActiveEffect {
   };
   note?: string;
   expiresRound?: number; // auto-cleared at the start of this round
+  /** AC modifiers (Shield of Faith +2, Shield +5). */
+  acBonus?: number;
+  /** AC floor (Barkskin: at least 17). */
+  acMin?: number;
+  /** Alternative base AC while no armor is worn (Mage Armor 13 + DEX). */
+  acBase?: number;
+  /** Melee attackers take this damage while the bearer has temp HP (Armor of Agathys). */
+  retaliate?: { dice: string; type: string };
 }
 
 /** What a token is currently concentrating on (one at a time). */
@@ -393,7 +403,13 @@ export interface Spell {
     expiresInRounds?: number;
     /** One-shot d20 bonus die granted to the target (Guidance +1d4 to a check). */
     rollBonus?: { dice: string; scope: 'check' | 'save' | 'attack' };
+    acBonus?: number;
+    acMin?: number;
+    acBase?: number;
+    retaliate?: { dice: string; type: string };
   };
+  /** Temp HP granted to the target: dice / number ('2d4+4', '5'). Doesn't stack. */
+  tempHp?: string;
   range?: string;
   /** Area-of-effect template, for display (e.g. "cầu 20ft", "nón 15ft"). */
   area?: string;
@@ -462,6 +478,8 @@ export interface Token {
   imageUrl?: string;
   currentHp?: number;
   maxHp?: number;
+  /** Temporary hit points (absorb damage first, never stack). */
+  tempHp?: number;
   armorClass?: number;
   hidden: boolean; // DM-only visibility
   controllerId?: string; // participant allowed to move it besides DM
