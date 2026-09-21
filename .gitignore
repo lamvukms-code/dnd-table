@@ -17,3 +17,4 @@ deploy/.dnd-setup.env
 .vite/
 coverage/
 .srd-src/
+server/data/*.backup.json
