@@ -22,6 +22,7 @@ const flag = (n) => {
   return v;
 };
 const tag = flag('--tag') ?? 'imported';
+const sourceLabel = flag('--source');
 const [pdf, first, last, outArg] = args;
 if (!pdf || !first || !last) {
   console.error('usage: extract-monsters.mjs <pdf> <firstPage> <lastPage> [out.json] [--tag name]');
@@ -35,7 +36,7 @@ const SKILLS = ['acrobatics', 'animal-handling', 'arcana', 'athletics', 'decepti
 
 const raw = execFileSync('pdftotext', ['-raw', '-f', first, '-l', last, pdf, '-'], { encoding: 'utf8', maxBuffer: 1 << 28 });
 const num = (s) => Number(String(s).replace(/[−–]/g, '-').replace(/\s/g, ''));
-const junk = /^(Bestiary|Appendix [A-Z]|[A-Z]|\d+|CROOKED MOON MONSTERS|\f)$/;
+const junk = /^(Bestiary|Appendix [A-Z]|[A-Z]|\d+|CROOKED MOON MONSTERS|\d+ System Reference Document 5\.2\.1|System Reference Document 5\.2\.1 \d+|\f)$/;
 const lines = raw
   .replace(/\r/g, '')
   .split('\n')
@@ -46,20 +47,23 @@ const SIZE = /^(Tiny|Small|Medium|Large|Huge|Gargantuan)\b.*,\s*[A-Za-z ,()-]+$/
 const CAPS = /^[A-Z][A-Z'’ ,-]{2,}$/;
 const SECTION = { Traits: 'trait', Actions: 'action', 'Bonus Actions': 'bonus', Reactions: 'reaction', 'Legendary Actions': 'other' };
 
-// ── find stat block starts: ALLCAPS name line immediately followed by the size line ──
+// ── find stat block starts: a name line, then the size line, then the "AC …" line ──
 const starts = [];
-for (let i = 1; i < lines.length; i++) {
-  if (SIZE.test(lines[i]) && CAPS.test(lines[i - 1])) starts.push(i);
+for (let i = 1; i < lines.length - 1; i++) {
+  if (SIZE.test(lines[i]) && lines[i + 1].startsWith('AC ') && lines[i - 1].length < 45) starts.push(i);
 }
 
+const TABLE_HDR = /^(MOD|SAVE| )+$/;
 const blocks = starts.map((s, k) => {
-  let end = lines.length;
-  for (let j = s + 1; j < lines.length; j++) {
-    if (CAPS.test(lines[j]) && !/^(MOD|SAVE)$/.test(lines[j])) {
-      end = j;
+  let end = k + 1 < starts.length ? starts[k + 1] - 1 : lines.length;
+  for (let j = s + 1; j < end; j++) {
+    if (CAPS.test(lines[j]) && !TABLE_HDR.test(lines[j])) {
+      end = j; // ALLCAPS heading = the next monster's lore section (Crooked Moon layout)
       break;
     }
   }
+  // drop trailing group headings ("Gold Dragons") that sit between two stat blocks
+  while (end - 1 > s && /^[A-Z][A-Za-z' ,-]{2,40}$/.test(lines[end - 1]) && /[.)]$/.test(lines[end - 2] ?? '')) end--;
   // lore = text between the previous block's end and this heading (habitat + secret)
   const prevEnd = k ? Math.min(...[starts[k]].concat([])) : 0;
   return { name: lines[s - 1], size: lines[s], body: lines.slice(s + 1, end), headIdx: s - 1, prevEnd };
@@ -90,6 +94,13 @@ function parseAction(name, text, actionType, id) {
     const extra = [...rest.matchAll(/plus\s*\d+\s*\(([^)]+)\)\s*(\w+)\s+damage/gi)];
     if (extra.length) a.extraDamage = extra.map((e) => ({ dice: dmg(e[1]), type: e[2].toLowerCase() }));
   }
+  if (!main) {
+    const flat = /(?:Hit|Failure):\s*(\d+)\s+(\w+)\s+damage/i.exec(text); // "Hit: 1 Piercing damage"
+    if (flat) {
+      a.damage = flat[1];
+      a.damageType = flat[2].toLowerCase();
+    }
+  }
   const save = /(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+Saving Throw:\s*DC\s*(\d+)/i.exec(text);
   if (save) a.save = { ability: save[1].slice(0, 3).toLowerCase(), dc: Number(save[2]) };
   return a;
@@ -101,7 +112,7 @@ const results = [];
 const problems = [];
 
 for (const b of blocks) {
-  const name = title(b.name);
+  const name = CAPS.test(b.name) ? title(b.name) : b.name;
   const body = b.body;
   const text = body.join('\n');
   try {
@@ -109,7 +120,7 @@ for (const b of blocks) {
     const ac = /\bAC\s+(\d+)/.exec(text);
     const hp = /\bHP\s+(\d+)\s*\(([^)]+)\)/.exec(text);
     const spd = /\bSpeed\s+([^\n]+)/.exec(text);
-    const cr = /\bCR\s+([\d/]+)\s*\(XP[^)]*?PB\s*\+(\d+)\)/.exec(text);
+    const cr = /\bCR\s+([\d/]+)\s*\([^)]*?PB\s*\+(\d+)\)/.exec(text);
     if (!ac || !hp || !cr) throw new Error('missing AC/HP/CR');
 
     // header block up to first meta line
@@ -172,11 +183,13 @@ for (const b of blocks) {
         continue;
       }
       if (!section) continue;
-      const m = ENTRY.exec(l);
+      // A new entry starts after a finished sentence (PDF wraps lines; a wrapped line that
+      // merely begins with a Capitalised phrase and a full stop must not split an entry).
+      const m = !cur || /[.!?)"”:]$/.test(cur.text.trim()) ? ENTRY.exec(l) : null;
       if (m) {
         flush();
         cur = { section, name: m[1], text: m[2] };
-      } else if (cur) cur.text += ' ' + l;
+      } else if (cur) cur.text = /[a-z]-$/.test(cur.text) && /^[a-z]/.test(l) ? cur.text.slice(0, -1) + l : `${cur.text} ${l}`;
       else cur = { section, name: section === 'other' ? 'Legendary Actions' : 'Note', text: l };
     }
     flush();
@@ -186,7 +199,7 @@ for (const b of blocks) {
     const sizeWord = b.size.split(' ')[0].toLowerCase();
     // lore: Habitat + Secret paragraph found in the lines just before this stat block heading
     const before = lines.slice(Math.max(0, b.headIdx - 60), b.headIdx + 1).join('\n');
-    const habitat = /Habitat:[^\n]*/.exec(before.split(new RegExp(`^${b.name}$`, 'm')).slice(-2, -1)[0] ?? before);
+    const habitat = /Habitat:[^\n]*/.exec(before.split('\n' + b.name + '\n').slice(-2, -1)[0] ?? before);
     const secretAt = lines.slice(Math.max(0, b.headIdx - 60), b.headIdx).findIndex((l) => l.startsWith('Secret.'));
     let secret = null;
     if (secretAt >= 0) {
@@ -200,7 +213,7 @@ for (const b of blocks) {
     }
 
     results.push({
-      id: `cm-${slug(name)}`,
+      id: `${slug(tag)}-${slug(name)}`,
       name,
       meta: b.size,
       cr: cr[1],
@@ -222,7 +235,7 @@ for (const b of blocks) {
       color: '#8e44ad',
       tags: [tag],
       notes: [habitat?.[0], secret?.[0]].filter(Boolean).join('\n'),
-      source: `${tag} (local, extracted)`,
+      source: sourceLabel ?? `${tag} (local, extracted)`,
       _init: initMod ? num(initMod[1]) : undefined,
     });
   } catch (e) {

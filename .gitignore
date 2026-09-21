@@ -16,3 +16,4 @@ deploy/.dnd-setup.env
 .DS_Store
 .vite/
 coverage/
+.srd-src/

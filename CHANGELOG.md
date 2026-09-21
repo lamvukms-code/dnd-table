@@ -6,13 +6,22 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-09-21
+
 ### Added
 
+- **SRD 5.2.1 monsters (330 stat blocks)** bundled as `client/public/srd/monsters.json`
+  (CC BY 4.0, © Wizards of the Coast). Bestiary panel → **Nạp SRD** merges them into
+  the bestiary, ready to spawn as tokens.
+- **SRD 5.2.1 classes** (12 classes, 244 entries: core traits + every class/subclass
+  feature by level) as `client/public/srd/classes.json`; searchable in the Tra cứu →
+  SRD tab under "Class (SRD)".
 - `scripts/extract-monsters.mjs`: PDF → bestiary JSON for 2024-format stat blocks
   (AC/HP/Speed, ability scores + save proficiencies, skills, resistances/immunities,
   traits, actions / bonus / reactions / legendary with parsed attack bonus, damage,
-  extra damage and save DC). Output is imported through the Bestiary panel
-  ("Nhập file"); keep book-derived output out of the repo.
+  extra damage and save DC). Handles both the Crooked Moon (local, git-ignored output)
+  and SRD layouts. Import via the Bestiary panel ("Nhập file").
+- `scripts/build-srd-classes.mjs`: SRD PDF → `classes.json`.
 
 ## [0.37.0] - 2026-09-21
 
@@ -903,7 +912,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...v0.35.0

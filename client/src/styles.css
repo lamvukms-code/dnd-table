@@ -1070,3 +1070,4 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .lore-thread { padding: 4px 0; border-bottom: 1px solid var(--line); }
 .lore-tp { margin: 4px 0 4px 10px; }
 .srd-attr { margin-top: 12px; font-size: 10px; opacity: 0.7; }
+.srd-text { white-space: pre-wrap; }

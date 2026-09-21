@@ -75,6 +75,18 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
     URL.revokeObjectURL(url);
   }
 
+  async function loadSrdMonsters() {
+    try {
+      const r = await fetch('/srd/monsters.json');
+      if (!r.ok) throw new Error('không tải được /srd/monsters.json');
+      const arr = (await r.json()) as Statblock[];
+      send({ t: 'bestiaryReplaceAll', entries: mergeBestiary(bestiary, arr.map(normalizeStatblock)) });
+      setNote(`Đã nạp ${arr.length} quái SRD 5.2.1 (CC BY 4.0).`);
+    } catch (e) {
+      setNote(`Lỗi nạp SRD: ${(e as Error).message}`);
+    }
+  }
+
   async function importFile(file: File) {
     try {
       const raw = JSON.parse(await file.text());
@@ -122,6 +134,9 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
             <div className="be-list-actions">
               <button onClick={create}>+ Mới</button>
               <button onClick={() => fileRef.current?.click()}>Nhập file</button>
+              <button onClick={() => void loadSrdMonsters()} title="330 stat block SRD 5.2.1">
+                Nạp SRD
+              </button>
               <button onClick={() => setShowPaste((v) => !v)}>Dán 5etools JSON</button>
               <button onClick={exportFile} disabled={bestiary.length === 0}>
                 Xuất file
