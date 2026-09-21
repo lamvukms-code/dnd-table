@@ -6,6 +6,18 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-22
+
+### Added
+
+- **Scanned-rulebook OCR pipeline (local, personal use)** for 2024-format Monster Manuals whose PDF has no
+  usable text layer: `scripts/ocr-book.mjs` (Ghostscript render, left/right column crop, Tesseract),
+  `scripts/mm-clean.mjs` (repairs the ability table, headings and names via the table of contents, re-reads
+  garbled AC/HP lines at 300 dpi), `scripts/mm-finalize.mjs` (drops SRD duplicates, validates HP / damage
+  averages / PB, writes an importable bestiary JSON + a Markdown review checklist).
+  `extract-monsters.mjs` gained `--text` and `--id-prefix`. All output is book content: it stays in the
+  git-ignored `.srd-src/` folder and must never be committed.
+
 ## [0.48.0] - 2026-09-22
 
 ### Added
@@ -1115,7 +1127,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...HEAD
+[0.49.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...v0.49.0
 [0.48.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...v0.47.0

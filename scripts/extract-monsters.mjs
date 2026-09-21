@@ -11,7 +11,7 @@
  * Best-effort: always eyeball a few results.
  */
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const flag = (n) => {
@@ -23,7 +23,9 @@ const flag = (n) => {
 };
 const tag = flag('--tag') ?? 'imported';
 const sourceLabel = flag('--source');
-const [pdf, first, last, outArg] = args;
+const textFile = flag('--text'); // pre-cleaned text (scripts/mm-clean.mjs) instead of a PDF
+const idPrefix = flag('--id-prefix');
+const [pdf, first, last, outArg] = textFile ? [textFile, '1', '1', args[0]] : args;
 if (!pdf || !first || !last) {
   console.error('usage: extract-monsters.mjs <pdf> <firstPage> <lastPage> [out.json] [--tag name]');
   process.exit(1);
@@ -34,7 +36,9 @@ const DAMAGE = ['bludgeoning', 'piercing', 'slashing', 'fire', 'cold', 'lightnin
 const ABIL = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const SKILLS = ['acrobatics', 'animal-handling', 'arcana', 'athletics', 'deception', 'history', 'insight', 'intimidation', 'investigation', 'medicine', 'nature', 'perception', 'performance', 'persuasion', 'religion', 'sleight-of-hand', 'stealth', 'survival'];
 
-const raw = execFileSync('pdftotext', ['-raw', '-f', first, '-l', last, pdf, '-'], { encoding: 'utf8', maxBuffer: 1 << 28 });
+const raw = textFile
+  ? readFileSync(textFile, 'utf8')
+  : execFileSync('pdftotext', ['-raw', '-f', first, '-l', last, pdf, '-'], { encoding: 'utf8', maxBuffer: 1 << 28 });
 const num = (s) => Number(String(s).replace(/[−–]/g, '-').replace(/\s/g, ''));
 const junk = /^(Bestiary|Appendix [A-Z]|[A-Z]|\d+|CROOKED MOON MONSTERS|\d+ System Reference Document 5\.2\.1|System Reference Document 5\.2\.1 \d+|\f)$/;
 const lines = raw
@@ -219,7 +223,7 @@ for (const b of blocks) {
     }
 
     results.push({
-      id: `${slug(tag)}-${slug(name)}`,
+      id: `${idPrefix ?? slug(tag)}-${slug(name)}`,
       name,
       meta: b.size,
       cr: cr[1] === "None" ? "" : cr[1],
