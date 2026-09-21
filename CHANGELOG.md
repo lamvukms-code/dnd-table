@@ -6,6 +6,28 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-22
+
+### Added
+
+- **Shillelagh now reshapes the caster's weapon attacks.** Casting it puts a 10-round effect on the
+  caster's token; while it lasts, club / quarterstaff attacks use the spellcasting ability + proficiency
+  to hit and the scaled die (d8 → d10 at level 5, d12 at 11, 2d6 at 17) + spellcasting modifier for
+  damage. If no club/staff is equipped, a ready-made attack row appears. (New `weaponImbue` on
+  `ActiveEffect`; `allActions(sheet, effects)`.) Shillelagh spells added earlier work without re-adding.
+- **Circle of the Old Ways — Wood Wose button** on the Druid features row (−1 Wild Shape): unarmored
+  AC = 10 + DEX + WIS (Bark Bulwark) for 10 minutes and temp HP = WIS mod + PB (Rampant Growth).
+- `link-token-art.mjs`: understands Forgotten Adventures file names, a SRD-2024 → token name alias
+  table (Goblin Warrior → Goblin, Adult dragons → Young dragon art…), and `--only-prefix srd-`.
+
+### Changed
+
+- `link-token-art.mjs` typo tolerance tightened (long names only) after short names matched wrongly.
+
+### Docs
+
+- README: personal-use terms for privately shared rulebook PDFs (non-commercial, never committed).
+
 ## [0.47.1] - 2026-09-22
 
 ### Added
@@ -1093,7 +1115,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.1...v0.48.0
 [0.47.1]: https://github.com/lamvukms-code/dnd-table/compare/v0.47.0...v0.47.1
 [0.47.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.45.0...v0.46.0

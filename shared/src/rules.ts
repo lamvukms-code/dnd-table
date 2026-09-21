@@ -1,5 +1,6 @@
 import type {
   Ability,
+  ActiveEffect,
   AttackRange,
   CasterType,
   CharacterSheet,
@@ -16,6 +17,7 @@ import type {
   Statblock,
   Token,
   TokenStatblock,
+  WeaponImbue,
 } from './types.js';
 import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
@@ -817,12 +819,70 @@ export function resolveDamageParts(
  * Equipped-weapon actions + an unarmed strike (Monk's Martial Arts version if a
  * Monk, else the basic 1 + STR one everyone always has) + the sheet's own actions.
  */
-export function allActions(sheet: CharacterSheet): SheetAction[] {
+export function allActions(sheet: CharacterSheet, effects?: ActiveEffect[]): SheetAction[] {
   const unarmed = monkUnarmedAction(sheet) ?? unarmedAction(sheet);
-  return [
+  const base = [
     ...derivedActions(sheet),
     unarmed,
     ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
+  ];
+  return applyWeaponImbue(sheet, base, effects);
+}
+
+/** The damage die of a Shillelagh-style imbue at the sheet's total character level. */
+export function imbueDie(imbue: WeaponImbue, charLevel: number): string {
+  const [a, b, c, d] = imbue.dice;
+  return charLevel >= 17 ? d : charLevel >= 11 ? c : charLevel >= 5 ? b : a;
+}
+
+/**
+ * Shillelagh (and similar): while the caster's token carries an effect with `weaponImbue`, its
+ * matching weapon attacks use the spellcasting ability + proficiency to hit and the scaled die +
+ * spellcasting modifier to damage. If no equipped weapon matches (the club is not in the inventory),
+ * a ready-made attack row is added so the spell still works.
+ */
+export function applyWeaponImbue(
+  sheet: CharacterSheet,
+  actions: SheetAction[],
+  effects: ActiveEffect[] | undefined,
+): SheetAction[] {
+  const eff = effects?.find((e) => e.weaponImbue);
+  const ab = spellcastingAbilityOf(sheet);
+  if (!eff?.weaponImbue || !ab) return actions;
+  const mod = abilityMod(sheet.abilities[ab]);
+  const die = imbueDie(eff.weaponImbue, totalLevelOf(sheet));
+  const dmg = mod === 0 ? die : mod > 0 ? `${die}+${mod}` : `${die}${mod}`;
+  const re = new RegExp(eff.weaponImbue.weapons, 'i');
+  const patch = {
+    attackBonus: mod + sheet.proficiencyBonus,
+    damage: dmg,
+    attackKind: 'weapon' as const,
+    attackRange: 'melee' as const,
+  };
+  let hit = false;
+  const out = actions.map((a) => {
+    if (!a.id.startsWith('weapon:') || !re.test(a.name)) return a;
+    hit = true;
+    return {
+      ...a,
+      ...patch,
+      name: `${a.name} (${eff.name})`,
+      description: `${eff.name}: dùng ${ab.toUpperCase()} để đánh và tính sát thương, tính là magic. Có thể gây bludgeoning hoặc force.`,
+    };
+  });
+  if (hit) return out;
+  return [
+    {
+      id: 'imbue:weapon',
+      name: `Gậy / dùi cui (${eff.name})`,
+      actionType: 'action',
+      damageType: 'bludgeoning',
+      range: '5 ft',
+      source: 'weapon',
+      description: `${eff.name}: dùng ${ab.toUpperCase()}, tính là magic; gây bludgeoning hoặc force.`,
+      ...patch,
+    },
+    ...out,
   ];
 }
 

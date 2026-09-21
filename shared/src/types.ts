@@ -323,6 +323,17 @@ export const CONDITION_VI: Record<ConditionType, string> = {
  * or just a labelled note. Concentration ties an effect to its source token's
  * single concentration slot.
  */
+/**
+ * Shillelagh-style weapon imbue: matching weapon attacks use the spellcasting ability for attack and
+ * damage, and the damage die scales with character level (d8 → d10 at 5, d12 at 11, 2d6 at 17).
+ */
+export interface WeaponImbue {
+  /** Regex source matching the weapon names it applies to ("club|quarterstaff"). */
+  weapons: string;
+  /** Damage die table: [d8, d10, d12, 2d6] at character level 1 / 5 / 11 / 17. */
+  dice: [string, string, string, string];
+}
+
 export interface ActiveEffect {
   id: string;
   name: string; // "Hex", "Hold Person", "Stunned"
@@ -349,6 +360,8 @@ export interface ActiveEffect {
   acBase?: number;
   /** Melee attackers take this damage while the bearer has temp HP (Armor of Agathys). */
   retaliate?: { dice: string; type: string };
+  /** Reshapes the bearer's weapon attacks while active (Shillelagh). */
+  weaponImbue?: WeaponImbue;
 }
 
 /** What a token is currently concentrating on (one at a time). */
@@ -414,6 +427,7 @@ export interface Spell {
     acMin?: number;
     acBase?: number;
     retaliate?: { dice: string; type: string };
+    weaponImbue?: WeaponImbue;
   };
   /** Temp HP granted to the target: dice / number ('2d4+4', '5'). Doesn't stack. */
   tempHp?: string;

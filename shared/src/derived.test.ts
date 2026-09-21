@@ -9,7 +9,7 @@ import {
   regainHitDice,
   spendHitDie,
 } from './derived.js';
-import { applyLongRest } from './rules.js';
+import { allActions, applyLongRest } from './rules.js';
 import type { CharacterSheet, InventoryItem } from './types.js';
 
 const sheet = (over: Partial<CharacterSheet> = {}): CharacterSheet =>
@@ -81,5 +81,32 @@ describe('temp HP', () => {
   it("doesn't stack — the larger pool wins", () => {
     expect(grantTempHp(5, 8)).toBe(8);
     expect(grantTempHp(9, 4)).toBe(9);
+  });
+});
+
+describe('Shillelagh imbue + Wood Wose', () => {
+  const druid = (over: Partial<CharacterSheet> = {}) =>
+    sheet({ className: 'Druid', level: 5, proficiencyBonus: 3, ...over });
+  const shil = {
+    id: 'e',
+    name: 'Shillelagh',
+    weaponImbue: { weapons: 'club|quarterstaff', dice: ['1d8', '1d10', '1d12', '2d6'] as [string, string, string, string] },
+  };
+  const staff = { id: 'w', name: 'Quarterstaff', type: 'weapon', quantity: 1, weight: 0, equipped: true, notes: '', damage: '1d6', damageType: 'bludgeoning', proficient: true } as InventoryItem;
+
+  it('rewrites a matching weapon to WIS + PB and the scaled die', () => {
+    const acts = allActions(druid({ inventory: [staff] }), [shil]);
+    const a = acts.find((x) => x.id === 'weapon:w')!;
+    expect(a.attackBonus).toBe(5); // WIS +2, PB +3
+    expect(a.damage).toBe('1d10+2'); // level 5
+    expect(allActions(druid({ level: 4, inventory: [staff] }), [shil]).find((x) => x.id === 'weapon:w')!.damage).toBe('1d8+2');
+  });
+  it('adds a ready-made attack when no club/staff is equipped, and does nothing without the effect', () => {
+    expect(allActions(druid(), [shil]).some((x) => x.id === 'imbue:weapon')).toBe(true);
+    expect(allActions(druid({ inventory: [staff] }), []).find((x) => x.id === 'weapon:w')!.damage).not.toContain('d10');
+  });
+  it('Wood Wose: unarmored AC 10 + DEX + WIS', () => {
+    // DEX 16 (+3), WIS 14 (+2)
+    expect(effectiveArmorClass(druid(), [{ id: 'e', name: 'Wood Wose', acBase: 12 }]).ac).toBe(15);
   });
 });

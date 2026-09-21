@@ -5,6 +5,7 @@ import type {
   DamagePart,
   Spell,
   SpellCastKind,
+  WeaponImbue,
 } from './types.js';
 import { abilityMod, sheetClasses, spellcastingAbilityOf, totalLevelOf } from './rules.js';
 
@@ -59,6 +60,8 @@ export interface CantripDef {
     acBase?: number;
     /** Melee attackers take this while the bearer has temp HP (Armor of Agathys). */
     retaliate?: { dice: string; type: string };
+    /** Shillelagh: reshape matching weapon attacks (see WeaponImbue). */
+    weaponImbue?: WeaponImbue;
   };
   /** Temp HP granted to the target ('2d4+4', '5'); doesn't stack. */
   tempHp?: string;
@@ -199,7 +202,13 @@ const UTILITY: CantripDef[] = [
     { range: '30ft' }),
   C('shillelagh', 'Shillelagh', 'Transmutation', ['druid'],
     'Bonus action. Gậy/dùi cui trong tay: 1 phút dùng chỉ số ra phép để đánh, sát thương 1d8 (d10 cấp 5+) và tính là magic. Sửa hành động vũ khí tương ứng.',
-    { actionType: 'bonus', range: 'Chạm' }),
+    { combat: true, castKind: 'utility', actionType: 'bonus', range: 'Chạm',
+      effect: {
+        name: 'Shillelagh',
+        expiresInRounds: 10,
+        weaponImbue: { weapons: 'club|quarterstaff|gậy|dùi cui', dice: ['1d8', '1d10', '1d12', '2d6'] },
+        note: 'Gậy/dùi cui dùng WIS để đánh & tính sát thương, tính là magic',
+      } }),
   C('thaumaturgy', 'Thaumaturgy', 'Transmutation', ['cleric'],
     'Điềm báo nhỏ: giọng vang gấp 3, rung mặt đất, mở/đóng cửa, đổi màu mắt, đèn lửa nhấp nháy…',
     { range: '30ft' }),

@@ -440,7 +440,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
   const ac = effectiveArmorClass(draft, linkedToken?.effects);
   const speedInfo = computeSpeed(draft);
-  const actions = allActions(draft);
+  const actions = allActions(draft, linkedToken?.effects);
   const modeTag =
     rollMode === 'advantage' ? ' (lợi thế)' : rollMode === 'disadvantage' ? ' (bất lợi)' : '';
   const roll = (label: string, mod: number, kind: 'check' | 'save' | 'other' = 'other') => {
@@ -1287,6 +1287,8 @@ function FocusPips({
 }
 
 function ClassFeatures({ draft, commit }: EditorCtx) {
+  const send = useStore((s) => s.send);
+  const room = useStore((s) => s.room);
   const feats = derivedClassFeatures(draft);
   if (feats.length === 0) return null;
   const rl = rogueLevel(draft);
@@ -1305,6 +1307,38 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const fMax = monkFocusMax(draft);
   const fUsed = Math.min(draft.focusUsed ?? 0, fMax);
   const spendFocus = (n = 1) => set({ focusUsed: Math.min(fMax, fUsed + n) });
+
+  // Circle of the Old Ways — Wood Wose: 1 Wild Shape (bonus action, or while casting Shillelagh).
+  // Bark Bulwark: unarmored AC = 10 + DEX + WIS; Rampant Growth: temp HP = WIS mod + PB. 10 minutes.
+  const woodTok = room?.tokens.find((t) => t.id === draft.tokenId);
+  const isOldWays = /old ways/i.test(draft.subclass ?? '');
+  const woseActive = !!woodTok?.effects?.some((e) => e.name === 'Wood Wose');
+  function activateWoodWose() {
+    if (!woodTok || !room || wsUsed >= wsMax || woseActive) return;
+    const wis = abilityMod(draft.abilities.wis);
+    set({ wildShapeUsed: wsUsed + 1 });
+    send({
+      t: 'applyEffect',
+      targetTokenId: woodTok.id,
+      effect: {
+        id: '',
+        name: 'Wood Wose',
+        sourceSheetId: draft.id,
+        acBase: 10 + wis,
+        expiresRound: (room.initiative.round ?? 1) + 100,
+        note: 'Bark Bulwark: AC = 10 + DEX + WIS khi không mặc giáp · Oaken Resolve: lợi thế save STR/CON · 10 phút',
+      },
+    });
+    const thp = wis + draft.proficiencyBonus;
+    if (thp > 0)
+      send({
+        t: 'grantTempHp',
+        targetTokenId: woodTok.id,
+        notation: String(thp),
+        label: 'Rampant Growth (HP tạm)',
+        sourceSheetId: draft.id,
+      });
+  }
 
   function toggleRage() {
     if (draft.raging) return set({ raging: false });
@@ -1392,6 +1426,16 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
               >
                 Wild Shape −1
               </button>
+              {isOldWays && (
+                <button
+                  className={`cf-btn ${woseActive ? 'on' : ''}`}
+                  disabled={woseActive || wsUsed >= wsMax || !woodTok}
+                  onClick={activateWoodWose}
+                  title="Bonus action (hoặc khi đúc Shillelagh): tốn 1 Wild Shape → AC = 10 + DEX + WIS (không giáp), HP tạm = WIS + PB, 10 phút"
+                >
+                  🌳 Wood Wose {woseActive ? '— ĐANG BẬT' : '(−1 Wild Shape)'}
+                </button>
+              )}
               <span className="hint">Dùng stat block quái từ Bestiary cho hình dạng thú.</span>
             </>
           ) : (

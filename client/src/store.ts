@@ -34,6 +34,7 @@ import {
   type RoomState,
   type ServerEvent,
   type Spell,
+  findCantrip,
 } from '@dnd-table/shared';
 import {
   getLocalKey,
@@ -566,22 +567,28 @@ export const useStore = create<StoreState>((set, get) => {
           sourceSheetId: sheetId,
         });
       }
-      if (spell.effect) {
+      // Spells added before an effect was wired (e.g. Shillelagh) fall back to the DB definition.
+      const fx: Spell['effect'] = spell.effect ?? (spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined);
+      if (fx) {
         rawSend({
           t: 'applyEffect',
           targetTokenId,
           effect: {
             id: '',
-            name: spell.effect.name || spell.name,
+            name: fx.name || spell.name,
             sourceSheetId: sheetId,
             concentration: spell.concentration,
-            condition: spell.effect.condition,
-            note: spell.effect.note,
-            rollBonus: spell.effect.rollBonus,
-            acBonus: spell.effect.acBonus,
-            acMin: spell.effect.acMin,
-            acBase: spell.effect.acBase,
-            retaliate: spell.effect.retaliate,
+            condition: fx.condition,
+            note: fx.note,
+            rollBonus: fx.rollBonus,
+            acBonus: fx.acBonus,
+            acMin: fx.acMin,
+            acBase: fx.acBase,
+            retaliate: fx.retaliate,
+            weaponImbue: fx.weaponImbue,
+            expiresRound: fx.expiresInRounds
+              ? (room.initiative.round ?? 1) + fx.expiresInRounds
+              : undefined,
           },
         });
       }

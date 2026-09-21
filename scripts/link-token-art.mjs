@@ -21,6 +21,7 @@ const flag = (n, d) => {
   return v;
 };
 const uploads = flag('--uploads', 'server/data/uploads');
+const onlyPrefix = flag('--only-prefix'); // e.g. "srd-": only touch stat blocks whose id starts with it
 const outArg = flag('--out');
 const [artDir, bestiaryPath] = args;
 if (!artDir || !bestiaryPath) {
@@ -47,22 +48,49 @@ const IMG = new Set(['.webp', '.png', '.jpg', '.jpeg']);
 const art = readdirSync(artDir)
   .filter((f) => IMG.has(extname(f).toLowerCase()))
   .map((f) => {
-    const base = f.slice(0, f.length - extname(f).length);
-    const m = /^[A-Za-z]_(.+?)(?:_(?:Tiny|Small|Medium|Large|Huge|Gargantuan))?$/.exec(base);
+    // FA names end "_Scale200_Aberration_01" / "_Scale300_Dragon_01": drop that tail first
+    const base = f.slice(0, f.length - extname(f).length).replace(/_Scale\d+.*$/, '');
+    // "C_Alpengrendel_Large" (single-letter prefix) or Forgotten Adventures "Baboon_Small_Beast_01"
+    const fa = /^(.+?)_(?:Tiny|Small|Medium|Large|Huge|Gargantuan)(?:PLUS)?(?:_[A-Za-z0-9]+)*$/.exec(base) ?? /^(.+?)_(?:Dragon|Fiend)_?\d*$/.exec(base);
+    const m = fa ?? /^[A-Za-z]_(.+?)(?:_(?:Tiny|Small|Medium|Large|Huge|Gargantuan))?$/.exec(base);
     return { file: f, key: norm(m ? m[1] : base), npc: /^[A-Za-z]_NPC_/.test(base) };
   })
   .filter((a) => !a.npc);
+
+// SRD 2024 name -> the token art it should borrow (Forgotten Adventures / older MM names)
+const ALIASES = {
+  'Goblin Warrior': 'Goblin', 'Goblin Minion': 'Goblin', 'Goblin Boss': 'Goblin',
+  'Hobgoblin Warrior': 'Hobgoblin', 'Hobgoblin Captain': 'Hobgoblin Warlord',
+  'Kobold Warrior': 'Kobold', 'Gnoll Warrior': 'Gnoll', 'Bugbear Warrior': 'Bugbear', 'Bugbear Stalker': 'Bugbear',
+  'Sahuagin Warrior': 'Sahuagin', 'Centaur Trooper': 'Centaur', 'Merfolk Skirmisher': 'Merfolk Mermaid',
+  'Cultist Fanatic': 'Cult Fanatic', 'Priest Acolyte': 'Acolyte', 'Guard Captain': 'Guard',
+  'Warrior Veteran': 'Veteran', 'Warrior Infantry': 'Tribal Warrior', Noble: 'Noble Sword',
+  Tough: 'Thug', 'Tough Boss': 'Thug', 'Pirate Captain': 'Bandit Captain', Pirate: 'Bandit',
+  'Animated Flying Sword': 'Flying Sword', 'Animated Rug of Smothering': 'Rug of Smothering',
+  'Azer Sentinel': 'Azer', 'Dust Mephit': 'Mephit Dust', 'Ice Mephit': 'Mephit Ice', 'Magma Mephit': 'Mephit Magma',
+  'Giant Venomous Snake': 'Giant Poisonous Snake', 'Venomous Snake': 'Poisonous Snake',
+  'Swarm of Venomous Snakes': 'Swarm of Poisonous Snakes', 'Swarm of Insects': 'Insect Swarm Mix A',
+  'Swarm of Piranhas': 'Swarm of Quippers', Piranha: 'Quipper', 'Swarm of Crawling Claws': 'Crawling Claw',
+  Seahorse: 'Sea Horse Underwater', Mimic: 'Mimic Chest Active', 'Water Elemental': 'Water', 'Air Elemental': 'Air',
+  'Shrieker Fungus': 'Shrieker', 'Minotaur of Baphomet': 'Minotaur',
+  'Half-Dragon': 'Half-Red Dragon Veteran', 'Sphinx of Valor': 'Androsphinx', 'Sphinx of Lore': 'Gynosphinx',
+  ...Object.fromEntries(
+    ['Black', 'Blue', 'Brass', 'Bronze', 'Copper', 'Gold', 'Green', 'Silver', 'White'].map((c) => [`Adult ${c} Dragon`, `Young ${c} Dragon`]),
+  ), // no Adult art in the free packs: borrow the Young dragon of the same colour
+};
 
 const list = JSON.parse(readFileSync(bestiaryPath, 'utf8'));
 mkdirSync(uploads, { recursive: true });
 const missing = [];
 let linked = 0;
 for (const sb of list) {
-  const key = norm(sb.name);
+  if (onlyPrefix && !String(sb.id).startsWith(onlyPrefix)) continue;
+  const key = norm(ALIASES[sb.name] ?? sb.name);
   let best = art.find((a) => a.key === key);
   if (!best) {
     const near = art.map((a) => ({ a, d: lev(a.key, key) })).sort((x, y) => x.d - y.d)[0];
-    if (near && near.d <= Math.max(2, Math.floor(key.length * 0.15))) best = near.a;
+    // typo tolerance only for long names sharing the first letter (short names gave false hits)
+    if (near && key.length >= 8 && near.a.key[0] === key[0] && near.d <= 2) best = near.a;
   }
   if (!best) {
     missing.push(sb.name);

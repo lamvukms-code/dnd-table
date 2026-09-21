@@ -138,3 +138,12 @@ cùng thư viện. Nhập nhanh bộ mẫu: mở **Bestiary → Nhập file →
 
 Chỉ chứa cơ chế trò chơi. Không kèm nội dung có bản quyền của Wizards of the
 Coast; người dùng tự cung cấp ảnh map, tên quái, chỉ số… khi chơi.
+
+### Tài liệu sách bản quyền (chỉ dùng cá nhân)
+
+Một số PDF sách chính thức (ví dụ Dungeon Master's Guide 2024, Monster Manual) được một DM
+chia sẻ riêng cho chủ dự án để **học chơi / dùng tại bàn cá nhân**. Quy ước:
+
+- **Không dùng cho mục đích thương mại**, không bán, không phân phối lại.
+- **Không commit lên git**: PDF và mọi dữ liệu trích từ chúng (chỉ số quái, ảnh, text) chỉ nằm ở
+  thư mục cục bộ đã git-ignore (`.srd-src/`, `*.local.json`, `server/data/`).
