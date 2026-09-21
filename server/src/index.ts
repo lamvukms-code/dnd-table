@@ -21,6 +21,10 @@ const DATA_FILE = process.env.ROOM_FILE ?? join(__dirname, '..', 'data', 'room.j
 const BESTIARY_FILE =
   process.env.BESTIARY_FILE ?? join(__dirname, '..', 'data', 'bestiary.json');
 const UPLOADS_DIR = process.env.UPLOADS_DIR ?? join(__dirname, '..', 'data', 'uploads');
+// Local, git-ignored book text (scripts/extract-pdf.mjs). Served to the DM only.
+const LOREBOOK_FILE =
+  process.env.LOREBOOK_FILE ??
+  join(__dirname, '..', '..', 'client', 'src', 'data', 'lorebook.local.json');
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);
@@ -61,6 +65,18 @@ app.post('/upload', (req, res) => {
     return res.status(500).json({ error: 'Không lưu được ảnh' });
   }
   res.json({ url: `/uploads/${name}` });
+});
+
+/** DM-only lore book (spoiler guard, not security — the app has no auth). */
+app.get('/lorebook', (req, res) => {
+  const pid = req.header('x-participant-id');
+  const who = pid ? getParticipant(pid) : undefined;
+  if (!who || who.role !== 'dm') return res.status(403).json({ error: 'Chỉ DM xem được Lore Book' });
+  if (!existsSync(LOREBOOK_FILE)) {
+    return res.status(404).json({ error: 'Chưa có lorebook.local.json (chạy scripts/extract-pdf.mjs)' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('json').sendFile(LOREBOOK_FILE);
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));

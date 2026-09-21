@@ -6,6 +6,30 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-09-21
+
+### Added
+
+- **Tra cứu panel is now tabbed**: 📚 SRD, 📖 Lore Book (DM only), 🌐 Web. The
+  SRD tab is a searchable Vietnamese paraphrase of SRD 5.2.1 (conditions,
+  actions, combat rules, weapon properties + mastery, skills, rests, environment)
+  plus every spell in the built-in DB (level, range, area, damage). CC BY 4.0
+  attribution shown in the panel.
+- **Lore Book**: full-text search over the locally extracted book
+  (`lorebook.local.json`), ranked, with snippets and full-page expand, plus a
+  🧵 Fate Weaving tab (quick searches, or curated `threads[]` if present). Served
+  by `GET /lorebook` to the DM only (`x-participant-id`); never bundled.
+- **Delete token**: 🗑 button in the token inspector and the Delete key (DM: any
+  token; players: their own). Deleting unlinks any character sheet bound to it.
+
+### Changed
+
+- Right-click on a token no longer opens the browser menu (it selects the token);
+  native image dragging of tokens is disabled.
+- `.dockerignore` excludes `client/src/data/*.local.json`.
+- Hardened VPS deploy (ufw, fail2ban, non-root container, headers) and added
+  `docs/TAILSCALE.md` (no-public-server remote play).
+
 ## [0.36.0] - 2026-09-10
 
 ### Changed
@@ -871,7 +895,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.33.0...v0.34.0
