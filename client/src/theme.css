@@ -72,23 +72,29 @@ button { border-radius: 4px; }
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(120, 95, 55, 0.16);
 }
 
-/* vine border along the bottom edge (a background layer so scrolling content doesn't drag it) */
+/* thorn-and-moon corners (background layers, so scrolling content doesn't drag them) */
 .inspector,
 .modal,
 .reference-panel,
-.join-card {
-  background-image: url('/theme/vine-bottom.png'), url('/theme/paper.jpg');
-  background-position: center bottom, 0 0;
-  background-size: 100% 46px, 640px auto;
-  background-repeat: no-repeat, repeat;
-  padding-bottom: 44px;
+.join-card,
+.dice-window {
+  background-image:
+    url('/theme/corner-tl.png'), url('/theme/corner-tr.png'),
+    url('/theme/corner-bl.png'), url('/theme/corner-br.png'),
+    url('/theme/paper.jpg');
+  background-position: left top, right top, left bottom, right bottom, 0 0;
+  background-size: 58px 58px, 58px 58px, 58px 58px, 58px 58px, 600px auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, repeat;
 }
+.modal, .join-card { background-size: 84px 84px, 84px 84px, 84px 84px, 84px 84px, 600px auto; }
 .sheet-dock {
-  background-image: url('/theme/vine-bottom.png'), url('/theme/paper.jpg');
-  background-position: center bottom, 0 0;
-  background-size: 100% 40px, 640px auto;
-  background-repeat: no-repeat, repeat;
-  border-top: 3px solid #a89985;
+  background-image:
+    url('/theme/corner-bl.png'), url('/theme/corner-br.png'),
+    url('/theme/paper.jpg');
+  background-position: left bottom, right bottom, 0 0;
+  background-size: 64px 64px, 64px 64px, 600px auto;
+  background-repeat: no-repeat, no-repeat, repeat;
+  border-top: 3px solid #6b5637;
 }
 
 /* controls inside parchment */
@@ -129,12 +135,32 @@ button { border-radius: 4px; }
   color: #4a3a25;
   font-weight: normal;
 }
-.join-card h1, .modal-head h2, .modal-head h3 {
-  padding-bottom: 8px;
-  background: url('/theme/divider.png') center bottom / 100% 10px no-repeat;
+.modal-head h2, .modal-head h3 {
+  padding-bottom: 22px;
+  background: url('/theme/divider.png') center bottom / contain no-repeat;
 }
 .join { background: radial-gradient(ellipse at center, #2a2016 0%, #120d08 75%); }
-.join-card h1 { font-size: 26px; text-align: center; }
+.join-card h1 {
+  font-size: 26px;
+  text-align: center;
+  margin: 0 -14px 6px;
+  padding: 26px 30px;
+  background: url('/theme/banner-light.png') center / 100% 100% no-repeat;
+}
+.join-card { padding: 28px 30px; }
+
+/* wax seal next to the room name */
+.topbar > strong::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  vertical-align: -6px;
+  background: url('/theme/seal.png') center / contain no-repeat;
+}
+.inspector, .modal { padding: 22px; }
+.sheet-dock .sd-tabs { padding-left: 34px; }
 
 .sd-tabs button, .lore-tabs button, .rp-tabs button { font-family: var(--serif); letter-spacing: 0.04em; }
 .sheet-dock .sd-tabs button.on, .rp-tabs button.on, .lore-tabs button.on, .lore-chips button.on {
@@ -158,3 +184,8 @@ button { border-radius: 4px; }
 .inspector input, .inspector select { min-width: 0; max-width: 100%; }
 .insp-grid > * { min-width: 0; }
 .sheet-dock { font-size: 14px; }
+
+/* legibility on the textured paper + smaller corners on the compact dice window */
+.sheet-dock, .inspector, .modal, .reference-panel, .dice-window, .token-palette, .join-card { --muted: #63523c; }
+.dice-window { background-size: 34px 34px, 34px 34px, 34px 34px, 34px 34px, 600px auto; }
+.dice-window .dw-head, .dice-window > :first-child { padding-left: 22px; }
