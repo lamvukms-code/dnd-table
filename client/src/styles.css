@@ -1100,3 +1100,19 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .class-setup .chk { flex-direction: row; align-items: center; gap: 8px; }
 .cs-skills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; padding-left: 22px; }
 .cs-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+
+/* DM: keep the "Bản đồ & cảnh" summary from covering the initiative buttons */
+.ib-row.has-toolbar { padding-right: 190px; }
+
+/* stat block actions: show the full description instead of one clipped line */
+.sb-act { flex-wrap: wrap; align-items: baseline; row-gap: 2px; }
+.sb-act .sb-act-name { order: 1; }
+.sb-act > button { order: 2; }
+.sb-act .sb-act-detail {
+  order: 3;
+  flex: 1 1 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.35;
+}

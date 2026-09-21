@@ -28,7 +28,7 @@ export function InitiativeBar() {
 
   return (
     <div className={`init-bar ${expanded ? 'expanded' : ''}`}>
-      <div className="ib-row">
+      <div className={`ib-row ${isDm ? 'has-toolbar' : ''}`}>
         <button className="ib-toggle" onClick={() => setExpanded((v) => !v)} title="Initiative">
           ⚔ Initiative {expanded ? '▴' : '▾'}
         </button>
