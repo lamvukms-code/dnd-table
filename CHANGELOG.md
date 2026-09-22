@@ -6,6 +6,26 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-09-22
+
+### Added
+
+- **Multiclass: secondary-class proficiencies** ("Điền theo class"), per each class' own SRD 5.2.1 "As a
+  Multiclass Character" text — a smaller grant than starting that class fresh, and never saving throws:
+  armor/shield training, weapon training, a tool/instrument (Bard, Rogue), and a limited skill pick (Bard 1 any,
+  Ranger/Rogue 1 from their list) where the class grants one. Armor/weapon/tool have no dedicated sheet field, so
+  they're recorded as a "Đa nghề: <Class>" entry under Năng lực for the player to mark the matching gear
+  proficient; skill picks go straight into the sheet's skill proficiencies. New: `multiclassProficiencies()`.
+
+### Fixed
+
+- **Agonizing Blast (2024)**: the app claimed it auto-applied to Eldritch Blast but never actually added the
+  Charisma modifier. It's now a per-spell "⚡ Agonizing Blast" toggle on any prepared damage-dealing cantrip
+  (shown once the sheet has Warlock levels) — matching the SRD 5.2.1 wording, which lets you pick **any one**
+  known damage-dealing Warlock cantrip (repeatable for more), not only Eldritch Blast. Adds the spellcasting
+  modifier once per cast, for both attack-roll and saving-throw cantrips (`Spell.agonizingBlast`,
+  `spellAttackParts(sheet, damage, spell)`).
+
 ## [0.51.0] - 2026-09-22
 
 ### Added
@@ -1179,7 +1199,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.52.0...HEAD
+[0.52.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...v0.50.0
 [0.49.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.48.0...v0.49.0

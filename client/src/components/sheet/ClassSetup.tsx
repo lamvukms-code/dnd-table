@@ -3,12 +3,28 @@ import {
   SKILLS,
   abilityMod,
   classDefaults,
+  multiclassProficiencies,
   recommendedHp,
   sheetClasses,
   type CharacterSheet,
+  type ClassEntry,
   type Feature,
+  type MulticlassProficiencies,
 } from '@dnd-table/shared';
 import { nanoIdish } from '../../util.js';
+
+const ARMOR_VI: Record<'light' | 'medium' | 'heavy', string> = { light: 'giáp Nhẹ', medium: 'giáp Vừa', heavy: 'giáp Nặng' };
+
+/** Vietnamese summary of a "As a Multiclass Character" grant, for display and for the feature note. */
+function mcProfSummary(p: MulticlassProficiencies): string {
+  const bits: string[] = [];
+  const armor = p.armor.map((a) => ARMOR_VI[a]);
+  if (p.shield) armor.push('Khiên');
+  if (armor.length) bits.push(`Training: ${armor.join(', ')}`);
+  if (p.weapons) bits.push(p.weapons);
+  if (p.tool) bits.push(p.tool);
+  return bits.length ? bits.join(' · ') : '(không có gì ngoài Hit Point Die)';
+}
 
 interface SrdClassEntry {
   class: string;
@@ -76,6 +92,36 @@ export function ClassSetup({
   const [doSkills, setDoSkills] = useState(true);
   const [doHp, setDoHp] = useState(hpIsDefault && hp !== null);
   const [doFeatures, setDoFeatures] = useState(true);
+  const [doMcProf, setDoMcProf] = useState(true);
+
+  // Multiclass (SRD 5.2.1): secondary classes grant only a small slice of their normal starting
+  // proficiencies (no saving throws) — see each class' "As a Multiclass Character" text.
+  const secondary = sheetClasses(draft)
+    .slice(1)
+    .filter((c) => c.level > 0)
+    .map((c) => ({ c, prof: multiclassProficiencies(c.name) }))
+    .filter((x): x is { c: ClassEntry; prof: MulticlassProficiencies } => !!x.prof);
+  const haveMcFeature = new Set(draft.features.map((f) => f.name.toLowerCase()));
+  const newMcClasses = secondary.filter((x) => !haveMcFeature.has(`đa nghề: ${x.c.name}`.toLowerCase()));
+  const [mcPicked, setMcPicked] = useState<Record<string, Set<string>>>(() =>
+    Object.fromEntries(
+      newMcClasses
+        .filter((x) => x.prof.skillPick > 0)
+        .map((x) => [
+          x.c.name,
+          new Set(
+            draft.skillProficiencies.filter((s) => (x.prof.skillOptions ?? Object.keys(SKILLS)).includes(s)),
+          ),
+        ]),
+    ),
+  );
+  const toggleMcSkill = (className: string, pick: number, sk: string) =>
+    setMcPicked((prev) => {
+      const cur = new Set(prev[className] ?? []);
+      if (cur.has(sk)) cur.delete(sk);
+      else if (cur.size < pick) cur.add(sk);
+      return { ...prev, [className]: cur };
+    });
 
   const newFeatures: Feature[] = useMemo(() => {
     if (!srd || !primary) return [];
@@ -131,6 +177,19 @@ export function ClassSetup({
       next.currentHp = hp;
     }
     if (doFeatures && newFeatures.length) next.features = [...draft.features, ...newFeatures];
+    if (doMcProf && newMcClasses.length) {
+      const mcSkills = newMcClasses.flatMap((x) => [...(mcPicked[x.c.name] ?? [])]);
+      next.skillProficiencies = Array.from(new Set([...(next.skillProficiencies ?? draft.skillProficiencies), ...mcSkills]));
+      next.features = [
+        ...(next.features ?? draft.features),
+        ...newMcClasses.map((x) => ({
+          id: nanoIdish(),
+          name: `Đa nghề: ${x.c.name}`,
+          source: `${x.c.name} (đa nghề)`,
+          description: mcProfSummary(x.prof),
+        })),
+      ];
+    }
     commit(next);
     onClose();
   }
@@ -186,10 +245,54 @@ export function ClassSetup({
             </label>
           ))}
         </div>
+        {newMcClasses.length > 0 && (
+          <>
+            <label className="chk">
+              <input type="checkbox" checked={doMcProf} onChange={(e) => setDoMcProf(e.target.checked)} />
+              Proficiency giới hạn của nghề phụ (SRD 5.2.1 — không gồm save):
+            </label>
+            {newMcClasses.map(({ c, prof }) => (
+              <div key={c.name} className="cs-mc-class">
+                <span className="cs-mc-head">
+                  <strong>{c.name}</strong>: {mcProfSummary(prof)}
+                  {prof.skillPick > 0 && (
+                    <>
+                      {' · kỹ năng '}
+                      {(mcPicked[c.name]?.size ?? 0)}/{prof.skillPick}
+                      {prof.skillOptions === null ? ' (bất kỳ)' : ''}
+                    </>
+                  )}
+                </span>
+                {prof.skillPick > 0 && (
+                  <div className="cs-skills">
+                    {(prof.skillOptions ?? Object.keys(SKILLS)).map((sk) => (
+                      <label key={sk} className="chk">
+                        <input
+                          type="checkbox"
+                          checked={mcPicked[c.name]?.has(sk) ?? false}
+                          disabled={
+                            !doMcProf ||
+                            (!(mcPicked[c.name]?.has(sk) ?? false) && (mcPicked[c.name]?.size ?? 0) >= prof.skillPick)
+                          }
+                          onChange={() => toggleMcSkill(c.name, prof.skillPick, sk)}
+                        />
+                        {SKILL_VI[sk] ?? sk}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <p className="hint">
+              Giáp / vũ khí / dụng cụ không có ô riêng trên sheet — ghi vào Đặc điểm (
+              <em>Đa nghề: &lt;tên nghề&gt;</em>) để bạn tự đánh dấu "proficient" đúng món trong Trang bị.
+            </p>
+          </>
+        )}
         {sheetClasses(draft).length > 1 && (
           <p className="hint">
             Đa nghề: save và kỹ năng khởi đầu chỉ lấy từ nghề đầu tiên ({primary.name}); các nghề sau chỉ thêm
-            feature. HP khuyến nghị đã tính đủ mọi nghề (HP cấp 1 chỉ của nghề đầu).
+            feature + proficiency giới hạn ở trên. HP khuyến nghị đã tính đủ mọi nghề (HP cấp 1 chỉ của nghề đầu).
           </p>
         )}
         <p className="hint">

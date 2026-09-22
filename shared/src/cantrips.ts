@@ -113,7 +113,7 @@ const COMBAT: CantripDef[] = [
     'Đòn đánh phép tầm 120ft. Trúng: 1d10 lửa (2d10 cấp 5 · 3d10 cấp 11 · 4d10 cấp 17). Bắt cháy vật không ai giữ.',
     { combat: true, castKind: 'attack', damageDie: '1d10', damageType: 'fire', range: '120ft' }),
   C('eldritch-blast', 'Eldritch Blast', 'Evocation', ['warlock'],
-    'Đòn đánh phép tầm 120ft, 1d10 lực mỗi tia. Thêm tia ở cấp 5/11/17 (app gộp thành 2d10/3d10/4d10 — muốn bắn nhiều mục tiêu thì tung tay từng tia). Agonizing Blast: tự cộng CHA mod vào mỗi tia.',
+    'Đòn đánh phép tầm 120ft, 1d10 lực mỗi tia. Thêm tia ở cấp 5/11/17 (app gộp thành 2d10/3d10/4d10 — muốn bắn nhiều mục tiêu thì tung tay từng tia). Có Agonizing Blast? Tích ô "⚡ Agonizing Blast" ở phép này để tự cộng CHA mod vào sát thương.',
     { combat: true, castKind: 'attack', damageDie: '1d10', damageType: 'force', range: '120ft' }),
   C('ray-of-frost', 'Ray of Frost', 'Evocation', ['sorcerer', 'wizard'],
     'Đòn đánh phép tầm 60ft. Trúng: 1d8 băng và tốc độ mục tiêu −10ft tới đầu lượt sau của bạn.',

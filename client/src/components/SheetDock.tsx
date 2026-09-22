@@ -1898,6 +1898,7 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   const atk = spellAttackBonus(draft);
   const spells = draft.spells ?? [];
   const prepared = spells.filter((s) => s.level === 0 || s.prepared).length;
+  const wl = warlockLevel(draft);
 
   const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
   const upd = (id: string, patch: Partial<Spell>) =>
@@ -1975,6 +1976,7 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 sp={sp}
                 canCast={caster !== 'none'}
                 onCast={() => beginCast(draft.id, sp)}
+                showAgonizingBlast={wl > 0}
                 castingClasses={castingClassesOf(draft).map((c) => c.name)}
                 onChange={(p) => upd(sp.id, p)}
                 onRescale={
@@ -2151,6 +2153,7 @@ function SpellRow({
   sp,
   canCast,
   castingClasses,
+  showAgonizingBlast,
   onCast,
   onChange,
   onRescale,
@@ -2160,12 +2163,15 @@ function SpellRow({
   canCast: boolean;
   /** Multiclass: the sheet's casting classes (a spell picks one → its ability / DC). */
   castingClasses: string[];
+  /** Has Warlock levels: offer the Agonizing Blast toggle on damage cantrips (2024 — any one, not just Eldritch Blast). */
+  showAgonizingBlast?: boolean;
   onCast: () => void;
   onChange: (p: Partial<Spell>) => void;
   onRescale?: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const eligibleForAgonizingBlast = sp.level === 0 && (sp.damage?.length ?? 0) > 0;
   return (
     <div className="spell-row">
       <div className="sr-line">
@@ -2192,6 +2198,18 @@ function SpellRow({
           onChange={(e) => onChange({ level: Math.max(0, Math.min(9, Number(e.target.value))) })}
         />
         {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
+        {showAgonizingBlast && eligibleForAgonizingBlast && (
+          <button
+            className={`sr-agonizing ${sp.agonizingBlast ? 'on' : ''}`}
+            title={
+              'Agonizing Blast (2024): chọn MỘT cantrip Warlock gây sát thương để cộng CHA mod vào sát thương — ' +
+              'không chỉ Eldritch Blast, và lặp lại invocation này để chọn thêm cantrip khác. Bấm để bật/tắt cho phép này.'
+            }
+            onClick={() => onChange({ agonizingBlast: !sp.agonizingBlast })}
+          >
+            ⚡ Agonizing Blast
+          </button>
+        )}
         {castingClasses.length > 1 && (
           <select
             className="sr-class"

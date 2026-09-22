@@ -275,6 +275,23 @@ describe('multi-source damage', () => {
     ]);
   });
 
+  it('Agonizing Blast (2024): +CHA mod once, on whichever damage cantrip has it set — not just Eldritch Blast', () => {
+    const s = sheet({ className: 'Warlock', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 17 } }); // CHA +3
+    // Eldritch Blast, tagged
+    const withAb = spellAttackParts(s, [{ dice: '2d10', type: 'force' }], { agonizingBlast: true });
+    expect(withAb).toEqual([{ dice: '2d10', type: 'force' }, { dice: '3', type: 'force', label: 'Agonizing Blast' }]);
+    // untagged: no bonus
+    expect(spellAttackParts(s, [{ dice: '2d10', type: 'force' }], { agonizingBlast: false })).toEqual([{ dice: '2d10', type: 'force' }]);
+    // any other damage cantrip works the same way (e.g. Chill Touch)
+    expect(spellAttackParts(s, [{ dice: '1d10', type: 'necrotic' }], { agonizingBlast: true })).toEqual([
+      { dice: '1d10', type: 'necrotic' },
+      { dice: '3', type: 'necrotic', label: 'Agonizing Blast' },
+    ]);
+    // a +0 CHA mod adds nothing (no "+0" clutter)
+    const flat = sheet({ className: 'Warlock', abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 } });
+    expect(spellAttackParts(flat, [{ dice: '1d10', type: 'force' }], { agonizingBlast: true })).toEqual([{ dice: '1d10', type: 'force' }]);
+  });
+
   it('spell-tagged attack rows skip weapon riders + Rage/Sneak', () => {
     const s = sheet({
       className: 'Rogue',

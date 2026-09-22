@@ -539,7 +539,7 @@ export const useStore = create<StoreState>((set, get) => {
         // Auto-hit damage spell (Magic Missile): no attack roll.
         await get().damageRoll(
           `${label} (phép)`,
-          spellAttackParts(sheet, spell.damage),
+          spellAttackParts(sheet, spell.damage, spell),
           targetTokenId,
           { sheetId, tokenId: sheet.tokenId },
         );
@@ -568,7 +568,12 @@ export const useStore = create<StoreState>((set, get) => {
           dc,
           label,
           sourceSheetId: sheetId,
-          damageOnFail: spell.damage && spell.damage.length ? spell.damage : undefined,
+          damageOnFail:
+            spell.damage && spell.damage.length
+              ? spell.agonizingBlast && castMod
+                ? [...spell.damage, { dice: String(castMod), type: spell.damage[0].type, label: 'Agonizing Blast' }]
+                : spell.damage
+              : undefined,
           damageHalfOnSave: spell.save.halfOnSave,
           aoeId: opts?.aoeId,
           effectOnFail: spell.effect
@@ -596,7 +601,7 @@ export const useStore = create<StoreState>((set, get) => {
           label: `${label} (phép)`,
           attackBonus: atkBonus,
           rollMode: 'normal',
-          damageParts: spellAttackParts(sheet, spell.damage),
+          damageParts: spellAttackParts(sheet, spell.damage, spell),
           targetTokenId,
           attackerSheetId: sheetId,
           attackerTokenId: sheet.tokenId,

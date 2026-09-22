@@ -47,6 +47,54 @@ export function primaryClassDefaults(sheet: CharacterSheet): ClassDefaults | nul
   return classDefaults(sheetClasses(sheet)[0]?.name);
 }
 
+/**
+ * What a class grants when it's a SECONDARY class (SRD 5.2.1 "Multiclassing" — each class' own "As a Multiclass
+ * Character" bullet): a smaller slice of that class' normal starting proficiencies. Unlike the level-1 grant, this
+ * never includes saving throws.
+ */
+export interface MulticlassProficiencies {
+  /** Armor categories trained (shield counted separately). */
+  armor: ('light' | 'medium' | 'heavy')[];
+  shield: boolean;
+  /** Weapon proficiency granted, as shown on the sheet ('' = none). */
+  weapons: string;
+  /** Extra skill proficiencies granted (0 for most classes). */
+  skillPick: number;
+  /** Pool the skill pick comes from; null = any skill (Bard, Cleric). Ignored when skillPick is 0. */
+  skillOptions: string[] | null;
+  /** A specific tool/instrument proficiency granted, if any. */
+  tool?: string;
+}
+
+const M = (
+  armor: MulticlassProficiencies['armor'],
+  shield: boolean,
+  weapons: string,
+  skillPick = 0,
+  skillOptions: string[] | null = null,
+  tool?: string,
+): MulticlassProficiencies => ({ armor, shield, weapons, skillPick, skillOptions, tool });
+
+export const MULTICLASS_PROFICIENCIES: Record<string, MulticlassProficiencies> = {
+  barbarian: M([], true, 'Vũ khí Martial'),
+  bard: M(['light'], false, '', 1, null, 'Nhạc cụ (1 loại tuỳ chọn)'),
+  cleric: M(['light', 'medium'], true, ''),
+  druid: M(['light'], true, ''),
+  fighter: M(['light', 'medium'], true, 'Vũ khí Martial'),
+  monk: M([], false, ''),
+  paladin: M(['light', 'medium'], true, 'Vũ khí Martial'),
+  ranger: M(['light', 'medium'], true, 'Vũ khí Martial', 1, CLASS_DEFAULTS.ranger.skillOptions),
+  rogue: M(['light'], false, '', 1, CLASS_DEFAULTS.rogue.skillOptions, "Bộ đồ nghề trộm (Thieves' Tools)"),
+  sorcerer: M([], false, ''),
+  warlock: M(['light'], false, ''),
+  wizard: M([], false, ''),
+};
+
+export function multiclassProficiencies(className: string | undefined): MulticlassProficiencies | null {
+  const key = (className ?? '').trim().toLowerCase();
+  return MULTICLASS_PROFICIENCIES[key] ?? null;
+}
+
 /** HP by the fixed-average method: max die at level 1, then die/2 + 1 per level, + CON mod each. */
 export function recommendedHp(sheet: CharacterSheet): number | null {
   const classes = sheetClasses(sheet).filter((c) => c.level > 0);

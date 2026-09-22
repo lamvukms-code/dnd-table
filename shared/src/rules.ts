@@ -354,9 +354,23 @@ export function spellRiderParts(sheet: CharacterSheet): DamagePart[] {
   return riderParts(sheet, 'spell');
 }
 
-/** The primary damage parts of a spell attack: its own damage + applicable spell riders. */
-export function spellAttackParts(sheet: CharacterSheet, spellDamage: DamagePart[] | undefined): DamagePart[] {
-  return [...(spellDamage ?? []).map((p) => ({ ...p })), ...spellRiderParts(sheet)];
+/**
+ * The primary damage parts of a spell attack: its own damage + applicable spell riders + (2024) Agonizing Blast,
+ * when the spell instance has it — "add your Charisma modifier to that spell's damage rolls" (SRD 5.2.1), added once
+ * per cast regardless of how many dice the cantrip's own damage scaled into.
+ */
+export function spellAttackParts(
+  sheet: CharacterSheet,
+  spellDamage: DamagePart[] | undefined,
+  spell?: Pick<Spell, 'agonizingBlast' | 'castingClass'>,
+): DamagePart[] {
+  const parts = [...(spellDamage ?? []).map((p) => ({ ...p })), ...spellRiderParts(sheet)];
+  if (spell?.agonizingBlast && spellDamage?.length) {
+    const ab = spellcastingAbilityOf(sheet, spell);
+    const mod = ab ? abilityMod(sheet.abilities[ab]) : 0;
+    if (mod) parts.push({ dice: String(mod), type: spellDamage[0].type, label: 'Agonizing Blast' });
+  }
+  return parts;
 }
 
 /**

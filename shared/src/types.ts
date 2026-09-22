@@ -446,6 +446,12 @@ export interface Spell {
   range?: string;
   /** Area-of-effect template, for display (e.g. "cầu 20ft", "nón 15ft"). */
   area?: string;
+  /**
+   * 2024 Agonizing Blast: chosen per Warlock cantrip (repeatable — pick a different damaging cantrip each time you
+   * gain the invocation again), not fixed to Eldritch Blast. When set, the spellcasting ability modifier is added
+   * once to this cantrip's damage roll.
+   */
+  agonizingBlast?: boolean;
   notes?: string;
 }
 

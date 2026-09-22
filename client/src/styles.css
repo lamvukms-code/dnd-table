@@ -721,6 +721,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .sr-detail label { display: inline-flex; flex-direction: column; }
 .sr-detail label.chk { flex-direction: row; gap: 3px; align-items: center; }
 .sr-detail label.grow { flex-basis: 100%; }
+.sr-agonizing { font-size: 10px; padding: 1px 5px; border-radius: 999px; white-space: nowrap; }
+.sr-agonizing.on { background: var(--accent-2); color: #06121f; border-color: transparent; font-weight: 700; }
 .sr-notes { width: 100%; font: inherit; resize: vertical; }
 .sr-range { width: 120px; }
 .cantrip-picker {
@@ -1102,6 +1104,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .class-setup .chk { flex-direction: row; align-items: center; gap: 8px; }
 .cs-skills { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; padding-left: 22px; }
 .cs-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.cs-mc-class { border-left: 2px solid var(--line); padding-left: 8px; margin: 2px 0 2px 22px; }
+.cs-mc-head { font-size: 13px; }
 
 /* DM: keep the "Bản đồ & cảnh" summary from covering the initiative buttons */
 .ib-row.has-toolbar { padding-right: 190px; }
