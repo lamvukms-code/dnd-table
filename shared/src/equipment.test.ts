@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { equipmentPresetFromDef } from './equipment.js';
-import type { EquipmentPreset } from './types.js';
+import { equipmentPresetFromDef, inventoryItemFromHomebrew } from './equipment.js';
+import type { EquipmentPreset, HomebrewEntry } from './types.js';
 
 const id = () => 'gen-id';
 
@@ -29,5 +29,28 @@ describe('equipmentPresetFromDef', () => {
     expect(item).toMatchObject({ type: 'gear', weight: 1, notes: 'Proficiency lets you pick locks.' });
     expect(item.damage).toBeUndefined();
     expect(item.armorBase).toBeUndefined();
+  });
+});
+
+describe('inventoryItemFromHomebrew', () => {
+  const entry = (over: Partial<HomebrewEntry> = {}): HomebrewEntry => ({
+    id: 'hb1', name: 'Everflame Lantern', kind: 'item', status: 'live',
+    description: 'A dented tin lantern whose flame never dies.', ...over,
+  });
+
+  it('folds description + mechanics into notes, unequipped, not yet attuned', () => {
+    const item = inventoryItemFromHomebrew(
+      entry({ mechanics: 'Bright light 20 ft.', rarity: 'uncommon', attunement: true }),
+      id,
+    );
+    expect(item).toMatchObject({ id: 'gen-id', name: 'Everflame Lantern', type: 'gear', quantity: 1, equipped: false });
+    expect(item.attuned).toBeUndefined();
+    expect(item.notes).toContain('dented tin lantern');
+    expect(item.notes).toContain('Bright light 20 ft.');
+    expect(item.notes).toContain('(uncommon, cần điều hợp)');
+  });
+  it('works with just a description and no rarity/attunement tag', () => {
+    const item = inventoryItemFromHomebrew(entry(), id);
+    expect(item.notes).toBe('A dented tin lantern whose flame never dies.');
   });
 });

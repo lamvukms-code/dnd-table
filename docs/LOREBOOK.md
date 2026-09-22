@@ -75,8 +75,10 @@ nothing gets lost and players can look up what they were given.
   `bestiaryUpsert` / `bestiaryRemove`.
 - **UI:** topbar "🧪 Homebrew" → list grouped by `kind`, filter by player /
   status, inline editor for the DM. Players see the same list minus `secret`
-  entries, read-only. A "gửi vào túi đồ" shortcut could push an `item` entry
-  onto a linked character sheet's inventory later.
+  entries, read-only. A **"→ Túi đồ"** shortcut (0.54.0) on every `item` entry
+  pushes it onto a chosen character sheet's inventory — DM picks any sheet,
+  a player only their own (plain `upsertSheet`, same ownership rule as
+  editing a sheet by hand; `inventoryItemFromHomebrew`).
 
 ---
 

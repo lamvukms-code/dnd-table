@@ -6,6 +6,26 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-09-22
+
+### Added
+
+- **Homebrew → inventory shortcut**: every `item` entry in the Homebrew tracker now has a **"→ Túi đồ"**
+  control — pick a character sheet and push a ready-made inventory item onto it. The DM can target any sheet;
+  a player only their own (plain `upsertSheet`, so the normal ownership rule already enforces this — no new
+  protocol needed). `inventoryItemFromHomebrew` folds the entry's description/mechanics/rarity/attunement
+  note into the new item's notes.
+- **Equip slots**: an armor or shield item can no longer be equipped alongside another item of the same type —
+  ticking one auto-unequips the other, so a character can't end up wearing two suits of armor or carrying two
+  shields (`equipInventoryItem`, used for every inventory-item edit). Weapons and plain gear stay uncapped
+  (dual-wielding, carrying several trinkets are normal); magic gear is still bottlenecked by the existing
+  Attunement cap (3, unchanged) rather than a body-slot system.
+
+### Verified
+
+- **Attunement** was already implemented (`ATTUNEMENT_SLOTS` = 3, per-item ⚡ toggle disabled once full) —
+  confirmed working, no changes needed.
+
 ## [0.53.0] - 2026-09-22
 
 ### Added
@@ -1216,7 +1236,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...v0.51.0

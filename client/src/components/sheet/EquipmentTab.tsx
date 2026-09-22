@@ -6,6 +6,7 @@ import {
   carriedWeight,
   carryCapacity,
   currencyInGp,
+  equipInventoryItem,
   equipmentPresetFromDef,
   type ArmorCategory,
   type EquipmentPreset,
@@ -51,8 +52,10 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
   const attuned = attunementCount(draft);
   const attuneFull = attuned >= ATTUNEMENT_SLOTS;
 
+  // Ticking "equipped" on an armor/shield item auto-unequips any other item of that same type — only one
+  // suit of armor / one shield at a time (see `equipInventoryItem`).
   const setItem = (id: string, patch: Partial<InventoryItem>) =>
-    commit({ ...draft, inventory: draft.inventory.map((it) => (it.id === id ? { ...it, ...patch } : it)) });
+    commit({ ...draft, inventory: equipInventoryItem(draft.inventory, id, patch) });
   const removeItem = (id: string) =>
     commit({ ...draft, inventory: draft.inventory.filter((it) => it.id !== id) });
   const addItem = (type: ItemType) =>
@@ -99,6 +102,7 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
           onAdd={(item) => commit({ ...draft, inventory: [...draft.inventory, item] })}
         />
       </div>
+      <p className="hint">Chỉ mặc được 1 giáp và 1 khiên cùng lúc — mặc món khác sẽ tự cởi món cũ.</p>
 
       <div className="inventory-list">
         {draft.inventory.map((it) => (

@@ -965,6 +965,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .hb-actions { display: flex; justify-content: flex-end; }
 .hb-readonly h3 { margin: 0; }
 .hb-mechanics { background: rgba(255,255,255,0.05); border-radius: 4px; padding: 6px 8px; }
+.hb-send { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hb-send select { font-size: 12px; padding: 3px 5px; }
 
 /* reference panel (self-hosted 5etools mirror etc) */
 .reference-panel {

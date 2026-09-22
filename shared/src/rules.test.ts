@@ -28,6 +28,7 @@ import {
   attackKindOf,
   attunementCount,
   clampToRange,
+  equipInventoryItem,
   grappleDc,
   gridFeet,
   monkFocusMax,
@@ -753,5 +754,43 @@ describe('currency & weight', () => {
     });
     expect(attunementCount(s)).toBe(2);
     expect(attunementCount(sheet())).toBe(0);
+  });
+
+  it('equipInventoryItem: only one armor / one shield equipped at a time', () => {
+    const inv = [
+      item({ id: 'a1', type: 'armor', name: 'Chain Mail', equipped: true }),
+      item({ id: 'a2', type: 'armor', name: 'Studded Leather', equipped: false }),
+      item({ id: 's1', type: 'shield', name: 'Shield', equipped: true }),
+      item({ id: 'w1', type: 'weapon', name: 'Sword', equipped: true }),
+    ];
+    // equipping the second armor un-equips the first; the shield and the weapon are untouched
+    const afterArmor = equipInventoryItem(inv, 'a2', { equipped: true });
+    expect(afterArmor.find((i) => i.id === 'a1')!.equipped).toBe(false);
+    expect(afterArmor.find((i) => i.id === 'a2')!.equipped).toBe(true);
+    expect(afterArmor.find((i) => i.id === 's1')!.equipped).toBe(true);
+    expect(afterArmor.find((i) => i.id === 'w1')!.equipped).toBe(true);
+  });
+  it('equipInventoryItem: weapons and gear are never capped (dual-wield / multiple trinkets are fine)', () => {
+    const inv = [
+      item({ id: 'w1', type: 'weapon', equipped: true }),
+      item({ id: 'w2', type: 'weapon', equipped: false }),
+      item({ id: 'g1', type: 'gear', equipped: true }),
+    ];
+    const next = equipInventoryItem(equipInventoryItem(inv, 'w2', { equipped: true }), 'g1', { equipped: true });
+    expect(next.filter((i) => i.equipped).map((i) => i.id).sort()).toEqual(['g1', 'w1', 'w2']);
+  });
+  it('equipInventoryItem: changing an equipped item\'s type to armor also enforces the cap', () => {
+    const inv = [
+      item({ id: 'a1', type: 'armor', equipped: true }),
+      item({ id: 'g1', type: 'gear', equipped: true }),
+    ];
+    const next = equipInventoryItem(inv, 'g1', { type: 'armor' });
+    expect(next.find((i) => i.id === 'a1')!.equipped).toBe(false);
+    expect(next.find((i) => i.id === 'g1')!.equipped).toBe(true);
+  });
+  it('equipInventoryItem: unequipping, or a patch unrelated to equipped/type, is a no-op pass-through', () => {
+    const inv = [item({ id: 'a1', type: 'armor', equipped: true }), item({ id: 'a2', type: 'armor', equipped: false })];
+    expect(equipInventoryItem(inv, 'a1', { equipped: false }).every((i) => !i.equipped)).toBe(true);
+    expect(equipInventoryItem(inv, 'a1', { weight: 5 }).find((i) => i.id === 'a1')).toMatchObject({ weight: 5, equipped: true });
   });
 });

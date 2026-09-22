@@ -11,6 +11,7 @@ import type {
   DamagePart,
   Defenses,
   InventoryItem,
+  ItemType,
   RollMode,
   SheetAction,
   Spell,
@@ -169,6 +170,33 @@ export function parseRangeFeet(text: string | undefined): number {
 /** How many inventory items the character is currently attuned to. */
 export function attunementCount(sheet: CharacterSheet): number {
   return sheet.inventory.reduce((n, it) => n + (it.attuned ? 1 : 0), 0);
+}
+
+/**
+ * Item types you can only have ONE of equipped at a time — one suit of armor, one shield (5e RAW: "you can wear
+ * only one suit of armor at a time" / one shield equipped). Weapons aren't capped here (dual-wielding, a quiver of
+ * throwables, etc. are all normal); loose `gear` isn't slot-restricted either — a magic ring/cloak/pair of boots
+ * bottlenecks on the Attunement cap instead (`ATTUNEMENT_SLOTS`), same as RAW.
+ */
+const SINGLE_EQUIP_TYPES: ItemType[] = ['armor', 'shield'];
+
+/**
+ * Apply a patch to one inventory item, then — if it ends up `equipped` and its type is single-equip
+ * (armor/shield) — unequip every OTHER item of that same type, so a character can't end up wearing two suits of
+ * armor or carrying two shields at once. Covers both "tick the equip box" and "change an item's type while it's
+ * equipped"; harmless no-op for weapons/gear or a patch that doesn't touch `equipped`/`type`.
+ */
+export function equipInventoryItem(
+  inventory: InventoryItem[],
+  id: string,
+  patch: Partial<InventoryItem>,
+): InventoryItem[] {
+  const next = inventory.map((it) => (it.id === id ? { ...it, ...patch } : it));
+  const target = next.find((it) => it.id === id);
+  if (!target?.equipped || !SINGLE_EQUIP_TYPES.includes(target.type)) return next;
+  return next.map((it) =>
+    it.id !== id && it.type === target.type && it.equipped ? { ...it, equipped: false } : it,
+  );
 }
 
 function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {

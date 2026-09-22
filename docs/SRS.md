@@ -479,6 +479,12 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
 - **FR-63a (P0):** Each sheet has an `inventory` of `InventoryItem`s of type
   `weapon | armor | shield | gear`, each with name, quantity, per-unit weight, an
   `equipped` flag and notes, plus type-specific fields.
+- **FR-63a′ (P0, 0.54.0):** **Equip slots.** `armor` and `shield` are single-equip
+  — ticking `equipped` on one auto-unequips any other item of that same type
+  (`equipInventoryItem`), so a character can't end up wearing two suits of armor
+  or carrying two shields. Weapons and plain `gear` are uncapped (dual-wielding,
+  carrying several trinkets are all normal 5e); magic gear's real bottleneck is
+  the Attunement cap (FR-63e), not a body slot.
 - **FR-63b (P0):** A `currency` purse of pp/gp/ep/sp/cp with a live total gold
   value, and a carried-weight readout against a STR × 15 lb capacity (coins at
   50/lb), flagged when over.

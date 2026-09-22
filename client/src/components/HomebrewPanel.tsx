@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import type { HomebrewEntry, HomebrewKind, HomebrewStatus } from '@dnd-table/shared';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { inventoryItemFromHomebrew, type HomebrewEntry, type HomebrewKind, type HomebrewStatus } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 
@@ -294,6 +294,8 @@ function HomebrewEditor({ entry, onDeleted }: { entry: HomebrewEntry; onDeleted:
         />
       </label>
 
+      {entry.kind === 'item' && <SendToInventory entry={entry} />}
+
       <div className="hb-actions">
         <button className="danger" onClick={remove}>
           Xóa
@@ -315,6 +317,55 @@ function HomebrewReadOnly({ entry }: { entry: HomebrewEntry }) {
       </p>
       <p>{entry.description}</p>
       {entry.mechanics && <p className="hb-mechanics">{entry.mechanics}</p>}
+      {entry.kind === 'item' && <SendToInventory entry={entry} />}
+    </div>
+  );
+}
+
+/**
+ * "→ Túi đồ": push a homebrew item entry onto a character sheet's inventory (docs/LOREBOOK.md §3's speculative
+ * shortcut). No new protocol action — just a normal `upsertSheet` with the item appended, so the usual ownership
+ * rule applies: the DM can target any sheet, a player only their own.
+ */
+function SendToInventory({ entry }: { entry: HomebrewEntry }) {
+  const send = useStore((s) => s.send);
+  const room = useStore((s) => s.room);
+  const participantId = useStore((s) => s.participantId);
+  const isDm = useStore((s) => s.isDm());
+  const sheets = useMemo(
+    () => (room?.sheets ?? []).filter((s) => isDm || s.ownerId === participantId),
+    [room, isDm, participantId],
+  );
+  const [target, setTarget] = useState(sheets[0]?.id ?? '');
+  const [sent, setSent] = useState<string | null>(null);
+  useEffect(() => {
+    if (!sheets.some((s) => s.id === target)) setTarget(sheets[0]?.id ?? '');
+  }, [sheets, target]);
+
+  if (sheets.length === 0) {
+    return <p className="hint">{isDm ? 'Chưa có nhân vật nào trên bàn.' : 'Bạn chưa có nhân vật nào.'}</p>;
+  }
+
+  function push() {
+    const sheet = sheets.find((s) => s.id === target);
+    if (!sheet) return;
+    const item = inventoryItemFromHomebrew(entry, nanoIdish);
+    send({ t: 'upsertSheet', sheet: { ...sheet, inventory: [...sheet.inventory, item] } });
+    setSent(`Đã thêm vào túi đồ của ${sheet.name}.`);
+    setTimeout(() => setSent(null), 3000);
+  }
+
+  return (
+    <div className="hb-send">
+      <select value={target} onChange={(e) => setTarget(e.target.value)}>
+        {sheets.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <button onClick={push}>→ Túi đồ</button>
+      {sent && <span className="hint">{sent}</span>}
     </div>
   );
 }
