@@ -29,6 +29,7 @@ import {
   attunementCount,
   clampToRange,
   equipInventoryItem,
+  consumeInventoryItem,
   grappleDc,
   gridFeet,
   monkFocusMax,
@@ -792,5 +793,20 @@ describe('currency & weight', () => {
     const inv = [item({ id: 'a1', type: 'armor', equipped: true }), item({ id: 'a2', type: 'armor', equipped: false })];
     expect(equipInventoryItem(inv, 'a1', { equipped: false }).every((i) => !i.equipped)).toBe(true);
     expect(equipInventoryItem(inv, 'a1', { weight: 5 }).find((i) => i.id === 'a1')).toMatchObject({ weight: 5, equipped: true });
+  });
+  it('equipInventoryItem: consumables are never capped either (two potions "equipped"/carried is fine)', () => {
+    const inv = [item({ id: 'c1', type: 'consumable', equipped: true }), item({ id: 'c2', type: 'consumable' })];
+    const next = equipInventoryItem(inv, 'c2', { equipped: true });
+    expect(next.filter((i) => i.equipped).map((i) => i.id).sort()).toEqual(['c1', 'c2']);
+  });
+
+  it('consumeInventoryItem: spends one charge, floored at 0, other items untouched', () => {
+    const inv = [item({ id: 'p1', type: 'consumable', quantity: 3 }), item({ id: 'p2', type: 'consumable', quantity: 1 })];
+    const after1 = consumeInventoryItem(inv, 'p1');
+    expect(after1.find((i) => i.id === 'p1')!.quantity).toBe(2);
+    expect(after1.find((i) => i.id === 'p2')!.quantity).toBe(1);
+    const after2 = consumeInventoryItem(after1, 'p2');
+    expect(after2.find((i) => i.id === 'p2')!.quantity).toBe(0);
+    expect(consumeInventoryItem(after2, 'p2').find((i) => i.id === 'p2')!.quantity).toBe(0); // floored, not negative
   });
 });

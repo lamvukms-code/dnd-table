@@ -578,6 +578,8 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .inv-item > summary { display: flex; align-items: center; gap: 8px; }
 .inv-item .inv-name { font-weight: 600; }
 .inv-item .inv-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+.inv-use { font-size: 11px; padding: 2px 8px; }
+.inv-used-note { margin: 2px 0 0 24px; }
 .inv-fields {
   display: flex;
   flex-wrap: wrap;

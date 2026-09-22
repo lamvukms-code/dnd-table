@@ -116,7 +116,10 @@ export interface Feature {
   uses?: { max: number; used: number; recharge: Recharge };
 }
 
-export type ItemType = 'weapon' | 'armor' | 'shield' | 'gear';
+export type ItemType = 'weapon' | 'armor' | 'shield' | 'gear' | 'consumable';
+
+/** What using a consumable item does — see `InventoryItem`'s consumable fields. */
+export type ConsumableKind = 'heal' | 'spell' | 'custom';
 
 /**
  * A reusable equipment template for the "+ preset" picker on the Equipment tab (SRS FR-63g) — picking one adds a
@@ -141,6 +144,11 @@ export interface EquipmentPreset {
   armorBase?: number;
   armorCategory?: ArmorCategory;
   stealthDisadvantage?: boolean;
+  // consumable (potions, spell scrolls…) — see `InventoryItem`'s consumable fields
+  consumableKind?: ConsumableKind;
+  healFormula?: string;
+  scrollSpellName?: string;
+  consumableNote?: string;
 }
 export type ArmorCategory = 'light' | 'medium' | 'heavy';
 /** How a weapon's attack/damage ability is chosen. */
@@ -180,6 +188,18 @@ export interface InventoryItem {
   armorBase?: number; // armor base AC, or shield bonus (usually 2)
   armorCategory?: ArmorCategory;
   stealthDisadvantage?: boolean;
+
+  // consumable fields (type === 'consumable'; `quantity` doubles as remaining charges — "Dùng" spends one)
+  /** 'heal': roll `healFormula` and heal the linked token. 'spell': cast `scrollSpellName` (looked up in the SRD
+   *  spell DB) through the normal casting flow. 'custom': no roll — just spends a charge (flavour in `notes`). */
+  consumableKind?: ConsumableKind;
+  /** 'heal': healing dice, e.g. "2d4+2" (Potion of Healing). */
+  healFormula?: string;
+  /** 'spell': the spell this scroll/wand casts, matched by name against the SRD spell DB at use-time
+   *  (`findCantrip`) — if not found, "Dùng" still spends the charge but can't auto-roll it. */
+  scrollSpellName?: string;
+  /** 'custom': shown when used (no roll performed). */
+  consumableNote?: string;
 }
 
 export interface CharacterSheet {

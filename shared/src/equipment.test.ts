@@ -30,6 +30,13 @@ describe('equipmentPresetFromDef', () => {
     expect(item.damage).toBeUndefined();
     expect(item.armorBase).toBeUndefined();
   });
+  it('carries over consumable fields (potion / scroll presets)', () => {
+    const potion: EquipmentPreset = { id: 'p5', name: 'Potion of Healing', type: 'consumable', weight: 0.5, consumableKind: 'heal', healFormula: '2d4+2' };
+    expect(equipmentPresetFromDef(potion, id)).toMatchObject({ type: 'consumable', consumableKind: 'heal', healFormula: '2d4+2' });
+    const scroll: EquipmentPreset = { id: 'p6', name: 'Scroll of Cure Wounds', type: 'consumable', consumableKind: 'spell', scrollSpellName: 'Cure Wounds' };
+    expect(equipmentPresetFromDef(scroll, id)).toMatchObject({ type: 'consumable', consumableKind: 'spell', scrollSpellName: 'Cure Wounds' });
+    expect(equipmentPresetFromDef(scroll, id).proficient).toBeUndefined();
+  });
 });
 
 describe('inventoryItemFromHomebrew', () => {

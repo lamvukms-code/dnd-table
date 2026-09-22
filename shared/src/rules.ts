@@ -199,6 +199,15 @@ export function equipInventoryItem(
   );
 }
 
+/**
+ * Spend one use of a consumable (potion, spell scroll…): `quantity` drops by 1, floored at 0. A spent item is
+ * left at 0 rather than removed — same "don't silently delete the player's data" pattern as elsewhere (Wild
+ * Shape / Rage charge trackers); the player deletes it by hand once it's truly gone.
+ */
+export function consumeInventoryItem(inventory: InventoryItem[], id: string): InventoryItem[] {
+  return inventory.map((it) => (it.id === id ? { ...it, quantity: Math.max(0, it.quantity - 1) } : it));
+}
+
 function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {
   const strMod = abilityMod(sheet.abilities.str);
   const dexMod = abilityMod(sheet.abilities.dex);

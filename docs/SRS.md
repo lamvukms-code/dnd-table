@@ -507,6 +507,17 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   picker + data shape (`EquipmentPreset`, fetched from `/srd/equipment.json`)
   ships now; the file itself starts **empty** (populating it with the SRD
   5.2.1 tables is a separate, later task).
+- **FR-63i (P1, 0.55.0):** **Consumables** — `type: 'consumable'` items (potions,
+  spell scrolls, wands…) where `quantity` doubles as remaining charges. A "Dùng"
+  button spends one charge (`consumeInventoryItem`) and, by `consumableKind`:
+  `'heal'` rolls `healFormula` onto the linked token (`healRoll`); `'spell'`
+  looks up `scrollSpellName` in the SRD spell DB (`findCantrip`, covering
+  cantrips through level 3) and casts it through the normal spell-casting flow
+  (`beginCast` — still needs a target click on the map for attack/save spells);
+  `'custom'` (or an unmatched scroll name) just spends the charge and shows
+  `consumableNote` inline. `EquipmentPreset` carries the same fields, so preset
+  potions/scrolls work once SRD data is added (FR-63g) with no further code
+  changes.
 - **FR-65 (P0):** Edits sync to all clients; a client mid-edit is not clobbered
   by an incoming snapshot.
 - **FR-66 (P1):** Spell slots and a spell list.

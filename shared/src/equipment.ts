@@ -20,6 +20,10 @@ export function equipmentPresetFromDef(def: EquipmentPreset, newId: () => string
     // a preset is a real weapon/armor a class can train with — default to proficient, like a blank weapon row;
     // the player unchecks it if their class doesn't actually train with it
     proficient: def.type === 'weapon' ? true : undefined,
+    consumableKind: def.consumableKind,
+    healFormula: def.healFormula,
+    scrollSpellName: def.scrollSpellName,
+    consumableNote: def.consumableNote,
   };
 }
 

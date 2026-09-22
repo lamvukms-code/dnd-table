@@ -6,6 +6,28 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-09-22
+
+### Added
+
+- **Consumables** (potions, spell scrolls, wands…): a new `type: 'consumable'` inventory item where `quantity`
+  doubles as remaining charges. A "Dùng" button spends one charge and, by kind:
+  - `'heal'` rolls `healFormula` (e.g. "2d4+2") onto the character's linked token;
+  - `'spell'` looks up `scrollSpellName` against the SRD spell DB (cantrips through level 3, `findCantrip`) and
+    casts it through the normal spell-casting flow (same as clicking 🪄 on a spell row — attack/save spells still
+    need a target click on the map); an unmatched name just spends the charge with a note instead of failing;
+  - `'custom'` just spends the charge and shows a one-line note.
+  `EquipmentPreset` (the "+ preset" picker, FR-63g) carries the same fields, so once SRD potions/scrolls are
+  added to `/srd/equipment.json` (a separate, later task — see 0.53.0) they work with no further code changes.
+  New: `consumeInventoryItem`, `ConsumableKind`.
+
+### Verified
+
+- **Weapons already wire into Actions automatically.** Adding a weapon and ticking "Trang bị" (equipped) was
+  already producing a matching action row with the right to-hit and damage (e.g. a hand-entered Greatsword,
+  2d6 slashing, showed up as "Greatsword · trang bị — +2 · 2d6 chém"). Confirmed end-to-end in the browser;
+  no changes were needed.
+
 ## [0.54.0] - 2026-09-22
 
 ### Added
@@ -1236,7 +1258,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...v0.52.0
