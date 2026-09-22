@@ -74,6 +74,7 @@ export class Room {
         if (migrated) {
           migrated.participants.forEach((p) => (p.connected = false));
           migrated.sheets = migrated.sheets.map(normalizeSheet);
+          migrated.homebrew ??= []; // added after schema 6 — no version bump needed, just default it in
           syncSceneAliases(migrated);
           for (const scene of migrated.scenes) {
             scene.tokens.forEach((t) => {
@@ -1478,6 +1479,23 @@ export class Room {
         if (!isDm) return 'Chỉ DM được sửa bestiary';
         if (!Array.isArray(action.entries)) return 'Dữ liệu bestiary không hợp lệ';
         this.state.bestiary = action.entries;
+        this.touch();
+        break;
+      }
+
+      case 'homebrewUpsert': {
+        if (!isDm) return 'Chỉ DM được sửa homebrew';
+        const existing = this.state.homebrew.find((h) => h.id === action.entry.id);
+        this.state.homebrew = existing
+          ? this.state.homebrew.map((h) => (h.id === action.entry.id ? action.entry : h))
+          : [...this.state.homebrew, action.entry];
+        this.touch();
+        break;
+      }
+
+      case 'homebrewRemove': {
+        if (!isDm) return 'Chỉ DM được sửa homebrew';
+        this.state.homebrew = this.state.homebrew.filter((h) => h.id !== action.id);
         this.touch();
         break;
       }

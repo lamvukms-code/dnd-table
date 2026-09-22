@@ -9,6 +9,7 @@ import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
 import { ReferencePanel } from './components/ReferencePanel.js';
 import { MapLibrary } from './components/MapLibrary.js';
+import { HomebrewPanel } from './components/HomebrewPanel.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -23,6 +24,7 @@ export function App() {
   const openBestiary = useStore((s) => s.openBestiary);
   const [refOpen, setRefOpen] = useState(false);
   const [mapsOpen, setMapsOpen] = useState(false);
+  const [homebrewOpen, setHomebrewOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
 
@@ -59,6 +61,9 @@ export function App() {
             Bestiary
           </button>
         )}
+        <button title="Vật phẩm / luật nhà tự chế" onClick={() => setHomebrewOpen(true)}>
+          🧪 Homebrew
+        </button>
         <button
           className={dockOpen ? 'on' : ''}
           title="Ẩn/hiện character sheet"
@@ -96,6 +101,7 @@ export function App() {
           }}
         />}
       {mapsOpen && isDm && <MapLibrary onClose={() => setMapsOpen(false)} />}
+      {homebrewOpen && <HomebrewPanel onClose={() => setHomebrewOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

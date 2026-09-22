@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   ATTUNEMENT_SLOTS,
   COIN_TYPES,
@@ -5,7 +6,9 @@ import {
   carriedWeight,
   carryCapacity,
   currencyInGp,
+  equipmentPresetFromDef,
   type ArmorCategory,
+  type EquipmentPreset,
   type InventoryItem,
   type ItemType,
   type WeaponAbility,
@@ -92,6 +95,9 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
             + {ITEM_TYPE_LABEL[t]}
           </button>
         ))}
+        <EquipmentPicker
+          onAdd={(item) => commit({ ...draft, inventory: [...draft.inventory, item] })}
+        />
       </div>
 
       <div className="inventory-list">
@@ -292,6 +298,75 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
         ))}
         {draft.inventory.length === 0 && <p className="empty">Túi đồ trống.</p>}
       </div>
+    </div>
+  );
+}
+
+/**
+ * "+ preset" picker (SRS FR-63g): searches `/srd/equipment.json` (fetched at runtime, same pattern as the
+ * Bestiary's SRD monster list) and turns a pick into a ready-filled inventory item. The repo ships that file
+ * EMPTY — populating it with the SRD 5.2.1 weapons/armor/gear tables is a separate, later task — so until then
+ * this quietly does nothing but the plain "+ Vũ khí / + Giáp / …" buttons keep working as before.
+ */
+function EquipmentPicker({ onAdd }: { onAdd: (item: InventoryItem) => void }) {
+  const [defs, setDefs] = useState<EquipmentPreset[] | null>(null);
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    fetch('/srd/equipment.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((j) => setDefs(Array.isArray(j) ? j : []))
+      .catch(() => setDefs([]));
+  }, []);
+
+  const term = q.trim().toLowerCase();
+  const list = (defs ?? []).filter((d) => !term || d.name.toLowerCase().includes(term));
+
+  function pick(d: EquipmentPreset) {
+    onAdd(equipmentPresetFromDef(d, nanoIdish));
+    setQ('');
+    setOpen(false);
+  }
+
+  const empty = defs !== null && defs.length === 0;
+  return (
+    <div className="eq-picker">
+      <input
+        value={q}
+        placeholder={
+          defs === null ? 'Đang tải preset…' : empty ? 'Chưa có preset SRD' : `Tìm trang bị… (${defs.length})`
+        }
+        disabled={empty}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+      />
+      {open && list.length > 0 && (
+        <ul className="eq-list">
+          {list.slice(0, 40).map((d) => (
+            <li key={d.id}>
+              <button
+                type="button"
+                className="sp-opt"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(d)}
+                title={d.notes}
+              >
+                <span className="sp-name">{d.name}</span>
+                <span className="sp-hint">
+                  {ITEM_TYPE_LABEL[d.type]}
+                  {d.cost ? ` · ${d.cost}` : ''}
+                  {d.damage ? ` · ${d.damage}` : ''}
+                  {d.armorBase !== undefined ? ` · AC ${d.armorBase}` : ''}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

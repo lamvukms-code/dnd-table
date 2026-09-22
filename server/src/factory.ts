@@ -36,6 +36,7 @@ export function createRoomState(): RoomState {
     diceTray: { entries: [] },
     dddice: { enabled: false, roomSlug: undefined, theme: 'dddice-standard' },
     bestiary: [],
+    homebrew: [],
   };
 }
 

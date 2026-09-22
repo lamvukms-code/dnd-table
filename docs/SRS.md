@@ -497,7 +497,10 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   un-attuned items once 3 are attuned, so the 5e limit can't be exceeded. (Item
   rarity / container grouping remain P1.)
 - **FR-63f (P1):** The map attack flow (FR-40) can pick a linked sheet's attack.
-- **FR-63g (P2):** A starting-equipment / weapon presets picker.
+- **FR-63g (P2, 0.53.0):** A starting-equipment / weapon presets picker — the
+  picker + data shape (`EquipmentPreset`, fetched from `/srd/equipment.json`)
+  ships now; the file itself starts **empty** (populating it with the SRD
+  5.2.1 tables is a separate, later task).
 - **FR-65 (P0):** Edits sync to all clients; a client mid-edit is not clobbered
   by an incoming snapshot.
 - **FR-66 (P1):** Spell slots and a spell list.
@@ -575,7 +578,7 @@ IDs are stable. **P0** = required for 0.1.0, **P1** = planned, **P2** = maybe.
   (snippet + page + chapter), plus a pinned **Fate Weaving** view of the 13
   Threads of Fate and their Narrative Touchpoints. Server serves the file from
   `LOREBOOK_FILE`; the client fetches it lazily. Read-only.
-- **FR-97 (P1):** **Homebrew tracker** — `RoomState.homebrew: HomebrewEntry[]`
+- **FR-97 (P1, 0.53.0):** **Homebrew tracker** — `RoomState.homebrew: HomebrewEntry[]`
   (`{id, name, kind, forPlayer?, rarity?, attunement?, status, description,
   mechanics?, secret?, notes?}`), DM-only edit (`homebrewUpsert`/`homebrewRemove`,
   like the bestiary), players see non-`secret` entries read-only.
@@ -608,8 +611,11 @@ See `shared/src/types.ts` for the authoritative definitions.
 
 - `RoomState { version, rev, name, participants[], scenes: Scene[],
   activeSceneId, map, tokens[], initiative, sheets[], rollLog[], diceTray,
-  dddice, bestiary: Statblock[] }` — `bestiary` is broadcast but persisted
-  separately (FR-84), not in `room.json`. `map` / `tokens` are **live aliases**
+  dddice, bestiary: Statblock[], homebrew: HomebrewEntry[] }` — `bestiary` is
+  broadcast but persisted separately (FR-84), not in `room.json`; `homebrew`
+  **is** persisted in `room.json` (FR-97), broadcast to players with `secret`
+  entries and DM `notes` stripped (`server/src/index.ts` `stateFor`).
+  `map` / `tokens` are **live aliases**
   of the active scene (also not persisted — rebuilt from `scenes` on load).
 - `Scene { id, name, map: BattleMap, tokens: Token[] }` — a saved map + token
   layout. Switching the active scene only re-points `map` / `tokens`; sheets and

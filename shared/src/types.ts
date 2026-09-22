@@ -117,6 +117,31 @@ export interface Feature {
 }
 
 export type ItemType = 'weapon' | 'armor' | 'shield' | 'gear';
+
+/**
+ * A reusable equipment template for the "+ preset" picker on the Equipment tab (SRS FR-63g) — picking one adds a
+ * ready-filled `InventoryItem`, the same idea as `CantripDef` → `Spell`. The repo ships an EMPTY starter list
+ * (`client/public/srd/equipment.json`, fetched at runtime like `monsters.json`); populating it with the SRD 5.2.1
+ * weapons/armor/gear tables is a separate, later task — until then players add items by hand as before.
+ */
+export interface EquipmentPreset {
+  id: string;
+  name: string;
+  type: ItemType;
+  weight?: number;
+  /** Display-only cost ("15 gp") — not tracked as currency automatically. */
+  cost?: string;
+  notes?: string;
+  // weapon
+  weaponAbility?: WeaponAbility;
+  damage?: string;
+  damageType?: string;
+  rangeText?: string;
+  // armor / shield
+  armorBase?: number;
+  armorCategory?: ArmorCategory;
+  stealthDisadvantage?: boolean;
+}
 export type ArmorCategory = 'light' | 'medium' | 'heavy';
 /** How a weapon's attack/damage ability is chosen. */
 export type WeaponAbility = 'str' | 'dex' | 'finesse';
@@ -455,6 +480,35 @@ export interface Spell {
   notes?: string;
 }
 
+export type HomebrewKind = 'item' | 'rule' | 'feature' | 'note';
+export type HomebrewStatus = 'draft' | 'live' | 'retired';
+
+/**
+ * A homebrew item / house rule / feature / note the DM made up for this table (docs/LOREBOOK.md §3).
+ * Lives in `RoomState.homebrew`, persisted with the rest of `room.json` (unlike the bestiary, which has
+ * its own file). `secret: true` and `notes` (balance/reminders) are DM-only — stripped for players.
+ */
+export interface HomebrewEntry {
+  id: string;
+  name: string;
+  kind: HomebrewKind;
+  /** Free text — which character it's for ("Sabine (Rogue / Sinner)"), not an access grant. */
+  forPlayer?: string;
+  /** Items only (common/uncommon/rare/very rare/legendary/artifact — free text to match house naming). */
+  rarity?: string;
+  attunement?: boolean;
+  status: HomebrewStatus;
+  /** Player-facing flavour/summary. */
+  description: string;
+  /** The crunchy part (also player-facing). */
+  mechanics?: string;
+  /** true → hidden from players entirely. */
+  secret?: boolean;
+  /** DM-only balance notes / reminders — never sent to players. */
+  notes?: string;
+  createdRound?: number;
+}
+
 export interface StatblockTrait {
   name: string;
   description: string;
@@ -674,4 +728,6 @@ export interface RoomState {
    * sync), not into room.json. Broadcast to everyone but only shown to the DM.
    */
   bestiary: Statblock[];
+  /** House-made items / rules / features / notes (docs/LOREBOOK.md §3). Persisted in room.json (unlike bestiary). */
+  homebrew: HomebrewEntry[];
 }

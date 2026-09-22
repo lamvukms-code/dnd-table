@@ -6,6 +6,23 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-09-22
+
+### Added
+
+- **Homebrew tracker** (docs/LOREBOOK.md §3, FR-97) — topbar "🧪 Homebrew": one place for DM-made items /
+  house rules / features / notes, grouped by kind, filterable by status and by player. `RoomState.homebrew:
+  HomebrewEntry[]`, persisted in `room.json` (unlike the bestiary). DM edits in place
+  (`homebrewUpsert`/`homebrewRemove`, import/export JSON — same pattern as the bestiary); players see the
+  same list read-only with `secret` entries and the DM's private `notes` stripped **server-side**
+  (`server/src/index.ts` `stateFor`), so a player client never receives them at all.
+- **Equipment presets picker** (FR-63g) on the Trang bị tab: a searchable "+ preset" box next to the existing
+  "+ Vũ khí / + Giáp / …" buttons, fetching `/srd/equipment.json` at runtime (same pattern as the SRD
+  monster list) and filling in a ready-to-use inventory item (`EquipmentPreset`, `equipmentPresetFromDef`).
+  The shipped file starts **empty** — populating it with the SRD 5.2.1 weapons/armor/gear tables is a
+  separate, later task; until then the picker just shows "Chưa có preset SRD" and the plain add buttons work
+  as before.
+
 ## [0.52.0] - 2026-09-22
 
 ### Added
@@ -1199,7 +1216,8 @@ First working slice: a LAN-synced D&D 5e (2024) tabletop on one page.
 - **Docs**: software requirements specification (`docs/SRS.md`), `README.md`,
   and the `dndcoder` build/version-management agent.
 
-[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.52.0...HEAD
+[Unreleased]: https://github.com/lamvukms-code/dnd-table/compare/v0.53.0...HEAD
+[0.53.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.52.0...v0.53.0
 [0.52.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.51.0...v0.52.0
 [0.51.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.50.0...v0.51.0
 [0.50.0]: https://github.com/lamvukms-code/dnd-table/compare/v0.49.0...v0.50.0

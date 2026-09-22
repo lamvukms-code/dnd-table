@@ -3,7 +3,7 @@
 Two DM-only screens to cut down on flipping through a 600-page PDF mid-session.
 Neither ships any book content in the repo — same rule as `subclasses.local.json`.
 
-Status: **data pipeline done (0.34.0); Lore Book screen done (0.37.0, tab in "Tra cứu"); Homebrew tracker still to do.**
+Status: **data pipeline done (0.34.0); Lore Book screen done (0.37.0, tab in "Tra cứu"); Homebrew tracker done (0.53.0, topbar "🧪 Homebrew").**
 
 ---
 

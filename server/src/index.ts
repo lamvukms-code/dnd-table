@@ -109,9 +109,19 @@ function send(ws: WebSocket, event: ServerEvent): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
 }
 
-/** The bestiary is DM-only and can be huge (hundreds of stat blocks) — players never get it. */
+/**
+ * The bestiary is DM-only and can be huge (hundreds of stat blocks) — players never get it. Homebrew entries
+ * players DO get, minus `secret` ones, and minus the DM's own `notes` on the entries they do see.
+ */
 function stateFor(isDm: boolean): RoomState {
-  return isDm ? room.state : { ...room.state, bestiary: [] };
+  if (isDm) return room.state;
+  return {
+    ...room.state,
+    bestiary: [],
+    homebrew: room.state.homebrew
+      .filter((h) => !h.secret)
+      .map((h) => ({ ...h, notes: undefined })),
+  };
 }
 
 function broadcastState(): void {

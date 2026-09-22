@@ -558,7 +558,15 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .weight-tag.over { color: #e88; }
 .attune-tag.full { color: var(--accent-2, #6cf); }
 .attune-tag.over { color: #e88; font-weight: 700; }
-.add-item-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.add-item-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; align-items: flex-start; }
+.eq-picker { position: relative; min-width: 180px; flex: 1; }
+.eq-picker input { width: 100%; }
+.eq-list {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 30; max-height: 260px; overflow-y: auto;
+  margin: 2px 0 0; padding: 4px; list-style: none; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+}
+.eq-list li { margin: 0; }
 .inventory-list { display: flex; flex-direction: column; gap: 6px; }
 .inv-item {
   background: var(--panel-2);
@@ -923,6 +931,40 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .be-list-actions button { font-size: 11px; padding: 3px 6px; }
 .be-paste { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .be-paste textarea { font-family: ui-monospace, monospace; font-size: 10px; }
+
+/* homebrew tracker */
+.modal.homebrew { width: min(860px, 95vw); }
+.homebrew-body { display: flex; gap: 12px; margin-top: 8px; min-height: 0; }
+.hb-list { width: 240px; flex: none; display: flex; flex-direction: column; gap: 6px; }
+.hb-filters { display: flex; gap: 4px; }
+.hb-filters select { flex: 1; font-size: 11px; min-width: 0; }
+.hb-list-scroll {
+  flex: 1; overflow: auto; border: 1px solid var(--line); border-radius: 6px; padding: 4px;
+  max-height: 58vh; display: flex; flex-direction: column; gap: 2px;
+}
+.hb-group-label { font-size: 10px; text-transform: uppercase; color: var(--muted); padding: 4px 4px 1px; }
+.hb-item {
+  display: flex; align-items: center; gap: 6px; text-align: left; background: none; border: none;
+  padding: 4px 6px; border-radius: 5px; width: 100%;
+}
+.hb-item.on { background: var(--panel-2); border: 1px solid var(--accent); }
+.hb-item .hb-name { flex: 1; }
+.hb-item.status-retired .hb-name { opacity: 0.55; text-decoration: line-through; }
+.hb-item.status-draft .hb-name { font-style: italic; }
+.hb-tag { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0 5px; }
+.hb-tag.secret { border-color: transparent; }
+.hb-list-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.hb-list-actions button { font-size: 11px; padding: 3px 6px; }
+.hb-editor { flex: 1; overflow: auto; max-height: 62vh; }
+.hb-form { display: flex; flex-direction: column; gap: 8px; }
+.hb-form label { flex-direction: column; gap: 2px; font-size: 11px; }
+.hb-form input, .hb-form select, .hb-form textarea { font-size: 12px; padding: 3px 5px; }
+.hb-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.hb-row .grow { flex: 1; }
+.hb-row .grow input { width: 100%; }
+.hb-actions { display: flex; justify-content: flex-end; }
+.hb-readonly h3 { margin: 0; }
+.hb-mechanics { background: rgba(255,255,255,0.05); border-radius: 4px; padding: 6px 8px; }
 
 /* reference panel (self-hosted 5etools mirror etc) */
 .reference-panel {

@@ -8,6 +8,7 @@ import type {
   DamagePart,
   DddiceConfig,
   ExternalRoll,
+  HomebrewEntry,
   InitiativeEntry,
   RoomState,
   Statblock,
@@ -145,6 +146,8 @@ export type ClientAction =
   | { t: 'bestiaryUpsert'; statblock: Statblock }
   | { t: 'bestiaryRemove'; id: string }
   | { t: 'bestiaryReplaceAll'; entries: Statblock[] }
+  | { t: 'homebrewUpsert'; entry: HomebrewEntry }
+  | { t: 'homebrewRemove'; id: string }
   | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean };
 
 /** Events sent server -> client. */
