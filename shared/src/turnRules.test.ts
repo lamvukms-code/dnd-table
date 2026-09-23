@@ -87,6 +87,14 @@ describe('spell slot consumption', () => {
     expect(r3.available).toBe(false);
     if (!r3.available) expect(r3.reason).toMatch(/Hết/);
   });
+  it('Vancian: castAtLevel lets you upcast into a higher slot, clamped down to the spell\'s own level', () => {
+    const withSlots = sheet({ spellSlots: [{ level: 1, max: 2, used: 0 }, { level: 2, max: 1, used: 0 }] });
+    const up = spendSpellSlot(withSlots, 1, 2);
+    expect(up).toEqual({ available: true, patch: { spellSlots: [{ level: 1, max: 2, used: 0 }, { level: 2, max: 1, used: 1 }] } });
+    // castAtLevel below the spell's own level is clamped up, never down.
+    const clamped = spendSpellSlot(withSlots, 2, 1);
+    expect(clamped).toEqual({ available: true, patch: { spellSlots: [{ level: 1, max: 2, used: 0 }, { level: 2, max: 1, used: 1 }] } });
+  });
   it('Pact Magic: always spends the single Pact slot, level must cover the spell', () => {
     const warlock = sheet({ className: 'Warlock', pactSlots: { level: 2, max: 2, used: 0 } });
     const r1 = spendSpellSlot(warlock, 1); // a level-1 spell still burns the level-2 pact slot

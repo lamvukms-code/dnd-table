@@ -76,7 +76,10 @@ import {
   type DamagePart,
   type SheetAction,
   type Spell,
+  type SpellSlots,
   type Token,
+  WARLOCK_INVOCATIONS_DRAFT,
+  type InvocationDef,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -1975,7 +1978,9 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 key={sp.id}
                 sp={sp}
                 canCast={caster !== 'none'}
-                onCast={() => beginCast(draft.id, sp)}
+                onCast={(castAtLevel) => beginCast(draft.id, sp, castAtLevel)}
+                caster={caster}
+                spellSlots={draft.spellSlots}
                 showAgonizingBlast={wl > 0}
                 castingClasses={castingClassesOf(draft).map((c) => c.name)}
                 onChange={(p) => upd(sp.id, p)}
@@ -2154,6 +2159,8 @@ function SpellRow({
   canCast,
   castingClasses,
   showAgonizingBlast,
+  caster,
+  spellSlots,
   onCast,
   onChange,
   onRescale,
@@ -2165,13 +2172,23 @@ function SpellRow({
   castingClasses: string[];
   /** Has Warlock levels: offer the Agonizing Blast toggle on damage cantrips (2024 — any one, not just Eldritch Blast). */
   showAgonizingBlast?: boolean;
-  onCast: () => void;
+  /** Vancian casters (full/half/third) can pick a higher slot to "Nâng ô" (upcast) — Pact Magic
+   *  always auto-casts at its single slot level, so no picker for those. */
+  caster?: CasterType;
+  spellSlots?: SpellSlots[];
+  onCast: (castAtLevel?: number) => void;
   onChange: (p: Partial<Spell>) => void;
   onRescale?: () => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [castLevel, setCastLevel] = useState(sp.level);
+  useEffect(() => setCastLevel(sp.level), [sp.level]);
   const eligibleForAgonizingBlast = sp.level === 0 && (sp.damage?.length ?? 0) > 0;
+  const upcastLevels =
+    sp.level > 0 && caster && caster !== 'pact' && caster !== 'none'
+      ? (spellSlots ?? []).filter((s) => s.level >= sp.level).sort((a, b) => a.level - b.level)
+      : [];
   return (
     <div className="spell-row">
       <div className="sr-line">
@@ -2234,8 +2251,26 @@ function SpellRow({
             ⟳
           </button>
         )}
+        {canCast && upcastLevels.length > 0 && (
+          <select
+            className="sr-upcast"
+            value={castLevel}
+            title="Nâng ô: chọn Spell Slot cấp cao hơn để trừ khi ra phép này (sát thương/hiệu ứng vẫn chỉnh tay như thường)"
+            onChange={(e) => setCastLevel(Number(e.target.value))}
+          >
+            {upcastLevels.map((s) => (
+              <option key={s.level} value={s.level} disabled={s.used >= s.max}>
+                Cấp {s.level} ({Math.max(0, s.max - s.used)}/{s.max})
+              </option>
+            ))}
+          </select>
+        )}
         {canCast && (
-          <button className="roll-btn strong" onClick={onCast} title="Ra phép (chọn mục tiêu)">
+          <button
+            className="roll-btn strong"
+            onClick={() => onCast(upcastLevels.length > 0 ? castLevel : undefined)}
+            title="Ra phép (chọn mục tiêu)"
+          >
             🪄
           </button>
         )}
@@ -2455,6 +2490,7 @@ function SpellRow({
 }
 
 function AbilitiesTab({ draft, commit }: EditorCtx) {
+  const wl = warlockLevel(draft);
   function upd(id: string, patch: Partial<CharacterSheet['features'][number]>) {
     commit({
       ...draft,
@@ -2555,6 +2591,83 @@ function AbilitiesTab({ draft, commit }: EditorCtx) {
         + Thêm năng lực
       </button>
       {draft.features.length === 0 && <p className="empty">Chưa có năng lực.</p>}
+      {wl > 0 && <InvocationPicker draft={draft} commit={commit} />}
+    </div>
+  );
+}
+
+/**
+ * Search/pick from the full 2024 PHB Eldritch Invocation list and add it as a plain
+ * Feature entry (name + prerequisite-aware description, no `uses` tracker — most
+ * invocations are unlimited-use). Mirrors `SpellDefPicker`'s search/list UI. Only shown
+ * for sheets with Warlock levels.
+ */
+function InvocationPicker({ draft, commit }: EditorCtx) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const have = new Set(draft.features.map((f) => f.name.toLowerCase()));
+  const term = q.trim().toLowerCase();
+  const list = WARLOCK_INVOCATIONS_DRAFT.filter(
+    (inv) => !have.has(inv.name.toLowerCase()) && (!term || inv.name.toLowerCase().includes(term)),
+  );
+
+  function pick(inv: InvocationDef) {
+    commit({
+      ...draft,
+      features: [
+        ...draft.features,
+        {
+          id: nanoIdish(),
+          name: inv.name,
+          source: 'Eldritch Invocation',
+          description: inv.prerequisite ? `${inv.guidance} (Yêu cầu: ${inv.prerequisite})` : inv.guidance,
+        },
+      ],
+    });
+    setQ('');
+    setOpen(false);
+  }
+
+  return (
+    <div className="spell-picker">
+      <span className="sp-label">+ Eldritch Invocation (PHB 2024)</span>
+      <input
+        value={q}
+        placeholder={`Tìm hoặc chọn… (${WARLOCK_INVOCATIONS_DRAFT.length})`}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Enter') {
+            const first = list[0];
+            if (first) pick(first);
+          }
+        }}
+      />
+      {open && (
+        <ul className="sp-list">
+          {list.length === 0 && <li className="sp-empty">Không thấy invocation nào.</li>}
+          {list.map((inv) => (
+            <li key={inv.id}>
+              <button
+                type="button"
+                className="sp-opt"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(inv)}
+                title={inv.guidance}
+              >
+                <span className="sp-mark">✦</span>
+                <span className="sp-name">{inv.name}</span>
+                <span className="sp-hint">{inv.prerequisite ?? 'Không yêu cầu'}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

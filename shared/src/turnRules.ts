@@ -76,12 +76,15 @@ export type SpellSlotCheck =
 /**
  * Which slot a leveled spell cast should consume, and the sheet patch to apply. Cantrips
  * (`spellLevel <= 0`) never spend a slot. Warlock Pact Magic always casts at the caster's
- * single Pact slot level (no choice); Vancian casters spend a slot of the spell's own level
- * (no upcast picker yet — upcasting a spell's effect is still "done by hand" like the rest of
- * this codebase's spell math). `available: false` means the caller should warn, not silently
- * block — a sheet with no slot data (e.g. misconfigured caster type) shouldn't hard-stop play.
+ * single Pact slot level (no choice — `castAtLevel` is ignored for Pact casters). Vancian
+ * casters spend a slot of `castAtLevel` (defaults to the spell's own level) if it's at least
+ * the spell's level — the picker (`SpellRow`) offers only levels >= `spellLevel`. Upcasting a
+ * spell's *effect* (extra damage dice etc.) is still "done by hand" like the rest of this
+ * codebase's spell math — this only tracks which slot gets burned. `available: false` means
+ * the caller should warn, not silently block — a sheet with no slot data (e.g. misconfigured
+ * caster type) shouldn't hard-stop play.
  */
-export function spendSpellSlot(sheet: CharacterSheet, spellLevel: number): SpellSlotCheck {
+export function spendSpellSlot(sheet: CharacterSheet, spellLevel: number, castAtLevel?: number): SpellSlotCheck {
   if (spellLevel <= 0) return { available: true, patch: {} };
   if (casterTypeOf(sheet) === 'pact') {
     const p = sheet.pactSlots;
@@ -89,12 +92,13 @@ export function spendSpellSlot(sheet: CharacterSheet, spellLevel: number): Spell
     if (p.used >= p.max) return { available: false, reason: 'Hết Pact Slot' };
     return { available: true, patch: { pactSlots: { ...p, used: p.used + 1 } } };
   }
-  const slot = sheet.spellSlots.find((s) => s.level === spellLevel);
-  if (!slot) return { available: false, reason: `Không có Spell Slot cấp ${spellLevel}` };
-  if (slot.used >= slot.max) return { available: false, reason: `Hết Spell Slot cấp ${spellLevel}` };
+  const lvl = Math.min(9, Math.max(spellLevel, castAtLevel ?? spellLevel));
+  const slot = sheet.spellSlots.find((s) => s.level === lvl);
+  if (!slot) return { available: false, reason: `Không có Spell Slot cấp ${lvl}` };
+  if (slot.used >= slot.max) return { available: false, reason: `Hết Spell Slot cấp ${lvl}` };
   return {
     available: true,
-    patch: { spellSlots: sheet.spellSlots.map((s) => (s.level === spellLevel ? { ...s, used: s.used + 1 } : s)) },
+    patch: { spellSlots: sheet.spellSlots.map((s) => (s.level === lvl ? { ...s, used: s.used + 1 } : s)) },
   };
 }
 

@@ -129,9 +129,11 @@ interface StoreState {
   applyEffect: (targetTokenId: string, effect: ActiveEffect) => void;
   removeEffect: (tokenId: string, effectId: string) => void;
   clearConcentration: (tokenId: string) => void;
-  /** Point-click spell casting: arm a spell, then click a token on the map. */
-  castingSpell: { sheetId: string; spell: Spell } | null;
-  beginCast: (sheetId: string, spell: Spell) => void;
+  /** Point-click spell casting: arm a spell, then click a token on the map. `castAtLevel`
+   *  (Vancian upcast only) picks which slot level to burn — the spell's own effect/damage
+   *  is unaffected (still adjusted by hand, per this codebase's spell-math convention). */
+  castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number } | null;
+  beginCast: (sheetId: string, spell: Spell, castAtLevel?: number) => void;
   /**
    * Spend Action / Bonus Action / Reaction for a token (only while initiative is running). Returns false when the
    * player declines to go on after a "already spent" warning. Attack rows count against Extra Attack.
@@ -452,7 +454,7 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'grantTempHp', targetTokenId: tok.id, notation: String(ww.tempHp), label: 'Rampant Growth (HP tạm)', sourceSheetId: sheet.id });
       return true;
     },
-    beginCast: (sheetId, spell) => {
+    beginCast: (sheetId, spell, castAtLevel) => {
       // Save spells with a parseable template: place the area on the map instead of clicking one target.
       const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
       const casterTokenId = get().room?.sheets.find((s) => s.id === sheetId)?.tokenId;
@@ -469,7 +471,7 @@ export const useStore = create<StoreState>((set, get) => {
             rangeFeet,
             onConfirm: (ids, aoeId) => {
               ids.forEach((id, i) => {
-                set({ castingSpell: { sheetId, spell } });
+                set({ castingSpell: { sheetId, spell, castAtLevel } });
                 void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0 });
               });
             },
@@ -477,7 +479,7 @@ export const useStore = create<StoreState>((set, get) => {
         });
         return;
       }
-      set({ castingSpell: { sheetId, spell } });
+      set({ castingSpell: { sheetId, spell, castAtLevel } });
     },
     cancelCast: () => set({ castingSpell: null, aoe: null }),
     aoe: null,
@@ -503,14 +505,15 @@ export const useStore = create<StoreState>((set, get) => {
       const sheet = room.sheets.find((s) => s.id === sheetId);
       set({ castingSpell: null });
       if (!sheet) return;
-      const label = `${sheet.name} · ${spell.name}`;
+      const castAtLevel = cast.castAtLevel && cast.castAtLevel > spell.level ? cast.castAtLevel : undefined;
+      const label = `${sheet.name} · ${spell.name}${castAtLevel ? ` (nâng ô cấp ${castAtLevel})` : ''}`;
       // An AOE cast resolves once per target hit (see `beginCast`'s aoe.onConfirm) — economy
       // and the spell slot must only be spent once per cast, on the first target.
       const firstTarget = !opts?.skipConc;
       if (firstTarget) {
         const econ = economyKindOf(spell.actionType);
         if (econ && !get().spendEconomy(sheet.tokenId, econ)) return;
-        const slot = spendSpellSlot(sheet, spell.level);
+        const slot = spendSpellSlot(sheet, spell.level, cast.castAtLevel);
         if (!slot.available) {
           if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return;
         } else if (Object.keys(slot.patch).length > 0) {
