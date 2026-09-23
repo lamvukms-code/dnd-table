@@ -2505,6 +2505,13 @@ function AbilitiesTab({ draft, commit }: EditorCtx) {
                   <option value="long">dài</option>
                   <option value="other">khác</option>
                 </select>
+                <button
+                  className="link"
+                  title="Bỏ lượt dùng (năng lực dùng không giới hạn)"
+                  onClick={() => upd(f.id, { uses: undefined })}
+                >
+                  bỏ lượt dùng
+                </button>
               </span>
             ) : (
               <button
@@ -2516,9 +2523,12 @@ function AbilitiesTab({ draft, commit }: EditorCtx) {
             )}
             <button
               className="link"
-              onClick={() =>
-                commit({ ...draft, features: draft.features.filter((x) => x.id !== f.id) })
-              }
+              title="Xóa năng lực này"
+              onClick={() => {
+                if (!window.confirm(`Xóa năng lực "${f.name || 'chưa đặt tên'}"? Không hoàn tác được.`))
+                  return;
+                commit({ ...draft, features: draft.features.filter((x) => x.id !== f.id) });
+              }}
             >
               ✕
             </button>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { actionDamageParts, effectAttackRiders, effectSaveAdvantage, effectiveArmorClass } from './index.js';
-import { attacksPerAction, economyKindOf, oldWaysClass, spellLimits, spendEconomy, woodWoseEffect } from './turnRules.js';
+import { attacksPerAction, economyKindOf, oldWaysClass, spellLimits, spendEconomy, spendSpellSlot, woodWoseEffect } from './turnRules.js';
 import type { CharacterSheet } from './types.js';
 
 const sheet = (over: Partial<CharacterSheet> = {}): CharacterSheet =>
@@ -64,6 +64,39 @@ describe('action economy', () => {
     expect(attacksPerAction(mc([{ name: 'Barbarian', level: 5 }, { name: 'Monk', level: 5 }]))).toBe(2);
     expect(attacksPerAction(mc([{ name: 'Fighter', level: 11 }, { name: 'Paladin', level: 5 }]))).toBe(3);
     expect(attacksPerAction(mc([{ name: 'Rogue', level: 5 }]))).toBe(1);
+  });
+});
+
+describe('spell slot consumption', () => {
+  it('cantrips never spend a slot', () => {
+    expect(spendSpellSlot(sheet(), 0)).toEqual({ available: true, patch: {} });
+  });
+  it('Vancian: spends the matching-level slot, warns without blocking when unavailable', () => {
+    const noSlots = spendSpellSlot(sheet(), 1); // spellSlots: [] by default
+    expect(noSlots.available).toBe(false);
+    if (!noSlots.available) expect(noSlots.reason).toMatch(/cấp 1/);
+
+    const withSlots = sheet({ spellSlots: [{ level: 1, max: 2, used: 0 }] });
+    const r1 = spendSpellSlot(withSlots, 1);
+    expect(r1).toEqual({ available: true, patch: { spellSlots: [{ level: 1, max: 2, used: 1 }] } });
+    const after1 = { ...withSlots, spellSlots: [{ level: 1, max: 2, used: 1 }] };
+    const r2 = spendSpellSlot(after1, 1);
+    expect(r2).toEqual({ available: true, patch: { spellSlots: [{ level: 1, max: 2, used: 2 }] } });
+    const after2 = { ...withSlots, spellSlots: [{ level: 1, max: 2, used: 2 }] };
+    const r3 = spendSpellSlot(after2, 1);
+    expect(r3.available).toBe(false);
+    if (!r3.available) expect(r3.reason).toMatch(/Hết/);
+  });
+  it('Pact Magic: always spends the single Pact slot, level must cover the spell', () => {
+    const warlock = sheet({ className: 'Warlock', pactSlots: { level: 2, max: 2, used: 0 } });
+    const r1 = spendSpellSlot(warlock, 1); // a level-1 spell still burns the level-2 pact slot
+    expect(r1).toEqual({ available: true, patch: { pactSlots: { level: 2, max: 2, used: 1 } } });
+    const tooHigh = spendSpellSlot(warlock, 3);
+    expect(tooHigh.available).toBe(false);
+    if (!tooHigh.available) expect(tooHigh.reason).toMatch(/Pact Slot đủ cấp/);
+    const exhausted = spendSpellSlot({ ...warlock, pactSlots: { level: 2, max: 2, used: 2 } }, 1);
+    expect(exhausted.available).toBe(false);
+    if (!exhausted.available) expect(exhausted.reason).toMatch(/Hết Pact Slot/);
   });
 });
 

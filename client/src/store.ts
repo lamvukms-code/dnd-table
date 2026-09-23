@@ -37,6 +37,7 @@ import {
   findCantrip,
   economyKindOf,
   spendEconomy as spendEconomyRule,
+  spendSpellSlot,
   woodWoseEffect,
   oldWaysClass,
   wildShapeMax,
@@ -503,8 +504,19 @@ export const useStore = create<StoreState>((set, get) => {
       set({ castingSpell: null });
       if (!sheet) return;
       const label = `${sheet.name} · ${spell.name}`;
-      const econ = economyKindOf(spell.actionType);
-      if (econ && !get().spendEconomy(sheet.tokenId, econ)) return;
+      // An AOE cast resolves once per target hit (see `beginCast`'s aoe.onConfirm) — economy
+      // and the spell slot must only be spent once per cast, on the first target.
+      const firstTarget = !opts?.skipConc;
+      if (firstTarget) {
+        const econ = economyKindOf(spell.actionType);
+        if (econ && !get().spendEconomy(sheet.tokenId, econ)) return;
+        const slot = spendSpellSlot(sheet, spell.level);
+        if (!slot.available) {
+          if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return;
+        } else if (Object.keys(slot.patch).length > 0) {
+          rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch } });
+        }
+      }
       const atkBonus = spellAttackBonus(sheet, spell) ?? 0;
       const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
       const castAbil = spellcastingAbilityOf(sheet, spell);
