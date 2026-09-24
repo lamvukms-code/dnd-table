@@ -110,6 +110,25 @@ export interface Feat {
   fromBackground?: string;
 }
 
+export type HeirloomTier = 'rare' | 'veryRare' | 'legendary';
+
+/** One property of a Fabled Heirloom (progression magic item) — gated behind `minLevel` so a
+ *  player can't read ahead into effects their character hasn't grown into yet. */
+export interface HeirloomFeature {
+  name: string;
+  tier: HeirloomTier;
+  minLevel: number;
+  text: string;
+}
+
+export interface HeirloomDef {
+  id: string;
+  name: string;
+  description: string;
+  source?: string;
+  features: HeirloomFeature[];
+}
+
 /** Class / racial feature or ability, optionally with limited uses. */
 export interface Feature {
   id: string;

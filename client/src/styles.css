@@ -775,6 +775,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .cf-uses em { color: var(--muted); font-size: 10px; }
 .background-features > summary { color: var(--accent-2); }
 .bg-flavor-list { margin: 4px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.hb-editor .cf-lvl { width: 62px; }
+.heirloom-locked { color: var(--accent-2); }
 
 .snap-ghost {
   position: absolute;

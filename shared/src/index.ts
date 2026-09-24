@@ -10,6 +10,7 @@ export * from './importPdfSheet.js';
 export * from './classDefaults.js';
 export * from './species.js';
 export * from './background.js';
+export * from './heirloom.js';
 export * from './derived.js';
 export * from './turnRules.js';
 export * from './equipment.js';

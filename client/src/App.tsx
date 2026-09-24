@@ -11,6 +11,7 @@ import { NpcPanel } from './components/NpcPanel.js';
 import { ReferencePanel } from './components/ReferencePanel.js';
 import { MapLibrary } from './components/MapLibrary.js';
 import { HomebrewPanel } from './components/HomebrewPanel.js';
+import { HeirloomPanel } from './components/HeirloomPanel.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -27,6 +28,7 @@ export function App() {
   const [refOpen, setRefOpen] = useState(false);
   const [mapsOpen, setMapsOpen] = useState(false);
   const [homebrewOpen, setHomebrewOpen] = useState(false);
+  const [heirloomOpen, setHeirloomOpen] = useState(false);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
 
@@ -71,6 +73,9 @@ export function App() {
         <button title="Vật phẩm / luật nhà tự chế" onClick={() => setHomebrewOpen(true)}>
           🧪 Homebrew
         </button>
+        <button title="Fabled Heirloom — Crooked Moon" onClick={() => setHeirloomOpen(true)}>
+          🏺 Bảo vật
+        </button>
         <button
           className={dockOpen ? 'on' : ''}
           title="Ẩn/hiện character sheet"
@@ -110,6 +115,7 @@ export function App() {
       {npcOpen && isDm && <NpcPanel onClose={() => setNpcOpen(false)} />}
       {mapsOpen && isDm && <MapLibrary onClose={() => setMapsOpen(false)} />}
       {homebrewOpen && <HomebrewPanel onClose={() => setHomebrewOpen(false)} />}
+      {heirloomOpen && <HeirloomPanel onClose={() => setHeirloomOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
