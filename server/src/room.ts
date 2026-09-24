@@ -298,6 +298,48 @@ export class Room {
     }
   }
 
+  /** Grapple attempt (2024 Unarmed Strike Grapple): the target rolls the better of its STR/DEX
+   *  save vs `dc`; on a failure it gains the Grappled condition from this source. Shared by the
+   *  standalone 'grapple' action and the Grappler feat's "Punch and Grab" (grapple-on-hit). */
+  private applyGrappleAttempt(
+    target: Token,
+    dc: number,
+    sourceSheetId: string | undefined,
+    sourceTokenId: string | undefined,
+    actor: Participant,
+    label: string,
+  ): void {
+    const isMine = (e: ActiveEffect) =>
+      (sourceSheetId && e.sourceSheetId === sourceSheetId) || (sourceTokenId && e.sourceTokenId === sourceTokenId);
+    const strB = this.tokenSaveBonus(target, 'str');
+    const dexB = this.tokenSaveBonus(target, 'dex');
+    const ability: Ability = dexB > strB ? 'dex' : 'str';
+    const { d20, total, pass, bonus } = this.rollTokenSave(target, ability, dc);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor.id,
+      actorName: actor.name,
+      label: `${label} → ${target.label}: ${ability.toUpperCase()} cứu ${total} vs DC ${dc} — ${
+        pass ? 'THOÁT' : 'BỊ GHÌ'
+      }`,
+      result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, { total, faces: [d20] }),
+    });
+    if (!pass && !(target.effects ?? []).some((e) => e.condition === 'grappled' && isMine(e))) {
+      target.effects = [
+        ...(target.effects ?? []),
+        {
+          id: nanoid(8),
+          name: 'Bị ghì (Grapple)',
+          sourceSheetId,
+          sourceTokenId,
+          condition: 'grappled',
+          note: `Tốc độ 0. Thoát: action + kiểm tra STR (Athletics) hoặc DEX (Acrobatics) vs DC ${dc}`,
+        },
+      ];
+    }
+  }
+
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
   /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
@@ -879,6 +921,17 @@ export class Room {
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
         }
+        // Grappler feat "Punch and Grab" (2024): damage + grapple on the same hit.
+        if (res.hit && action.grappleOnHit) {
+          this.applyGrappleAttempt(
+            target,
+            action.grappleOnHit.dc,
+            action.attackerSheetId,
+            action.attackerTokenId,
+            actor,
+            action.label || 'Attack',
+          );
+        }
         this.touch();
         break;
       }
@@ -1206,37 +1259,7 @@ export class Room {
           break;
         }
 
-        // Target chooses the better of its STR / DEX save.
-        const strB = this.tokenSaveBonus(target, 'str');
-        const dexB = this.tokenSaveBonus(target, 'dex');
-        const ability: Ability = dexB > strB ? 'dex' : 'str';
-        const { d20, total, pass, bonus } = this.rollTokenSave(target, ability, action.dc);
-        this.pushRoll({
-          id: nanoid(8),
-          ts: Date.now(),
-          actorId: actor.id,
-          actorName: actor.name,
-          label: `${action.label} → ${target.label}: ${ability.toUpperCase()} cứu ${total} vs DC ${action.dc} — ${
-            pass ? 'THOÁT' : 'BỊ GHÌ'
-          }`,
-          result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {
-            total,
-            faces: [d20],
-          }),
-        });
-        if (!pass && !(target.effects ?? []).some((e) => e.condition === 'grappled' && isMine(e))) {
-          target.effects = [
-            ...(target.effects ?? []),
-            {
-              id: nanoid(8),
-              name: 'Bị ghì (Grapple)',
-              sourceSheetId: action.sourceSheetId,
-              sourceTokenId: action.sourceTokenId,
-              condition: 'grappled',
-              note: `Tốc độ 0. Thoát: action + kiểm tra STR (Athletics) hoặc DEX (Acrobatics) vs DC ${action.dc}`,
-            },
-          ];
-        }
+        this.applyGrappleAttempt(target, action.dc, action.sourceSheetId, action.sourceTokenId, actor, action.label);
         this.touch();
         break;
       }

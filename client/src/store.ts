@@ -82,6 +82,8 @@ interface AttackParams {
   attackerTokenId?: string;
   /** Melee / ranged tag of the attack (ranged at ≤5 ft ⇒ Disadvantage). */
   attackRange?: AttackRange;
+  /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
+  grappleOnHit?: { dc: number };
 }
 
 export interface AoeMode {
@@ -339,6 +341,7 @@ export const useStore = create<StoreState>((set, get) => {
       attackerSheetId,
       attackerTokenId,
       attackRange,
+      grappleOnHit,
     }) => {
       const room = get().room;
       // Fold condition-implied advantage/disadvantage into the manual roll mode.
@@ -376,6 +379,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackerSheetId,
           attackerTokenId,
           attackRange,
+          grappleOnHit,
         });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(notation);
@@ -415,6 +419,7 @@ export const useStore = create<StoreState>((set, get) => {
         targetTokenId,
         attackerSheetId,
         attackerTokenId,
+        grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },
       });
     },

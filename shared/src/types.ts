@@ -616,9 +616,10 @@ export interface TurnUsed {
   reaction?: boolean;
   /** Attack rolls made with the Attack action this turn (Extra Attack). */
   attacks?: number;
-  /** Without the Grappler feat, an Unarmed Strike is damage OR grapple, not both (2024 RAW) —
-   *  which one this token's unarmed strike was used for this turn, so the other is locked out. */
-  unarmedChoice?: 'damage' | 'grapple';
+  /** Grappler feat "Punch and Grab" (2024): damage + grapple on the same Unarmed Strike hit —
+   *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
+   *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
+  grapplerComboUsed?: boolean;
 }
 
 export interface BattleMap {

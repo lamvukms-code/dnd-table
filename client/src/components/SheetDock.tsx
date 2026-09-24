@@ -451,14 +451,14 @@ function BasicTab({ draft, commit }: EditorCtx) {
       ((draft.tokenId && activeEntry.tokenId === draft.tokenId) ||
         activeEntry.name === draft.name),
   );
-  // 2024 RAW: an Unarmed Strike used to grapple deals no damage unless you have the Grappler
-  // feat (which lets you do both). Enforced only in combat (turnUsed isn't tracked outside it).
+  // 2024 RAW: a plain grapple attempt (no feat) spends one of your attacks like any other attack
+  // roll, and deals no damage. Grappler feat: "Punch and Grab" — hitting with an Unarmed Strike
+  // lets you deal damage AND grapple on that same swing, once per turn (separate combo button).
   const hasGrappler = hasFeat(draft, 'Grappler');
-  const unarmedChoiceLock =
-    !hasGrappler && initiative?.running ? (linkedToken?.turnUsed?.unarmedChoice ?? null) : undefined;
-  function useUnarmedFor(choice: 'damage' | 'grapple') {
-    if (unarmedChoiceLock === undefined || !linkedToken) return;
-    send({ t: 'setTurnUsed', tokenId: linkedToken.id, patch: { unarmedChoice: choice } });
+  const grapplerComboUsed = Boolean(initiative?.running && linkedToken?.turnUsed?.grapplerComboUsed);
+  function markGrapplerComboUsed() {
+    if (!linkedToken || !initiative?.running) return;
+    send({ t: 'setTurnUsed', tokenId: linkedToken.id, patch: { grapplerComboUsed: true } });
   }
   const [targetId, setTargetId] = useState(draft.tokenId ?? '');
   const [showRolls, setShowRolls] = useState(false);
@@ -869,15 +869,17 @@ function BasicTab({ draft, commit }: EditorCtx) {
           return (
             <div key={type} className="action-group">
               <span className="ag-label">{ACTION_LABEL[type]}</span>
-              {rows.map((a) => (
+              {rows.map((a) => {
+                const trySpend = (attack: boolean) => {
+                  const kind = economyKindOf(a.actionType);
+                  return kind ? spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks: attacksPerAction(draft) }) : true;
+                };
+                return (
                 <ActionRow
                   key={a.id}
                   action={a}
                   parts={actionDamageParts(draft, a, linkedToken?.effects)}
-                  onSpend={(attack) => {
-                    const kind = economyKindOf(a.actionType);
-                    return kind ? spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks: attacksPerAction(draft) }) : true;
-                  }}
+                  onSpend={trySpend}
                   sheetName={draft.name}
                   attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
                   targetId={targetId}
@@ -899,7 +901,9 @@ function BasicTab({ draft, commit }: EditorCtx) {
                             (e) => e.sourceSheetId === draft.id && e.condition === 'grappled',
                           ),
                           onToggle: (release: boolean) => {
-                            if (!release) useUnarmedFor('grapple');
+                            // A plain grapple attempt spends an attack, same as any other swing
+                            // (2024 RAW) — releasing an existing grapple is free.
+                            if (!release && !trySpend(true)) return;
                             grapple({
                               targetTokenId: targetId,
                               dc: grappleDc(draft),
@@ -909,8 +913,29 @@ function BasicTab({ draft, commit }: EditorCtx) {
                               release,
                             });
                           },
-                          choiceLock: unarmedChoiceLock,
-                          onUseForDamage: () => useUnarmedFor('damage'),
+                        }
+                      : undefined
+                  }
+                  grapplerCombo={
+                    hasGrappler && (a.id === 'unarmed' || a.id === 'monk-unarmed') && targetId
+                      ? {
+                          dc: grappleDc(draft),
+                          used: grapplerComboUsed,
+                          onFire: () => {
+                            if (!trySpend(true)) return;
+                            markGrapplerComboUsed();
+                            void attackRoll({
+                              label: `${draft.name} · ${a.name} (Punch and Grab)`,
+                              attackBonus: a.attackBonus!,
+                              rollMode,
+                              damageParts: actionDamageParts(draft, a, linkedToken?.effects),
+                              targetTokenId: targetId,
+                              attackerSheetId: draft.id,
+                              attackerTokenId: draft.tokenId || undefined,
+                              attackRange: attackRangeOf(a),
+                              grappleOnHit: { dc: grappleDc(draft) },
+                            });
+                          },
                         }
                       : undefined
                   }
@@ -941,7 +966,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
                       : () => commit({ ...draft, actions: draft.actions.filter((x) => x.id !== a.id) })
                   }
                 />
-              ))}
+                );
+              })}
             </div>
           );
         })}
@@ -983,6 +1009,7 @@ function ActionRow({
   onFired,
   onSpend,
   grapple,
+  grapplerCombo,
   onToggleRange,
   onDelete,
 }: {
@@ -1017,20 +1044,21 @@ function ActionRow({
   grapple?: {
     dc: number;
     grappling: boolean;
+    /** A plain grapple attempt (release=false) spends an attack like any other swing. */
     onToggle: (release: boolean) => void;
-    /** Without the Grappler feat: which use ('damage' or 'grapple') this token's Unarmed
-     *  Strike is locked to this turn — null = neither used yet, undefined = not enforced
-     *  (has Grappler, or not in combat). */
-    choiceLock?: 'damage' | 'grapple' | null;
-    onUseForDamage?: () => void;
+  };
+  /** Grappler feat "Punch and Grab": one button that rolls to hit and, on a hit, deals damage
+   *  AND attempts the grapple — capped to once per turn. */
+  grapplerCombo?: {
+    dc: number;
+    used: boolean;
+    onFire: () => void;
   };
   onToggleRange?: () => void;
   onDelete?: () => void;
 }) {
   const base = `${sheetName} · ${action.name}`;
   const isAttack = typeof action.attackBonus === 'number' && parts.length > 0;
-  const dmgLockedByGrapple = grapple?.choiceLock === 'grapple';
-  const grappleLockedByDamage = grapple?.choiceLock === 'damage';
   const atkNotation = (bonus: number) => d20Check(bonus, rollMode);
   const combinedDamage = parts.map((p) => p.dice).join(' + ');
   const damageLabel = parts
@@ -1067,11 +1095,8 @@ function ActionRow({
       {isAttack && targetId && (
         <button
           className="roll-btn strong"
-          disabled={dmgLockedByGrapple}
-          title={dmgLockedByGrapple ? 'Không có feat Grappler — lượt này đã dùng Unarmed Strike để vật lộn' : undefined}
           onClick={() => {
             if (onSpend && !onSpend(true)) return;
-            grapple?.onUseForDamage?.();
             void attackRoll({
               label: `${base} → ${targetName}`,
               attackBonus: action.attackBonus!,
@@ -1091,11 +1116,8 @@ function ActionRow({
       {isAttack && !targetId && (
         <button
           className="roll-btn"
-          disabled={dmgLockedByGrapple}
-          title={dmgLockedByGrapple ? 'Không có feat Grappler — lượt này đã dùng Unarmed Strike để vật lộn' : undefined}
           onClick={() => {
             if (onSpend && !onSpend(true)) return;
-            grapple?.onUseForDamage?.();
             void rollDice(`${base} (đánh)`, atkNotation(action.attackBonus!));
           }}
         >
@@ -1105,11 +1127,8 @@ function ActionRow({
       {parts.length > 0 && (
         <button
           className="roll-btn"
-          disabled={dmgLockedByGrapple}
-          title={dmgLockedByGrapple ? 'Không có feat Grappler — lượt này đã dùng Unarmed Strike để vật lộn' : undefined}
           onClick={() => {
             if (!isAttack && onSpend && !onSpend(false)) return; // damage-only rows spend on their roll
-            grapple?.onUseForDamage?.();
             if (targetId) void damageRoll(`${base} → ${targetName}`, parts, targetId, attacker);
             else void rollDice(`${base} (sát thương)`, combinedDamage);
             onFired?.();
@@ -1126,17 +1145,28 @@ function ActionRow({
       {grapple && (
         <button
           className={`roll-btn grapple ${grapple.grappling ? 'on' : ''}`}
-          disabled={!grapple.grappling && grappleLockedByDamage}
           title={
             grapple.grappling
               ? `Thả ${targetName}`
-              : grappleLockedByDamage
-                ? 'Không có feat Grappler — lượt này đã dùng Unarmed Strike để gây sát thương'
-                : `Vật lộn ${targetName} (mục tiêu cứu STR/DEX vs DC ${grapple.dc})`
+              : `Vật lộn ${targetName} (tốn 1 đòn tấn công, không gây sát thương — mục tiêu cứu STR/DEX vs DC ${grapple.dc})`
           }
           onClick={() => grapple.onToggle(grapple.grappling)}
         >
           {grapple.grappling ? '✋ thả' : `🤼 vật lộn DC${grapple.dc}`}
+        </button>
+      )}
+      {grapplerCombo && targetId && (
+        <button
+          className="roll-btn strong"
+          disabled={grapplerCombo.used}
+          title={
+            grapplerCombo.used
+              ? 'Punch and Grab (Grappler) đã dùng lượt này'
+              : `Punch and Grab: trúng thì vừa gây sát thương vừa vật lộn ${targetName} (DC ${grapplerCombo.dc}) — 1 lần/lượt`
+          }
+          onClick={grapplerCombo.onFire}
+        >
+          🥊 Punch &amp; Grab
         </button>
       )}
       {onDelete && (

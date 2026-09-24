@@ -45,6 +45,10 @@ export type ClientAction =
       attackerTokenId?: string;
       /** Melee or ranged delivery (drives Armor of Agathys retaliation, ranged-in-melee). */
       attackRange?: AttackRange;
+      /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target
+       *  (same save-vs-DC resolution as the standalone 'grapple' action). Client gates this to
+       *  once per turn via `turnUsed.grapplerComboUsed`; the server doesn't re-check the feat. */
+      grappleOnHit?: { dc: number };
       // When present, the client already rolled (via dddice). On a crit the
       // per-part totals are the homebrew-crit notation's roll.
       external?: {
