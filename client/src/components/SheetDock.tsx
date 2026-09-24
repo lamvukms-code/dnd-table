@@ -80,6 +80,8 @@ import {
   type Token,
   WARLOCK_INVOCATIONS_DRAFT,
   type InvocationDef,
+  SRD_FEATS_DRAFT,
+  type FeatDef,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -1853,7 +1855,11 @@ function FeatsTab({ draft, commit }: EditorCtx) {
           />
           <button
             className="link"
-            onClick={() => commit({ ...draft, feats: draft.feats.filter((x) => x.id !== f.id) })}
+            title="Xóa feat này"
+            onClick={() => {
+              if (!window.confirm(`Xóa feat "${f.name || 'chưa đặt tên'}"? Không hoàn tác được.`)) return;
+              commit({ ...draft, feats: draft.feats.filter((x) => x.id !== f.id) });
+            }}
           >
             ✕
           </button>
@@ -1870,6 +1876,94 @@ function FeatsTab({ draft, commit }: EditorCtx) {
         + Thêm feat
       </button>
       {draft.feats.length === 0 && <p className="empty">Chưa có feat.</p>}
+      <FeatPicker draft={draft} commit={commit} />
+    </div>
+  );
+}
+
+const FEAT_CATEGORY_LABEL: Record<FeatDef['category'], string> = {
+  origin: 'Origin',
+  general: 'General',
+  'fighting-style': 'Fighting Style',
+  'epic-boon': 'Epic Boon',
+};
+const FEAT_CATEGORY_MARK: Record<FeatDef['category'], string> = {
+  origin: '◆',
+  general: '•',
+  'fighting-style': '⚔',
+  'epic-boon': '✦',
+};
+
+/**
+ * Search/pick from the full 2024 PHB feat list (all 4 categories) and add it as a
+ * plain Feat entry (name + prerequisite-aware description). Mirrors
+ * `InvocationPicker`'s search/list UI.
+ */
+function FeatPicker({ draft, commit }: EditorCtx) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const have = new Set(draft.feats.map((f) => f.name.toLowerCase()));
+  const term = q.trim().toLowerCase();
+  const list = SRD_FEATS_DRAFT.filter(
+    (f) => !have.has(f.name.toLowerCase()) && (!term || f.name.toLowerCase().includes(term)),
+  );
+
+  function pick(f: FeatDef) {
+    commit({
+      ...draft,
+      feats: [
+        ...draft.feats,
+        {
+          id: nanoIdish(),
+          name: f.name,
+          description: f.prerequisite ? `${f.guidance} (Yêu cầu: ${f.prerequisite})` : f.guidance,
+        },
+      ],
+    });
+    setQ('');
+    setOpen(false);
+  }
+
+  return (
+    <div className="spell-picker">
+      <span className="sp-label">+ Feat (PHB 2024)</span>
+      <input
+        value={q}
+        placeholder={`Tìm hoặc chọn… (${SRD_FEATS_DRAFT.length})`}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+          if (e.key === 'Enter') {
+            const first = list[0];
+            if (first) pick(first);
+          }
+        }}
+      />
+      {open && (
+        <ul className="sp-list">
+          {list.length === 0 && <li className="sp-empty">Không thấy feat nào.</li>}
+          {list.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                className="sp-opt"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(f)}
+                title={f.guidance}
+              >
+                <span className="sp-mark">{FEAT_CATEGORY_MARK[f.category]}</span>
+                <span className="sp-name">{f.name}</span>
+                <span className="sp-hint">{f.prerequisite ?? FEAT_CATEGORY_LABEL[f.category]}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
