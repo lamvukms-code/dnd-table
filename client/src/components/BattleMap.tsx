@@ -539,7 +539,7 @@ export function BattleMap() {
               }}
               onClick={(e) => {
                 e.stopPropagation();
-                if (castingSpell || castingMonsterSpell || groupMode || aoe) return;
+                if (castingSpell || groupMode || aoe) return;
                 setZonePopup({ kind: 'existing', zone: z });
               }}
               title={`${z.code ? z.code + ' — ' : ''}${z.name}`}
