@@ -186,7 +186,7 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: () => void }) {
+export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: () => void }) {
   const send = useStore((s) => s.send);
   const rollDice = useStore((s) => s.rollDice);
   const map = useStore((s) => s.room!.map);

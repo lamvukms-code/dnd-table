@@ -262,6 +262,7 @@ export function BattleMap() {
       </div>
 
       {isDm && <BestiaryPalette />}
+      {isDm && <NpcPalette />}
 
       {tokens.length > 0 && (
         <details className="token-palette">
@@ -1385,6 +1386,54 @@ function BestiaryPalette() {
         className="bp-search"
         value={q}
         placeholder="Tìm quái… (giữ Shift khi thả = tung HP)"
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <div className="tp-list">
+        {list.map((s) => (
+          <div
+            key={s.id}
+            className="tp-chip"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/statblock-id', s.id);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={`Kéo "${s.name}" (CR ${s.cr || '?'}, AC ${s.ac}, HP ${s.maxHp}) vào bản đồ`}
+          >
+            <span
+              className="tp-dot"
+              style={s.imageUrl ? { background: `center/cover url(${s.imageUrl})` } : { background: s.color }}
+            />
+            {s.name}
+            {s.cr ? <small> · CR {s.cr}</small> : null}
+          </div>
+        ))}
+        {list.length === 0 && <span className="hint">Không thấy.</span>}
+      </div>
+    </details>
+  );
+}
+
+
+/** DM-only: drag an NPC (from `room.bestiary`, tag "npc") straight onto the map to spawn its
+ *  token — same mechanism as BestiaryPalette, filtered to the story-NPC subset so they don't
+ *  get lost in the monster list. Entries land here once opened/spawned from the NPC tab. */
+function NpcPalette() {
+  const bestiary = useStore((s) => s.room?.bestiary ?? []);
+  const [q, setQ] = useState('');
+  const npcs = bestiary.filter((s) => s.tags.includes('npc'));
+  if (npcs.length === 0) return null;
+  const term = q.trim().toLowerCase();
+  const list = npcs
+    .filter((s) => !term || `${s.name} ${s.cr} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(term))
+    .slice(0, 40);
+  return (
+    <details className="token-palette npc-palette">
+      <summary>🧑‍🤝‍🧑 Kéo NPC vào bản đồ ({npcs.length})</summary>
+      <input
+        className="bp-search"
+        value={q}
+        placeholder="Tìm NPC… (giữ Shift khi thả = tung HP)"
         onChange={(e) => setQ(e.target.value)}
       />
       <div className="tp-list">

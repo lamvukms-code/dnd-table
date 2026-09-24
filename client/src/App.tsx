@@ -7,6 +7,7 @@ import { InitiativeBar } from './components/InitiativeBar.js';
 import { SheetDock } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
+import { NpcPanel } from './components/NpcPanel.js';
 import { ReferencePanel } from './components/ReferencePanel.js';
 import { MapLibrary } from './components/MapLibrary.js';
 import { HomebrewPanel } from './components/HomebrewPanel.js';
@@ -22,6 +23,7 @@ export function App() {
   const [bestiaryOpen, setBestiaryOpen] = useState(false);
   const bestiaryFocus = useStore((s) => s.bestiaryFocus);
   const openBestiary = useStore((s) => s.openBestiary);
+  const [npcOpen, setNpcOpen] = useState(false);
   const [refOpen, setRefOpen] = useState(false);
   const [mapsOpen, setMapsOpen] = useState(false);
   const [homebrewOpen, setHomebrewOpen] = useState(false);
@@ -59,6 +61,11 @@ export function App() {
         {isDm && (
           <button title="Bestiary" onClick={() => setBestiaryOpen(true)}>
             Bestiary
+          </button>
+        )}
+        {isDm && (
+          <button title="NPC — The Crooked Moon" onClick={() => setNpcOpen(true)}>
+            NPC
           </button>
         )}
         <button title="Vật phẩm / luật nhà tự chế" onClick={() => setHomebrewOpen(true)}>
@@ -100,6 +107,7 @@ export function App() {
             openBestiary(null);
           }}
         />}
+      {npcOpen && isDm && <NpcPanel onClose={() => setNpcOpen(false)} />}
       {mapsOpen && isDm && <MapLibrary onClose={() => setMapsOpen(false)} />}
       {homebrewOpen && <HomebrewPanel onClose={() => setHomebrewOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}

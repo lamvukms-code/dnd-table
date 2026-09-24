@@ -931,6 +931,10 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .be-item .be-cr { font-size: 10px; color: var(--muted); }
 .be-list-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .be-list-actions button { font-size: 11px; padding: 3px 6px; }
+.npc-item { padding: 0; gap: 0; }
+.npc-item.on { background: var(--panel-2); border: 1px solid var(--accent); }
+.npc-item-main { flex: 1; display: flex; align-items: center; gap: 6px; background: none; border: none; padding: 4px 6px; text-align: left; }
+.npc-quickspawn { padding: 0 8px; font-size: 13px; }
 .be-paste { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .be-paste textarea { font-family: ui-monospace, monospace; font-size: 10px; }
 
@@ -1127,6 +1131,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .insp-sb-link { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
 .insp-sb-link button { font-size: 11px; padding: 2px 6px; }
 .bestiary-palette { left: 215px; }
+.npc-palette { left: 430px; }
 
 .aoe-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; }
 .aoe-shape { fill: rgba(231, 76, 60, 0.28); stroke: #e74c3c; stroke-width: 2; }
