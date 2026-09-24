@@ -143,7 +143,11 @@ export async function rollEquation(notation: string): Promise<ExternalRoll> {
     total_value: unknown;
     values: { value: number; is_dropped: boolean; type: string }[];
   };
-  const kept = roll.values.filter((v) => !v.is_dropped && typeof v.value === 'number');
+  // A flat modifier (e.g. the "+4" in "1d8+4") comes back as its own entry with
+  // type 'mod' — a fixed-value placeholder token for the 3D scene, not a rolled die.
+  // Excluding it keeps `faces` to only the physical dice, matching what the roll
+  // log's per-die breakdown ("8, 4" for 2d6) is meant to show.
+  const kept = roll.values.filter((v) => !v.is_dropped && v.type !== 'mod' && typeof v.value === 'number');
   const d20 = roll.values.find((v) => v.type === 'd20' && !v.is_dropped);
   return {
     total: toNumber(roll.total_value),

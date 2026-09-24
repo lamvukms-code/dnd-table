@@ -34,6 +34,7 @@ import {
   spendHitDie,
   gridFeet,
   abilityMod as abilityModOf,
+  diceFacesOf,
   rollNotation,
   targetRiderParts,
   tokenConditions,
@@ -305,22 +306,29 @@ export class Room {
   private rollDamageParts(
     parts: DamagePart[],
     crit: boolean,
-    externals: number[] | undefined,
+    externals: { total: number; faces: number[] }[] | undefined,
   ): { rolled: { part: DamagePart; raw: number }[]; combined: RollResult; notation: string } {
     const rolled: { part: DamagePart; raw: number }[] = [];
     const bits: string[] = [];
+    const faces: number[] = [];
     parts.forEach((p, i) => {
       const n = crit ? homebrewCritDamage(p.dice) : p.dice;
       bits.push(n);
-      const raw =
-        externals && typeof externals[i] === 'number'
-          ? externals[i]
-          : rollNotation(n).total;
+      const ext = externals?.[i];
+      let raw: number;
+      if (ext) {
+        raw = ext.total;
+        faces.push(...ext.faces);
+      } else {
+        const r = rollNotation(n);
+        raw = r.total;
+        faces.push(...diceFacesOf(r));
+      }
       rolled.push({ part: p, raw });
     });
     const total = rolled.reduce((s, r) => s + r.raw, 0);
     const notation = bits.join(' + ');
-    return { rolled, notation, combined: externalRollResult(notation, { total, faces: [] }) };
+    return { rolled, notation, combined: externalRollResult(notation, { total, faces }) };
   }
 
   /** The currently active scene (its map / tokens are aliased on state). */

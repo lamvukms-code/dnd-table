@@ -254,6 +254,11 @@ export interface AttackResolution {
  * Build a RollResult from values rolled outside the engine (e.g. dddice), so it
  * can live in the shared roll log alongside server-rolled results.
  */
+/** Every kept die value rolled across a result's dice terms, in term order (flat/modifier terms contribute nothing). */
+export function diceFacesOf(r: RollResult): number[] {
+  return r.terms.filter((t) => t.kind === 'dice').flatMap((t) => (t.rolls ?? []).filter((d) => d.kept).map((d) => d.value));
+}
+
 export function externalRollResult(
   notation: string,
   ext: { total: number; faces: number[]; d20Natural?: number },

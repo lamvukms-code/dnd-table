@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   d20Check,
   describeNotation,
+  diceFacesOf,
   doubleDiceCounts,
   externalRollResult,
   homebrewCritDamage,
@@ -131,6 +132,21 @@ describe('externalRollResult', () => {
     const r = externalRollResult('1d20', { total: 20, faces: [20], d20Natural: 20 });
     expect(r.d20?.isCrit).toBe(true);
     expect(resolveAttack(r, 25).hit).toBe(true);
+  });
+});
+
+describe('diceFacesOf', () => {
+  it('flattens kept dice values across dice terms, in order, ignoring flat modifiers', () => {
+    const r = rollNotation('2d6+3', seq([0, 0.5, 0.99])); // 1, 4, +3 flat
+    expect(diceFacesOf(r)).toEqual([1, 4]);
+  });
+  it('combines multiple dice terms (as built for a multi-part damage roll)', () => {
+    const r = rollNotation('1d4 + 1d6', seq([0, 0.99]));
+    expect(diceFacesOf(r)).toEqual([1, 6]);
+  });
+  it('drops kh/kl-dropped dice, keeping only the kept ones', () => {
+    const r = rollNotation('2d20kh1', seq([0.9, 0.1])); // rolls 19, 3 — keeps the higher
+    expect(diceFacesOf(r)).toEqual([19]);
   });
 });
 

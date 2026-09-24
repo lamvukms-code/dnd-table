@@ -29,8 +29,8 @@ export type ClientAction =
       label: string;
       damageParts: DamagePart[];
       targetTokenId: string;
-      // per-part rolled totals (dddice); index-aligned with damageParts
-      external?: number[];
+      // per-part rolled totals + individual die faces (dddice); index-aligned with damageParts
+      external?: { total: number; faces: number[] }[];
       // attacker identity, so target-bound riders (Hex/Hunter's Mark) can apply
       attackerSheetId?: string;
       attackerTokenId?: string;
@@ -50,7 +50,7 @@ export type ClientAction =
       external?: {
         attack: ExternalRoll;
         crit?: boolean;
-        partTotals?: number[]; // index-aligned with damageParts
+        partTotals?: { total: number; faces: number[] }[]; // index-aligned with damageParts
       };
     }
   // spell / feature effects on a token (conditions, riders, recurring saves)

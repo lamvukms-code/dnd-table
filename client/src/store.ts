@@ -279,12 +279,12 @@ export const useStore = create<StoreState>((set, get) => {
     grapple: (p) => rawSend({ t: 'grapple', ...p }),
 
     damageRoll: async (label, damageParts, targetTokenId, attacker) => {
-      let external: number[] | undefined;
+      let external: { total: number; faces: number[] }[] | undefined;
       if (dddiceActive()) {
         external = [];
         for (const p of damageParts) {
           const ext = await externalRoll(p.dice);
-          external.push(ext ? ext.total : rollNotation(p.dice).total);
+          external.push(ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(p.dice).total, faces: [] });
         }
       }
       rawSend({
@@ -398,13 +398,13 @@ export const useStore = create<StoreState>((set, get) => {
       const fumble = attack.d20Natural === 1;
       const hit = nat20 || (!fumble && attack.total >= ac);
       const effectiveCrit = (nat20 || (hit && autoCrit)) && !critImmune;
-      let partTotals: number[] | undefined;
+      let partTotals: { total: number; faces: number[] }[] | undefined;
       if (hit) {
         partTotals = [];
         for (const p of damageParts) {
           const n = effectiveCrit ? homebrewCritDamage(p.dice) : p.dice;
           const ext = await externalRoll(n);
-          partTotals.push(ext ? ext.total : rollNotation(n).total);
+          partTotals.push(ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(n).total, faces: [] });
         }
       }
       rawSend({
