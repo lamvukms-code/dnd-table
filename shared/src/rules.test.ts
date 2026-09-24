@@ -31,6 +31,7 @@ import {
   equipInventoryItem,
   consumeInventoryItem,
   grappleDc,
+  hasFeat,
   gridFeet,
   monkFocusMax,
   parseRangeFeet,
@@ -708,6 +709,14 @@ describe('currency & weight', () => {
       proficiencyBonus: 3,
     });
     expect(grappleDc(monk)).toBe(8 + 3 + 4); // uses DEX +4
+  });
+
+  it('hasFeat matches by name, case/whitespace-insensitive', () => {
+    const s = sheet({ feats: [{ id: 'x', name: '  Grappler ', description: '' }] });
+    expect(hasFeat(s, 'Grappler')).toBe(true);
+    expect(hasFeat(s, 'grappler')).toBe(true);
+    expect(hasFeat(s, 'Tough')).toBe(false);
+    expect(hasFeat(sheet(), 'Grappler')).toBe(false);
   });
 
   it('gridFeet is Chebyshev × 5; clampToRange caps distance', () => {

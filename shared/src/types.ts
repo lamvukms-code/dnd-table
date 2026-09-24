@@ -616,6 +616,9 @@ export interface TurnUsed {
   reaction?: boolean;
   /** Attack rolls made with the Attack action this turn (Extra Attack). */
   attacks?: number;
+  /** Without the Grappler feat, an Unarmed Strike is damage OR grapple, not both (2024 RAW) —
+   *  which one this token's unarmed strike was used for this turn, so the other is locked out. */
+  unarmedChoice?: 'damage' | 'grapple';
 }
 
 export interface BattleMap {

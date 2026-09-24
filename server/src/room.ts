@@ -1123,7 +1123,11 @@ export class Room {
         if (!token) return 'Token không tồn tại';
         if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
         const next = { ...(token.turnUsed ?? {}), ...action.patch };
-        token.turnUsed = next.action || next.bonus || next.reaction || next.attacks ? next : undefined;
+        // Any truthy field (not just the original action/bonus/reaction/attacks) means the
+        // tracker is meaningful — a hardcoded field list here silently drops newer fields
+        // (e.g. unarmedChoice) the moment they're the only thing set.
+        const hasAnyUsed = Object.values(next).some((v) => v);
+        token.turnUsed = hasAnyUsed ? next : undefined;
         this.touch();
         break;
       }

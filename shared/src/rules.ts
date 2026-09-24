@@ -544,6 +544,12 @@ export function grappleDc(sheet: CharacterSheet): number {
   return 8 + sheet.proficiencyBonus + best;
 }
 
+/** Whether the sheet has a feat by name (case/whitespace-insensitive — feats are free-text). */
+export function hasFeat(sheet: CharacterSheet, name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return sheet.feats.some((f) => f.name.trim().toLowerCase() === n);
+}
+
 /** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
 export function sneakAttackDice(sheet: CharacterSheet): number {
   const lvl = rogueLevel(sheet);
