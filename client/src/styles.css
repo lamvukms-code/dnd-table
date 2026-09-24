@@ -773,6 +773,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .subclass-features > summary { color: var(--accent, #a06cd5); }
 .cf-uses { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
 .cf-uses em { color: var(--muted); font-size: 10px; }
+.background-features > summary { color: var(--accent-2); }
+.bg-flavor-list { margin: 4px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
 
 .snap-ghost {
   position: absolute;
@@ -1253,6 +1255,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .sp-opt .sp-hint { color: var(--muted); font-size: 11px; margin-left: auto; text-align: right; }
 
 .bt-species { max-width: 150px; }
+.bt-background { max-width: 150px; }
 .sf-ability { flex-direction: row; align-items: center; gap: 8px; margin: 4px 0; }
 
 .hit-dice { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; margin: 4px 0; }

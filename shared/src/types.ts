@@ -105,6 +105,9 @@ export interface Feat {
   id: string;
   name: string;
   description: string;
+  /** Set when this feat was auto-granted by picking a Background (its `name`) — lets a later
+   *  background swap cleanly remove it, the same way `Spell.fromSpecies` works for species. */
+  fromBackground?: string;
 }
 
 /** Class / racial feature or ability, optionally with limited uses. */
@@ -262,6 +265,11 @@ export interface CharacterSheet {
   speciesUses?: Record<string, number>;
   /** Casting ability for species spells (INT / WIS / CHA). */
   speciesSpellAbility?: Ability;
+  /** Chosen background (name); its granted feat/skills are derived from the local background data. */
+  background?: string;
+  /** Skill keys currently granted by the chosen background — lets swapping backgrounds cleanly
+   *  remove only what the old one added, the same way `fromSpecies`/`fromBackground` work. */
+  backgroundSkills?: string[];
   feats: Feat[];
   features: Feature[];
   inventory: InventoryItem[];

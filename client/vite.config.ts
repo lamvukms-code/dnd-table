@@ -22,6 +22,7 @@ export default defineConfig({
       '/health': { target },
       '/upload': { target },
       '/uploads': { target },
+      '/lorebook': { target },
     },
   },
 });

@@ -62,6 +62,8 @@ import {
   speciesUsesMax,
   syncSpeciesSpells,
   SPECIES_SPELL_ABILITIES,
+  applyBackground,
+  findBackground,
   warlockLevel,
   wildShapeMax,
   spellAttackBonus,
@@ -88,6 +90,7 @@ import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { SUBCLASS_DEFS } from '../subclassData.js';
 import { SPECIES_DEFS } from '../speciesData.js';
+import { BACKGROUND_DEFS } from '../backgroundData.js';
 import { FormulaHint } from './FormulaHint.js';
 import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
@@ -558,6 +561,23 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 ))}
               </select>
             )}
+            {BACKGROUND_DEFS.length > 0 && (
+              <select
+                className="bt-background"
+                title="Background — đổi ở đây sẽ đổi luôn skill proficiency và Origin Feat được cấp"
+                value={draft.background ?? ''}
+                onChange={(e) =>
+                  commit(applyBackground(draft, findBackground(BACKGROUND_DEFS, e.target.value), nanoIdish))
+                }
+              >
+                <option value="">— Background —</option>
+                {BACKGROUND_DEFS.map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <label>
               Cấp
               <input
@@ -791,6 +811,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
       <ClassFeatures draft={draft} commit={commit} />
       <SpeciesFeatures draft={draft} commit={commit} />
+      <BackgroundFeatures draft={draft} />
       <SubclassFeatures draft={draft} commit={commit} />
 
       {/* actions economy */}
@@ -1727,6 +1748,62 @@ function SpeciesFeatures({ draft, commit }: EditorCtx) {
           );
         })}
       </div>
+    </details>
+  );
+}
+
+/**
+ * Chosen background's granted Origin Feat + reference info (skills/tools/equipment/story
+ * threads), plus a teaser for its paired Thread of Fate. Read-only — the feat itself already
+ * lives (editable) in the Feats tab via `applyBackground`; this is just the "why". Only the
+ * thread's name + one-line goal are shown here (never the touchpoints — those are DM-only
+ * spoilers, see the Lore Book's "🧵 Fate Weaving" tab).
+ */
+function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
+  const def = findBackground(BACKGROUND_DEFS, draft.background);
+  if (!def) return null;
+  return (
+    <details className="class-features background-features">
+      <summary>Background — {def.name}</summary>
+      <p className="hint">Chỉ số: {def.abilityScores}</p>
+      <div className="cf-list">
+        <div className="cf-row">
+          <span className="cf-lvl">•</span>
+          <span className="cf-body">
+            <strong>{def.featName}.</strong> {def.featText}
+          </span>
+        </div>
+      </div>
+      {def.toolOrLanguage && <p className="hint">Thành thạo: {def.toolOrLanguage}</p>}
+      <p className="hint">
+        Trang bị: (A) {def.equipmentA} — hoặc (B) {def.equipmentB}
+      </p>
+      {def.threadOfFate && (
+        <p className="hint">
+          🧵 Thread of Fate: <b>{def.threadOfFate}</b>
+          {def.threadGoal ? ` — ${def.threadGoal}` : ''}
+        </p>
+      )}
+      {(def.storyThreads?.length ?? 0) > 0 && (
+        <details>
+          <summary>Gợi ý cốt truyện (1d6)</summary>
+          <ul className="bg-flavor-list">
+            {def.storyThreads!.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {(def.trinkets?.length ?? 0) > 0 && (
+        <details>
+          <summary>Vật kỷ niệm khởi đầu (1d6)</summary>
+          <ul className="bg-flavor-list">
+            {def.trinkets!.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </details>
+      )}
     </details>
   );
 }
