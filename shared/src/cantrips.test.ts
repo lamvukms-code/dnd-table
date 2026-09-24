@@ -109,14 +109,31 @@ describe('cantripsForSheet', () => {
 });
 
 describe('rescaleCantripSpell', () => {
-  it('re-scales a known cantrip to the current level, else null', () => {
-    const s = sheet({ className: 'Warlock', level: 17 });
-    const sp = spellFromCantrip(findCantrip('Eldritch Blast')!, sheet({ className: 'Warlock', level: 1 }), 'x4');
+  it('re-scales a normal damage cantrip (more dice) to the current level, else null', () => {
+    const s = sheet({ className: 'Wizard', level: 17 });
+    const sp = spellFromCantrip(findCantrip('Fire Bolt')!, sheet({ className: 'Wizard', level: 1 }), 'x4');
     expect(sp.damage![0].dice).toBe('1d10');
     expect(rescaleCantripSpell(sp, s)).toEqual({
-      damage: [{ dice: '4d10', type: 'force', label: 'Eldritch Blast' }],
+      damage: [{ dice: '4d10', type: 'fire', label: 'Fire Bolt' }],
+      beams: undefined,
     });
     expect(rescaleCantripSpell({ ...sp, name: 'Guidance' }, s)).toBeNull();
+  });
+
+  it('Eldritch Blast (multiAttack) scales beam count, never the die itself', () => {
+    const lvl1 = sheet({ className: 'Warlock', level: 1 });
+    const lvl17 = sheet({ className: 'Warlock', level: 17 });
+    const sp = spellFromCantrip(findCantrip('Eldritch Blast')!, lvl1, 'x4');
+    expect(sp.damage![0].dice).toBe('1d10');
+    expect(sp.beams).toBe(1); // 1 beam at level 1 — same as a normal single attack roll
+    expect(rescaleCantripSpell(sp, lvl17)).toEqual({
+      damage: [{ dice: '1d10', type: 'force', label: 'Eldritch Blast' }],
+      beams: 4,
+    });
+    // Rescaling straight from a level-17 sheet also sets beams (not just the rescale path).
+    const sp17 = spellFromCantrip(findCantrip('Eldritch Blast')!, lvl17, 'x5');
+    expect(sp17.damage![0].dice).toBe('1d10');
+    expect(sp17.beams).toBe(4);
   });
 });
 

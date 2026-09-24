@@ -468,6 +468,15 @@ export interface Spell {
   };
   /** 'attack' / 'save' / 'damage' spells: damage parts (on a hit / failed save / always). */
   damage?: DamagePart[];
+  /**
+   * 2024 Eldritch Blast (and any future cantrip with the same scaling shape): instead of bigger
+   * damage dice at higher levels, you get more separate beams — each its own attack roll, each
+   * dealing the base `damage` dice. Set by `spellFromCantrip`/`rescaleCantripSpell` from
+   * `CantripDef.multiAttack` + `cantripTier(level)`. Undefined/1 = a normal single attack roll.
+   * All beams fire at the same clicked target — a different target per beam is still done by
+   * hand (re-cast, or a manual roll).
+   */
+  beams?: number;
   /** 'heal' spells: healing dice; the spellcasting ability modifier is added automatically. */
   heal?: string;
   /** 'rider' spells (Hex, Hunter's Mark): + damage when the caster hits the target. */

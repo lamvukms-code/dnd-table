@@ -617,16 +617,22 @@ export const useStore = create<StoreState>((set, get) => {
         return;
       }
       if (spell.castKind === 'attack') {
-        await get().attackRoll({
-          label: `${label} (phép)`,
-          attackBonus: atkBonus,
-          rollMode: 'normal',
-          damageParts: spellAttackParts(sheet, spell.damage, spell),
-          targetTokenId,
-          attackerSheetId: sheetId,
-          attackerTokenId: sheet.tokenId,
-          attackRange: inferAttackRange(spell.range),
-        });
+        // Eldritch Blast (2024): more levels = more separate beams (each its own attack roll),
+        // not bigger dice — `spell.beams` is set by spellFromCantrip/rescaleCantripSpell.
+        // Casting is still one Action; the beams themselves don't spend extra economy.
+        const beams = spell.beams && spell.beams > 1 ? spell.beams : 1;
+        for (let i = 0; i < beams; i++) {
+          await get().attackRoll({
+            label: beams > 1 ? `${label} (phép, tia ${i + 1}/${beams})` : `${label} (phép)`,
+            attackBonus: atkBonus,
+            rollMode: 'normal',
+            damageParts: spellAttackParts(sheet, spell.damage, spell),
+            targetTokenId,
+            attackerSheetId: sheetId,
+            attackerTokenId: sheet.tokenId,
+            attackRange: inferAttackRange(spell.range),
+          });
+        }
         return;
       }
       // utility: temp HP (False Life, Armor of Agathys) and/or a plain effect (Mage Armor, Shield of Faith…)

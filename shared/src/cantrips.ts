@@ -34,6 +34,12 @@ export interface CantripDef {
   actionType?: 'action' | 'bonus' | 'reaction';
   /** Cantrips: one die ('1d10'), scaled by count at character levels 5 / 11 / 17. */
   damageDie?: string;
+  /**
+   * 2024 Eldritch Blast's scaling shape: `damageDie` stays fixed and the character instead gets
+   * `cantripTier(level)` separate beams (each its own attack roll) at levels 5 / 11 / 17, instead
+   * of the usual "more dice on one roll" scaling every other damage cantrip uses.
+   */
+  multiAttack?: boolean;
   /** Leveled spells: the fixed base damage ('3d6'); upcast is done by hand. */
   fixedDamage?: string;
   damageType?: string;
@@ -113,8 +119,8 @@ const COMBAT: CantripDef[] = [
     'Đòn đánh phép tầm 120ft. Trúng: 1d10 lửa (2d10 cấp 5 · 3d10 cấp 11 · 4d10 cấp 17). Bắt cháy vật không ai giữ.',
     { combat: true, castKind: 'attack', damageDie: '1d10', damageType: 'fire', range: '120ft' }),
   C('eldritch-blast', 'Eldritch Blast', 'Evocation', ['warlock'],
-    'Đòn đánh phép tầm 120ft, 1d10 lực mỗi tia. Thêm tia ở cấp 5/11/17 (app gộp thành 2d10/3d10/4d10 — muốn bắn nhiều mục tiêu thì tung tay từng tia). Có Agonizing Blast? Tích ô "⚡ Agonizing Blast" ở phép này để tự cộng CHA mod vào sát thương.',
-    { combat: true, castKind: 'attack', damageDie: '1d10', damageType: 'force', range: '120ft' }),
+    'Đòn đánh phép tầm 120ft, 1d10 lực mỗi tia — thêm tia (không thêm dice) ở cấp 5/11/17: 2/3/4 tia, mỗi tia tự roll tấn công riêng vào cùng 1 mục tiêu khi bấm Cast. Muốn chia tia sang mục tiêu khác thì tự roll tay. Có Agonizing Blast? Tích ô "⚡ Agonizing Blast" ở phép này để tự cộng CHA mod vào sát thương (mỗi tia).',
+    { combat: true, castKind: 'attack', damageDie: '1d10', damageType: 'force', range: '120ft', multiAttack: true }),
   C('ray-of-frost', 'Ray of Frost', 'Evocation', ['sorcerer', 'wizard'],
     'Đòn đánh phép tầm 60ft. Trúng: 1d8 băng và tốc độ mục tiêu −10ft tới đầu lượt sau của bạn.',
     { combat: true, castKind: 'attack', damageDie: '1d8', damageType: 'cold', range: '60ft' }),
@@ -937,12 +943,15 @@ export function castingClassFor(def: CantripDef, sheet: CharacterSheet): string 
   return hit?.name;
 }
 
-/** The base damage parts for a spell def, scaled for cantrips / fixed for leveled. */
+/** The base damage parts for a spell def, scaled for cantrips / fixed for leveled. `multiAttack`
+ *  cantrips (Eldritch Blast) never scale the die count here — they scale beam count instead. */
 function defDamageParts(def: CantripDef, sheet: CharacterSheet): DamagePart[] | undefined {
   let dice = def.fixedDamage
     ? def.fixedDamage
     : def.damageDie
-      ? scaleCantripDie(def.damageDie, totalLevelOf(sheet))
+      ? def.multiAttack
+        ? def.damageDie
+        : scaleCantripDie(def.damageDie, totalLevelOf(sheet))
       : undefined;
   if (!dice) return undefined;
   if (def.addSpellMod) {
@@ -968,6 +977,7 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
     castKind: def.castKind,
     actionType: def.actionType ?? 'action',
     damage: wired ? damage : undefined,
+    beams: def.multiAttack ? cantripTier(totalLevelOf(sheet)) : undefined,
     heal: def.castKind === 'heal' ? def.heal : undefined,
     rider: def.castKind === 'rider' ? def.rider : undefined,
     save:
@@ -986,10 +996,14 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
   };
 }
 
-/** Re-scale a cantrip spell's damage dice to the sheet's current level, or null. */
+/** Re-scale a cantrip spell's damage dice (and beam count, for Eldritch Blast) to the sheet's
+ *  current level, or null. */
 export function rescaleCantripSpell(sp: Spell, sheet: CharacterSheet): Partial<Spell> | null {
   const def = findCantrip(sp.name);
   if (!def || !def.damageDie) return null;
-  const scaled = scaleCantripDie(def.damageDie, totalLevelOf(sheet));
-  return { damage: [{ dice: scaled, type: def.damageType ?? '', label: def.name }] };
+  const scaled = def.multiAttack ? def.damageDie : scaleCantripDie(def.damageDie, totalLevelOf(sheet));
+  return {
+    damage: [{ dice: scaled, type: def.damageType ?? '', label: def.name }],
+    beams: def.multiAttack ? cantripTier(totalLevelOf(sheet)) : undefined,
+  };
 }
