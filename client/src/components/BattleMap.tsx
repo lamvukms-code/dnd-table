@@ -25,6 +25,7 @@ import {
   type CharacterSheet,
   type ConditionType,
   type CoverLevel,
+  type MapZone,
   type Token,
   type TokenSize,
 } from '@dnd-table/shared';
@@ -34,6 +35,7 @@ import { statblockFromToken } from '../statblock.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
+import { ZonePopup, type ZonePopupState } from './ZonePopup.js';
 
 const CELL = 56; // display px per grid cell
 
@@ -64,6 +66,7 @@ export function BattleMap() {
   const [aoeAim, setAoeAim] = useState<{ x: number; y: number } | null>(null);
   const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
   const { map, tokens, diceTray } = room;
+  const zones = room.zones ?? [];
   const sheets = room.sheets;
 
   // --- movement tracker (active combatant) ---
@@ -133,6 +136,12 @@ export function BattleMap() {
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  // --- DM zone tool: click-drag on empty board to draw a room/area rectangle, click an
+  //     existing one to view its read-aloud/DM text (see ZonePopup). ---
+  const [zoneDraw, setZoneDraw] = useState(false);
+  const [drawRect, setDrawRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const zoneDragStart = useRef<{ x: number; y: number } | null>(null);
+  const [zonePopup, setZonePopup] = useState<ZonePopupState>(null);
 
   const selectedToken = tokens.find((t) => t.id === selected) ?? null;
 
@@ -184,7 +193,31 @@ export function BattleMap() {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
+  function onBoardPointerDown(e: React.PointerEvent) {
+    if (!zoneDraw || !isDm) return;
+    if (e.target !== e.currentTarget || !boardRef.current) return; // only start on empty board
+    const rect = boardRef.current.getBoundingClientRect();
+    const gx = (e.clientX - rect.left) / CELL;
+    const gy = (e.clientY - rect.top) / CELL;
+    zoneDragStart.current = { x: gx, y: gy };
+    setDrawRect({ x: gx, y: gy, w: 0, h: 0 });
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
   function onPointerMove(e: React.PointerEvent) {
+    if (zoneDragStart.current && boardRef.current) {
+      const rect = boardRef.current.getBoundingClientRect();
+      const gx = (e.clientX - rect.left) / CELL;
+      const gy = (e.clientY - rect.top) / CELL;
+      const start = zoneDragStart.current;
+      setDrawRect({
+        x: Math.min(start.x, gx),
+        y: Math.min(start.y, gy),
+        w: Math.abs(gx - start.x),
+        h: Math.abs(gy - start.y),
+      });
+      return;
+    }
     if (aoe && boardRef.current) {
       const r = boardRef.current.getBoundingClientRect();
       setAoeAim({ x: (e.clientX - r.left) / CELL, y: (e.clientY - r.top) / CELL });
@@ -200,6 +233,21 @@ export function BattleMap() {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (zoneDragStart.current) {
+      zoneDragStart.current = null;
+      const r = drawRect;
+      setDrawRect(null);
+      if (r && r.w > 0.3 && r.h > 0.3) {
+        setZonePopup({
+          kind: 'new',
+          x: Math.round(r.x),
+          y: Math.round(r.y),
+          w: Math.max(1, Math.round(r.w)),
+          h: Math.max(1, Math.round(r.h)),
+        });
+      }
+      return;
+    }
     setGhost(null);
     if (!drag.current) return;
     const token = tokens.find((t) => t.id === drag.current!.id);
@@ -257,6 +305,15 @@ export function BattleMap() {
             title="Chọn nhiều token để tung initiative"
           >
             {groupMode ? '✓ Đang chọn nhóm' : '⊕ Chọn nhóm init'}
+          </button>
+        )}
+        {isDm && (
+          <button
+            className={`add-token-fab ${zoneDraw ? 'on' : ''}`}
+            onClick={() => setZoneDraw((v) => !v)}
+            title="Bấm-kéo lên bản đồ để vẽ 1 vùng phòng/khu vực; bấm vào vùng đã vẽ (khi tắt chế độ này) để xem mô tả"
+          >
+            {zoneDraw ? '✓ Đang vẽ vùng' : '📐 Vẽ vùng'}
           </button>
         )}
       </div>
@@ -367,6 +424,7 @@ export function BattleMap() {
             backgroundImage: map.backgroundUrl ? `url(${map.backgroundUrl})` : undefined,
             backgroundSize: '100% 100%',
           }}
+          onPointerDown={onBoardPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerDownCapture={(e) => {
@@ -466,6 +524,46 @@ export function BattleMap() {
             />
           )}
 
+          {zones.map((z) => (
+            <div
+              key={z.id}
+              className="zone-rect"
+              style={{
+                left: z.x * CELL,
+                top: z.y * CELL,
+                width: z.w * CELL,
+                height: z.h * CELL,
+                borderColor: z.color,
+                background: `${z.color}22`,
+                pointerEvents: zoneDraw ? 'none' : 'auto',
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (castingSpell || castingMonsterSpell || groupMode || aoe) return;
+                setZonePopup({ kind: 'existing', zone: z });
+              }}
+              title={`${z.code ? z.code + ' — ' : ''}${z.name}`}
+            >
+              {(z.code || z.name) && (
+                <span className="zone-chip" style={{ background: z.color }}>
+                  {z.code || z.name}
+                </span>
+              )}
+            </div>
+          ))}
+
+          {drawRect && (
+            <div
+              className="zone-draw-rect"
+              style={{
+                left: drawRect.x * CELL,
+                top: drawRect.y * CELL,
+                width: drawRect.w * CELL,
+                height: drawRect.h * CELL,
+              }}
+            />
+          )}
+
           {tokens
             .filter((t) => isDm || !t.hidden)
             .map((t) => {
@@ -560,6 +658,22 @@ export function BattleMap() {
           onClose={() => setSelected(null)}
           inGroup={groupSel.has(selectedToken.id)}
           onToggleGroup={() => toggleGroup(selectedToken.id)}
+        />
+      )}
+
+      {isDm && (
+        <ZonePopup
+          key={zonePopup?.kind === 'existing' ? zonePopup.zone.id : zonePopup?.kind === 'new' ? 'new' : 'none'}
+          state={zonePopup}
+          onClose={() => setZonePopup(null)}
+          onSave={(zone: MapZone) => {
+            send({ t: 'zoneUpsert', zone });
+            setZonePopup(null);
+          }}
+          onDelete={(id: string) => {
+            send({ t: 'zoneRemove', id });
+            setZonePopup(null);
+          }}
         />
       )}
     </div>

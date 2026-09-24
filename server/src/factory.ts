@@ -20,7 +20,13 @@ export function defaultMap(name = 'Bản đồ mới'): RoomState['map'] {
 }
 
 export function createRoomState(): RoomState {
-  const scene = { id: nanoid(8), name: 'Cảnh 1', map: defaultMap(), tokens: [] as RoomState['tokens'] };
+  const scene = {
+    id: nanoid(8),
+    name: 'Cảnh 1',
+    map: defaultMap(),
+    tokens: [] as RoomState['tokens'],
+    zones: [] as RoomState['zones'],
+  };
   return {
     version: SCHEMA_VERSION,
     rev: 0,
@@ -30,6 +36,7 @@ export function createRoomState(): RoomState {
     activeSceneId: scene.id,
     map: scene.map,
     tokens: scene.tokens,
+    zones: scene.zones,
     initiative: { entries: [], round: 1, turnIndex: 0, running: false },
     sheets: [],
     rollLog: [],

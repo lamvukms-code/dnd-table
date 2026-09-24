@@ -10,6 +10,7 @@ import type {
   ExternalRoll,
   HomebrewEntry,
   InitiativeEntry,
+  MapZone,
   RoomState,
   Statblock,
   Token,
@@ -152,7 +153,10 @@ export type ClientAction =
   | { t: 'bestiaryReplaceAll'; entries: Statblock[] }
   | { t: 'homebrewUpsert'; entry: HomebrewEntry }
   | { t: 'homebrewRemove'; id: string }
-  | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean };
+  | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean }
+  // map zones (DM only) — a drawn region on the active scene's map + its read-aloud/DM text
+  | { t: 'zoneUpsert'; zone: MapZone }
+  | { t: 'zoneRemove'; id: string };
 
 /** Events sent server -> client. */
 export type ServerEvent =

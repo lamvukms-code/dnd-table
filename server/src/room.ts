@@ -76,8 +76,8 @@ export class Room {
           migrated.participants.forEach((p) => (p.connected = false));
           migrated.sheets = migrated.sheets.map(normalizeSheet);
           migrated.homebrew ??= []; // added after schema 6 — no version bump needed, just default it in
-          syncSceneAliases(migrated);
-          for (const scene of migrated.scenes) {
+          for (const scene of migrated.scenes ?? []) {
+            scene.zones ??= []; // added after schema 6 — default before aliasing, so `state.zones` isn't left undefined
             scene.tokens.forEach((t) => {
               t.effects ??= [];
               t.concentration ??= null;
@@ -85,6 +85,7 @@ export class Room {
               t.extraMove ??= 0;
             });
           }
+          syncSceneAliases(migrated);
           return migrated;
         }
         console.warn(`Room schema ${raw.version} unsupported; starting fresh.`);
@@ -111,12 +112,13 @@ export class Room {
   save(): void {
     try {
       mkdirSync(dirname(this.file), { recursive: true });
-      // room.json never carries the bestiary (its own file); `map` / `tokens`
+      // room.json never carries the bestiary (its own file); `map` / `tokens` / `zones`
       // are just live aliases of the active scene, so they're not persisted either.
-      const { bestiary, map, tokens, ...room } = this.state;
+      const { bestiary, map, tokens, zones, ...room } = this.state;
       void bestiary;
       void map;
       void tokens;
+      void zones;
       writeFileSync(this.file, JSON.stringify(room, null, 2));
     } catch (err) {
       console.error('Failed to persist room:', err);
@@ -959,6 +961,7 @@ export class Room {
           name: action.name?.trim() || `Cảnh ${this.state.scenes.length + 1}`,
           map: defaultMap(action.name?.trim() || 'Bản đồ mới'),
           tokens: [],
+          zones: [],
         };
         this.state.scenes.push(scene);
         this.state.activeSceneId = scene.id;
@@ -994,6 +997,7 @@ export class Room {
           name: `${src.name} (bản sao)`,
           map: { ...src.map },
           tokens: src.tokens.map((t) => ({ ...JSON.parse(JSON.stringify(t)), id: nanoid(8) })),
+          zones: src.zones.map((z) => ({ ...z, id: nanoid(8) })),
         };
         this.state.scenes.push(copy);
         this.touch();
@@ -1129,6 +1133,24 @@ export class Room {
           (e) => e.tokenId !== action.id,
         );
         for (const sh of this.state.sheets) if (sh.tokenId === action.id) sh.tokenId = undefined;
+        this.touch();
+        break;
+      }
+
+      case 'zoneUpsert': {
+        if (!isDm) return 'Chỉ DM được sửa vùng bản đồ';
+        const idx = this.state.zones.findIndex((z) => z.id === action.zone.id);
+        // Mutate in place (index assign / push) so the active-scene alias stays valid.
+        if (idx >= 0) this.state.zones[idx] = action.zone;
+        else this.state.zones.push(action.zone);
+        this.touch();
+        break;
+      }
+
+      case 'zoneRemove': {
+        if (!isDm) return 'Chỉ DM được xóa vùng bản đồ';
+        const idx = this.state.zones.findIndex((z) => z.id === action.id);
+        if (idx >= 0) this.state.zones.splice(idx, 1);
         this.touch();
         break;
       }
@@ -1602,6 +1624,7 @@ function migrateRoom(raw: RoomState): RoomState | null {
       name: legacyMap.name || 'Cảnh 1',
       map: legacyMap,
       tokens: (s.tokens as RoomState['tokens']) ?? [],
+      zones: [] as RoomState['zones'],
     };
     s.scenes = [scene];
     s.activeSceneId = scene.id;
@@ -1614,7 +1637,7 @@ function migrateRoom(raw: RoomState): RoomState | null {
 /** Point `state.map` / `state.tokens` at the active scene's live objects. */
 function syncSceneAliases(state: RoomState): void {
   if (!state.scenes || state.scenes.length === 0) {
-    const scene = { id: nanoid(8), name: 'Cảnh 1', map: defaultMap(), tokens: [] };
+    const scene = { id: nanoid(8), name: 'Cảnh 1', map: defaultMap(), tokens: [], zones: [] };
     state.scenes = [scene];
     state.activeSceneId = scene.id;
   }
@@ -1623,6 +1646,7 @@ function syncSceneAliases(state: RoomState): void {
   state.activeSceneId = active.id;
   state.map = active.map;
   state.tokens = active.tokens;
+  state.zones = active.zones;
 }
 
 function initNotation(mod: number): string {

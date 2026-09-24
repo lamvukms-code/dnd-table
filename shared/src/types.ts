@@ -643,6 +643,25 @@ export interface BattleMap {
 }
 
 /**
+ * A DM-drawn rectangular region on a scene's map — e.g. "V4: Mayor's Home and Office" on the
+ * Wickermoor Village map. Clicking it shows `description` (read-aloud text / DM notes) as a
+ * quick-reference popup, so the DM doesn't have to flip through the book mid-session. DM-only:
+ * never sent to player clients (stripped the same way `bestiary` is, see `RoomState.zones`).
+ */
+export interface MapZone {
+  id: string;
+  name: string; // "Mayor's Home and Office"
+  code?: string; // the book's area label, e.g. "V4" — shown as a small chip on the map
+  x: number; // grid cell coords, top-left corner (can be fractional)
+  y: number;
+  w: number; // width, in grid cells
+  h: number; // height, in grid cells
+  color: string;
+  description: string;
+  source?: string; // attribution, e.g. "The Crooked Moon — chương 11"
+}
+
+/**
  * A saved scene: its own battle map + token layout. Switching the active scene
  * only re-points `RoomState.map` / `RoomState.tokens`; character sheets and the
  * bestiary are room-global and never touched by a scene change.
@@ -652,6 +671,7 @@ export interface Scene {
   name: string;
   map: BattleMap;
   tokens: Token[];
+  zones: MapZone[];
 }
 
 export interface InitiativeEntry {
@@ -750,6 +770,10 @@ export interface RoomState {
   map: BattleMap;
   /** The active scene's tokens — same array as `scenes[active].tokens`. */
   tokens: Token[];
+  /** The active scene's DM-only map zones — same array as `scenes[active].zones`. Stripped for
+   *  players the same way `bestiary` is (see `index.ts`'s per-participant state filtering) since
+   *  the description text is often spoiler-y (traps, secrets, DCs). */
+  zones: MapZone[];
   initiative: Initiative;
   sheets: CharacterSheet[];
   rollLog: RollLogEntry[]; // capped, newest last
