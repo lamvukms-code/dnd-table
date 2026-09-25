@@ -37,6 +37,7 @@ import {
   pendingRollBonus,
   monkFocusMax,
   monkLevel,
+  monkBonusUnarmedMax,
   proficiencyByLevel,
   rageDamageBonus,
   rageMax,
@@ -891,15 +892,19 @@ function BasicTab({ draft, commit }: EditorCtx) {
             <div key={type} className="action-group">
               <span className="ag-label">{ACTION_LABEL[type]}</span>
               {rows.map((a) => {
+                const flurryActive = Boolean(linkedToken?.turnUsed?.monkFlurryActive);
                 const trySpend = (attack: boolean) => {
                   const kind = economyKindOf(a.actionType);
-                  return kind ? spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks: attacksPerAction(draft) }) : true;
+                  if (!kind) return true;
+                  const maxAttacks =
+                    a.id === 'monk-unarmed-bonus' ? monkBonusUnarmedMax(draft, flurryActive) : attacksPerAction(draft);
+                  return spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks });
                 };
                 return (
                 <ActionRow
                   key={a.id}
                   action={a}
-                  parts={actionDamageParts(draft, a, linkedToken?.effects)}
+                  parts={actionDamageParts(draft, a, linkedToken?.effects, { monkFlurryActive: flurryActive })}
                   onSpend={trySpend}
                   sheetName={draft.name}
                   attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
@@ -1445,6 +1450,7 @@ function FocusPips({
 function ClassFeatures({ draft, commit }: EditorCtx) {
   const send = useStore((s) => s.send);
   const room = useStore((s) => s.room);
+  const linkedToken = room?.tokens.find((t) => t.id === draft.tokenId);
   const activateWoodWose = useStore((s) => s.activateWoodWose);
   const spendEconomy = useStore((s) => s.spendEconomy);
   const spendTurn = (kind: 'action' | 'bonus' | 'reaction') => spendEconomy(draft.tokenId || undefined, kind);
@@ -1466,6 +1472,17 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const fMax = monkFocusMax(draft);
   const fUsed = Math.min(draft.focusUsed ?? 0, fMax);
   const spendFocus = (n = 1) => set({ focusUsed: Math.min(fMax, fUsed + n) });
+  const flurryActive = Boolean(linkedToken?.turnUsed?.monkFlurryActive);
+  // Flurry of Blows: spend 1 Focus Point to raise this turn's Bonus Action Unarmed Strike (see
+  // `allActions`'s 'monk-unarmed-bonus' row, in the action list below) from 1 free strike to 2 (3
+  // from level 10). The strikes themselves are rolled from that row, same as any other attack —
+  // this button only pays the cost and flags the turn; `monkFlurryActive` clears automatically
+  // with the rest of `turnUsed` when this token's next turn starts.
+  const spendFlurry = () => {
+    if (fUsed >= fMax) return;
+    spendFocus();
+    if (linkedToken) send({ t: 'setTurnUsed', tokenId: linkedToken.id, patch: { monkFlurryActive: true } });
+  };
 
   // Circle of the Old Ways — Wood Wose (SRD-independent local subclass text): 1 Wild Shape, Bonus Action (or while
   // casting Shillelagh), 10 minutes. The effect itself (Bark Bulwark AC, Oaken Resolve, Rampant Growth temp HP at the
@@ -1523,9 +1540,13 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
             <>
               <span className="cf-label">Focus:</span>
               <FocusPips max={fMax} used={fUsed} onChange={(u) => set({ focusUsed: u })} />
-              <button className="cf-btn" disabled={fUsed >= fMax} onClick={() => spendFocus()}
-                title="Thêm 2 đòn không vũ khí (3 từ cấp 10)">
-                Flurry of Blows −1
+              <button
+                className={`cf-btn ${flurryActive ? 'on' : ''}`}
+                disabled={fUsed >= fMax || flurryActive}
+                onClick={spendFlurry}
+                title="Nâng Đánh không vũ khí (Bonus Action) trong danh sách Action bên dưới lên 2 đòn (3 từ cấp 10), thay vì 1 đòn miễn phí"
+              >
+                {flurryActive ? '✓ Flurry đang bật' : 'Flurry of Blows −1'}
               </button>
               <button className="cf-btn" disabled={fUsed >= fMax} onClick={() => spendFocus()}
                 title="Disengage bonus action">

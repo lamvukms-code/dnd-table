@@ -58,6 +58,19 @@ export function spendEconomy(
     cur.action = true;
     return { used: cur, warning };
   }
+  // Same idea as the Extra Attack branch above, but for a Bonus Action attack row that can swing
+  // more than once in one go — the Monk's Flurry of Blows (2 Unarmed Strikes, 3 from level 10)
+  // instead of the single free Martial Arts strike. A separate counter from `attacks` since it's
+  // a different slice of the turn's economy.
+  if (opts?.attack && kind === 'bonus') {
+    const n = (cur.bonusAttacks ?? 0) + 1;
+    const max = opts.maxAttacks ?? 1;
+    if (cur.bonus && !cur.bonusAttacks) warning = 'Bonus Action lượt này đã dùng cho việc khác';
+    else if (n > max) warning = `Đã đủ ${max} đòn từ Bonus Action này`;
+    cur.bonusAttacks = n;
+    cur.bonus = true;
+    return { used: cur, warning };
+  }
   if (cur[kind]) {
     warning = kind === 'action' ? 'Action lượt này đã dùng' : kind === 'bonus' ? 'Bonus Action lượt này đã dùng' : 'Reaction đã dùng (hồi ở đầu lượt của bạn)';
   }

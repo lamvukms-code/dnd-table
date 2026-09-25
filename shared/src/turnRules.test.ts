@@ -59,6 +59,19 @@ describe('action economy', () => {
     // the Action was already spent on a spell → an attack warns
     expect(spendEconomy({ action: true }, 'action', { attack: true, maxAttacks: 2 }).warning).toMatch(/Action/);
   });
+  it('Bonus Action attacks (Monk Flurry of Blows) count separately from Extra Attack', () => {
+    let u = spendEconomy(undefined, 'bonus', { attack: true, maxAttacks: 2 });
+    expect(u.warning).toBeUndefined();
+    expect(u.used).toMatchObject({ bonus: true, bonusAttacks: 1 });
+    u = spendEconomy(u.used, 'bonus', { attack: true, maxAttacks: 2 });
+    expect(u.warning).toBeUndefined();
+    expect(u.used.bonusAttacks).toBe(2);
+    expect(spendEconomy(u.used, 'bonus', { attack: true, maxAttacks: 2 }).warning).toMatch(/Bonus Action/);
+    // the Bonus Action was already spent on something else → an attack warns, and the plain
+    // `attacks` (Extra Attack) counter is untouched by bonus-action attacks.
+    expect(spendEconomy({ bonus: true }, 'bonus', { attack: true, maxAttacks: 2 }).warning).toMatch(/Bonus Action/);
+    expect(u.used.attacks).toBeUndefined();
+  });
   it('Extra Attack does not stack across classes; Fighter scales', () => {
     const mc = (classes: { name: string; level: number }[]) => sheet({ classes, level: classes.reduce((n, c) => n + c.level, 0) });
     expect(attacksPerAction(mc([{ name: 'Barbarian', level: 5 }, { name: 'Monk', level: 5 }]))).toBe(2);

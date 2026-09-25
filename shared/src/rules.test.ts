@@ -23,6 +23,10 @@ import {
   emptyCurrency,
   druidLevel,
   martialArtsDie,
+  isPestilentHazeMonk,
+  isUnarmedAction,
+  monkBonusUnarmedAction,
+  monkBonusUnarmedMax,
   mergeDefenses,
   ATTUNEMENT_SLOTS,
   attackKindOf,
@@ -544,6 +548,41 @@ describe('class features (Rogue / Barbarian)', () => {
     expect(a.attackBonus).toBe(3 + 3); // DEX +3, prof +3
     expect(a.damage).toBe('1d8+3');
     expect(derivedClassFeatures(s).some((f) => f.id === 'monk-stunning-strike')).toBe(true);
+  });
+
+  it('Monk: Bonus Action Unarmed Strike row exists, caps at 1 free / 2 Flurry / 3 from level 10', () => {
+    const s5 = sheet({ className: 'Monk', level: 5 });
+    const s10 = sheet({ className: 'Monk', level: 10 });
+    const bonusRow = monkBonusUnarmedAction(s5)!;
+    expect(bonusRow.id).toBe('monk-unarmed-bonus');
+    expect(bonusRow.actionType).toBe('bonus');
+    expect(isUnarmedAction(bonusRow)).toBe(true);
+    expect(allActions(s5).some((a) => a.id === 'monk-unarmed-bonus')).toBe(true);
+    expect(monkBonusUnarmedMax(s5, false)).toBe(1); // free Martial Arts strike, no Focus spent
+    expect(monkBonusUnarmedMax(s5, true)).toBe(2); // Flurry of Blows below level 10
+    expect(monkBonusUnarmedMax(s10, true)).toBe(3); // Heightened Focus: Flurry hits 3 from level 10
+    // Non-monks don't get the row at all.
+    expect(allActions(sheet({ className: 'Fighter', level: 5 })).some((a) => a.id === 'monk-unarmed-bonus')).toBe(false);
+  });
+
+  it('Warrior of the Pestilent Haze: Claws of Pestilence adds Necrotic only on the Flurry bonus row while Flurry is active', () => {
+    const pestilent = sheet({ className: 'Monk', level: 3, subclass: 'Warrior of the Pestilent Haze' });
+    const other = sheet({ className: 'Monk', level: 3, subclass: 'Warrior of the Open Hand' });
+    expect(isPestilentHazeMonk(pestilent)).toBe(true);
+    expect(isPestilentHazeMonk(other)).toBe(false);
+
+    const bonusRow = monkBonusUnarmedAction(pestilent)!;
+    const withFlurry = actionDamageParts(pestilent, bonusRow, undefined, { monkFlurryActive: true });
+    expect(withFlurry).toContainEqual({ dice: martialArtsDie(pestilent), type: 'necrotic', label: 'Claws of Pestilence' });
+
+    // Not applied to the free strike (Flurry not active this turn)...
+    expect(actionDamageParts(pestilent, bonusRow, undefined, { monkFlurryActive: false }).some((p) => p.label === 'Claws of Pestilence')).toBe(false);
+    // ...nor to the Attack-action Unarmed Strike row, even with Flurry active...
+    const actionRow = monkUnarmedAction(pestilent)!;
+    expect(actionDamageParts(pestilent, actionRow, undefined, { monkFlurryActive: true }).some((p) => p.label === 'Claws of Pestilence')).toBe(false);
+    // ...nor to a different subclass.
+    const otherBonusRow = monkBonusUnarmedAction(other)!;
+    expect(actionDamageParts(other, otherBonusRow, undefined, { monkFlurryActive: true }).some((p) => p.label === 'Claws of Pestilence')).toBe(false);
   });
 
   it('Warlock features derive; short rest clears Monk focus', () => {

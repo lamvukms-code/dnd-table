@@ -272,9 +272,10 @@ export function unarmedAction(sheet: CharacterSheet): SheetAction {
  * apply. Explicit `action.attackKind` wins; equipped weapons are 'weapon';
  * everything else (manual rows) defaults to 'weapon' too.
  */
-/** The unarmed strike rows: the basic one everyone has, and the Monk's Martial Arts version. */
+/** The unarmed strike rows: the basic one everyone has, and the Monk's Martial Arts versions
+ *  (the Attack-action one, and the Bonus Action one — free strike or Flurry of Blows). */
 export function isUnarmedAction(action: Pick<SheetAction, 'id'>): boolean {
-  return action.id === 'unarmed' || action.id === 'monk-unarmed';
+  return action.id === 'unarmed' || action.id === 'monk-unarmed' || action.id === 'monk-unarmed-bonus';
 }
 export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
   return action.attackKind ?? 'weapon';
@@ -326,7 +327,12 @@ export function effectAttackRiders(
   );
 }
 
-export function actionDamageParts(sheet: CharacterSheet, action: SheetAction, effects?: ActiveEffect[]): DamagePart[] {
+export function actionDamageParts(
+  sheet: CharacterSheet,
+  action: SheetAction,
+  effects?: ActiveEffect[],
+  opts?: { monkFlurryActive?: boolean },
+): DamagePart[] {
   const parts: DamagePart[] = [];
   if (action.damage) parts.push({ dice: action.damage, type: action.damageType || '' });
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
@@ -351,6 +357,14 @@ export function actionDamageParts(sheet: CharacterSheet, action: SheetAction, ef
     if (sheet.sneakAttackArmed) {
       const dice = sneakAttackDice(sheet);
       if (dice > 0) parts.push({ dice: `${dice}d6`, type: primaryType, label: 'Sneak Attack' });
+    }
+    // Warrior of the Pestilent Haze (Crooked Moon, lv3) — Contagious Discipline's Claws of
+    // Pestilence: a hit landed "from Flurry of Blows" adds Necrotic damage equal to one roll of
+    // the Martial Arts die. Scoped to the Bonus Action Unarmed Strike row AND only while Flurry
+    // is active this turn (not the free single strike outside Flurry).
+    if (action.id === 'monk-unarmed-bonus' && opts?.monkFlurryActive && isPestilentHazeMonk(sheet)) {
+      const die = martialArtsDie(sheet);
+      if (die) parts.push({ dice: die, type: 'necrotic', label: 'Claws of Pestilence' });
     }
   }
   return parts;
@@ -532,6 +546,34 @@ export function monkUnarmedAction(sheet: CharacterSheet): SheetAction | null {
     source: 'weapon',
     attackKind: 'weapon',
   };
+}
+
+/**
+ * The Monk's Bonus Action Unarmed Strike row — same to-hit/damage as `monkUnarmedAction`, just
+ * flagged as a Bonus Action. Covers both RAW options for that Bonus Action: the free single
+ * strike Martial Arts always grants after the Attack action, and Flurry of Blows (spend 1 Focus
+ * Point for 2 strikes instead, 3 from level 10 — Heightened Focus) — see `monkBonusUnarmedMax`
+ * for which cap applies. One row, not two, because they're the same Bonus Action spent once;
+ * the UI/economy layer (`spendEconomy` with `attack: true`) enforces the click cap.
+ */
+export function monkBonusUnarmedAction(sheet: CharacterSheet): SheetAction | null {
+  const base = monkUnarmedAction(sheet);
+  if (!base) return null;
+  return { ...base, id: 'monk-unarmed-bonus', name: 'Đánh không vũ khí (Bonus Action)', actionType: 'bonus' };
+}
+
+/** How many times the Bonus Action Unarmed Strike row can be rolled this turn: 1 for the free
+ *  Martial Arts strike, or 2 (3 from level 10 — Heightened Focus) once Flurry of Blows is active. */
+export function monkBonusUnarmedMax(sheet: CharacterSheet, flurryActive: boolean): number {
+  if (!flurryActive) return 1;
+  return monkLevel(sheet) >= 10 ? 3 : 2;
+}
+
+/** Whether the sheet's Monk subclass is "Warrior of the Pestilent Haze" (The Crooked Moon). */
+export function isPestilentHazeMonk(sheet: CharacterSheet): boolean {
+  return sheetClasses(sheet).some(
+    (c) => (c.name ?? '').toLowerCase().includes('monk') && /pestilent haze/i.test(c.subclass ?? ''),
+  );
 }
 
 /**
@@ -979,13 +1021,16 @@ export function resolveDamageParts(
 
 /**
  * Equipped-weapon actions + an unarmed strike (Monk's Martial Arts version if a
- * Monk, else the basic 1 + STR one everyone always has) + the sheet's own actions.
+ * Monk, else the basic 1 + STR one everyone always has) + a Monk's Bonus Action
+ * Unarmed Strike (free strike, or Flurry of Blows once activated) + the sheet's own actions.
  */
 export function allActions(sheet: CharacterSheet, effects?: ActiveEffect[]): SheetAction[] {
   const unarmed = monkUnarmedAction(sheet) ?? unarmedAction(sheet);
+  const bonusUnarmed = monkBonusUnarmedAction(sheet);
   const base = [
     ...derivedActions(sheet),
     unarmed,
+    ...(bonusUnarmed ? [bonusUnarmed] : []),
     ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
   ];
   return applyWeaponImbue(sheet, base, effects);

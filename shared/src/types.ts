@@ -652,6 +652,13 @@ export interface TurnUsed {
   reaction?: boolean;
   /** Attack rolls made with the Attack action this turn (Extra Attack). */
   attacks?: number;
+  /** Attack rolls made via a Bonus Action attack row this turn — mirrors `attacks` but for the
+   *  Bonus Action (Monk's free Martial Arts Unarmed Strike, or Flurry of Blows once activated). */
+  bonusAttacks?: number;
+  /** Set for this turn once a Monk spends a Focus Point on Flurry of Blows — raises the
+   *  bonus-action Unarmed Strike's cap from 1 (the free Martial Arts strike) to 2, or 3 from
+   *  level 10 (Heightened Focus). Cleared automatically with the rest of `turnUsed`. */
+  monkFlurryActive?: boolean;
   /** Grappler feat "Punch and Grab" (2024): damage + grapple on the same Unarmed Strike hit —
    *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
    *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
