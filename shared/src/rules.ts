@@ -576,6 +576,13 @@ export function isPestilentHazeMonk(sheet: CharacterSheet): boolean {
   );
 }
 
+/** Whether the sheet's Barbarian subclass is "Path of the Experiment" (The Crooked Moon). */
+export function isExperimentBarbarian(sheet: CharacterSheet): boolean {
+  return sheetClasses(sheet).some(
+    (c) => (c.name ?? '').toLowerCase().includes('barbarian') && /path of the experiment/i.test(c.subclass ?? ''),
+  );
+}
+
 /**
  * 5e 2024 Unarmed Strike Grapple / Shove save DC: 8 + Proficiency Bonus + STR
  * modifier (a Monk may use DEX instead — we take the better of the two).

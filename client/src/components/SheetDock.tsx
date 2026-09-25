@@ -38,6 +38,8 @@ import {
   monkFocusMax,
   monkLevel,
   monkBonusUnarmedMax,
+  isExperimentBarbarian,
+  classDefaults,
   proficiencyByLevel,
   rageDamageBonus,
   rageMax,
@@ -1503,8 +1505,52 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
     activateWoodWose({ ...draft, wildShapeUsed: wsUsed + 1 });
   }
 
+  const activeSerum = linkedToken?.effects?.find((e) => e.name.startsWith('Serum: '));
+  const SERUM_DEFS: Record<'ferocity' | 'monstrosity' | 'reconstruction', { label: string; note: string }> = {
+    ferocity: {
+      label: 'Ferocity',
+      note:
+        'Bỏ qua Difficult Terrain. Khi trúng đòn cận chiến/không vũ khí, kích hoạt thêm mastery Cleave ' +
+        '(đánh thêm 1 kẻ trong 5 ft mục tiêu) — app chưa mô phỏng weapon mastery/địa hình, tự áp dụng tay.',
+    },
+    monstrosity: {
+      label: 'Monstrosity',
+      note:
+        'Reach +5 ft; nếu nhỏ hơn Large thì coi như Large. 1 lần/lượt khi trượt đòn STR: có thể cộng Rage ' +
+        `Damage bonus (+${rBonus}) vào roll đó — app chưa tự động hoá phần cộng ngược này, tự áp dụng tay.`,
+    },
+    reconstruction: {
+      label: 'Reconstruction',
+      note:
+        'Khi tiêm & đầu mỗi lượt của bạn: tự tiêu 1 Hit Die, hồi HP = tung + CON mod (không tự chuyển phần ' +
+        'dư thành HP tạm). Ngưng lặng lẽ nếu hết Hit Die.',
+    },
+  };
+  function pickSerum(kind: keyof typeof SERUM_DEFS) {
+    if (!linkedToken) return;
+    const def = SERUM_DEFS[kind];
+    if (activeSerum?.name === `Serum: ${def.label}`) return;
+    // The first pick (entering Rage) is free; switching serum afterward costs a Bonus Action.
+    if (activeSerum && !spendTurn('bonus')) return;
+    if (activeSerum) send({ t: 'removeEffect', tokenId: linkedToken.id, effectId: activeSerum.id });
+    send({
+      t: 'applyEffect',
+      targetTokenId: linkedToken.id,
+      effect: {
+        id: '',
+        name: `Serum: ${def.label}`,
+        sourceSheetId: draft.id,
+        note: def.note,
+        ...(kind === 'reconstruction' ? { hitDieHeal: { die: classDefaults('barbarian')?.hitDie ?? 12 } } : {}),
+      },
+    });
+  }
+
   function toggleRage() {
-    if (draft.raging) return set({ raging: false });
+    if (draft.raging) {
+      if (linkedToken && activeSerum) send({ t: 'removeEffect', tokenId: linkedToken.id, effectId: activeSerum.id });
+      return set({ raging: false });
+    }
     if (!spendTurn('bonus')) return; // entering a Rage is a Bonus Action
     set(rUsed < rMax ? { raging: true, rageUsed: rUsed + 1 } : { raging: true });
   }
@@ -1530,6 +1576,22 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           </button>
           <span className="cf-label">Rage charge:</span>
           <FocusPips max={rMax} used={rUsed} onChange={(u) => set({ rageUsed: u })} />
+        </div>
+      )}
+
+      {bl > 0 && draft.raging && isExperimentBarbarian(draft) && (
+        <div className="cf-auto">
+          <span className="cf-label">Volatile Serum:</span>
+          {(Object.keys(SERUM_DEFS) as (keyof typeof SERUM_DEFS)[]).map((kind) => (
+            <button
+              key={kind}
+              className={`cf-btn ${activeSerum?.name === `Serum: ${SERUM_DEFS[kind].label}` ? 'on' : ''}`}
+              title={SERUM_DEFS[kind].note}
+              onClick={() => pickSerum(kind)}
+            >
+              {SERUM_DEFS[kind].label}
+            </button>
+          ))}
         </div>
       )}
 

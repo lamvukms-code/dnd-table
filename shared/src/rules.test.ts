@@ -24,6 +24,7 @@ import {
   druidLevel,
   martialArtsDie,
   isPestilentHazeMonk,
+  isExperimentBarbarian,
   isUnarmedAction,
   monkBonusUnarmedAction,
   monkBonusUnarmedMax,
@@ -583,6 +584,12 @@ describe('class features (Rogue / Barbarian)', () => {
     // ...nor to a different subclass.
     const otherBonusRow = monkBonusUnarmedAction(other)!;
     expect(actionDamageParts(other, otherBonusRow, undefined, { monkFlurryActive: true }).some((p) => p.label === 'Claws of Pestilence')).toBe(false);
+  });
+
+  it('isExperimentBarbarian matches Path of the Experiment only', () => {
+    expect(isExperimentBarbarian(sheet({ className: 'Barbarian', level: 4, subclass: 'Path of the Experiment' }))).toBe(true);
+    expect(isExperimentBarbarian(sheet({ className: 'Barbarian', level: 4, subclass: 'Path of the Berserker' }))).toBe(false);
+    expect(isExperimentBarbarian(sheet({ className: 'Fighter', level: 4, subclass: 'Path of the Experiment' }))).toBe(false);
   });
 
   it('Warlock features derive; short rest clears Monk focus', () => {

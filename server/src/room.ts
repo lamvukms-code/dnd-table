@@ -482,6 +482,43 @@ export class Room {
     if (!kept) this.dropConcentration(token, `thất bại CON save DC ${dc}`);
   }
 
+  /**
+   * Path of the Experiment's Reconstruction serum: spend 1 Hit Die of `e.hitDieHeal.die`, roll
+   * it + CON mod, heal for the total (clamped to max HP, same formula as the plain "dùng Hit
+   * Die" button — no temp-HP overflow). Called once immediately when the effect is applied
+   * ("khi tiêm") and again every start-of-turn while it's active. Silently no-ops once Hit Dice
+   * run out, rather than ending the effect — switching serum or leaving Rage still removes it.
+   */
+  private applyHitDieHealTick(token: Token, e: ActiveEffect): void {
+    if (!e.hitDieHeal) return;
+    const sheet = this.linkedSheet(token);
+    if (!sheet) return;
+    const die = e.hitDieHeal.die;
+    const pool = hitDicePools(sheet).find((p) => p.die === die);
+    if (!pool || pool.left <= 0) return;
+    const spent = spendHitDie(sheet, die);
+    if (!spent) return;
+    sheet.hitDiceUsed = spent.hitDiceUsed;
+    const conMod = abilityMod(sheet.abilities.con);
+    let result: RollResult;
+    try {
+      result = rollNotation(`1d${die}${conMod >= 0 ? '+' : ''}${conMod}`);
+    } catch {
+      return;
+    }
+    const before = sheet.currentHp;
+    sheet.currentHp = Math.min(sheet.maxHp, sheet.currentHp + Math.max(0, result.total));
+    this.mirrorSheetToToken(sheet);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `${token.label}: ${e.name} → dùng Hit Die d${die}, +${sheet.currentHp - before} HP`,
+      result,
+    });
+  }
+
   /** At a turn boundary: run "save ends" effects on `token` and clear expired ones. */
   private processTurnEffects(token: Token, phase: 'start-of-turn' | 'end-of-turn'): void {
     const round = this.state.initiative.round;
@@ -490,6 +527,8 @@ export class Room {
     const INCAPACITATING = ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'];
     if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
     if (phase === 'start-of-turn') {
+      // Reconstruction: auto-heal via Hit Die at the start of each of the bearer's turns.
+      for (const e of token.effects ?? []) this.applyHitDieHealTick(token, e);
       // Rampant Growth: temp HP at the start of each of the bearer's turns (never stacks)
       for (const e of token.effects ?? []) {
         if (!e.turnTempHp) continue;
@@ -1178,6 +1217,9 @@ export class Room {
           }
         }
         target.effects = [...(target.effects ?? []), effect];
+        // Reconstruction: "khi tiêm & đầu mỗi lượt" — the start-of-turn loop covers the
+        // recurring half, this covers the immediate one-shot heal on injection.
+        if (effect.hitDieHeal) this.applyHitDieHealTick(target, effect);
         if (effect.condition && ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'].includes(effect.condition)) {
           this.endDownEffects(target, effect.name);
         }

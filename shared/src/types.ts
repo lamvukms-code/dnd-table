@@ -444,6 +444,12 @@ export interface ActiveEffect {
   resist?: string[];
   /** Ends when the bearer drops to 0 HP or gains an incapacitating condition (Wood Wose). */
   endsWhenDown?: boolean;
+  /** Auto-spends 1 Hit Die of this size at the start of each of the bearer's turns (and once
+   *  immediately when the effect is applied), rolls it + CON mod, and heals for the total —
+   *  Path of the Experiment's Reconstruction serum. Stops quietly once Hit Dice run out; excess
+   *  above max HP is NOT banked as temp HP (a deliberate simplification, same as the plain
+   *  "spend a Hit Die" button everyone already has). */
+  hitDieHeal?: { die: number };
 }
 
 /** What a token is currently concentrating on (one at a time). */
