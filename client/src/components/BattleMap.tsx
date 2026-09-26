@@ -938,6 +938,15 @@ function EffectsPanel({ token }: { token: Token }) {
             </option>
           ))}
         </select>
+        <button
+          className="link"
+          title="Homebrew — Bracer of Brutality: Necrotic = WIS mod (tối thiểu 1), không thể giảm/tránh, nếu không gây sát thương lượt này"
+          onClick={() =>
+            add({ name: 'Nguyền: Vòng tay Bạo lực', cursedNoHitSelfDamage: { ability: 'wis' } })
+          }
+        >
+          + nguyền Vòng tay Bạo lực
+        </button>
         <select value={cond} onChange={(e) => setCond(e.target.value as ConditionType | '')}>
           <option value="">+ trạng thái…</option>
           {CONDITIONS.map((c) => (

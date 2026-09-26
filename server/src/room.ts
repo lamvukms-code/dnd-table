@@ -482,6 +482,15 @@ export class Room {
     if (!kept) this.dropConcentration(token, `thất bại CON save DC ${dc}`);
   }
 
+  /** Flags that `tokenId` dealt damage this turn — checked at end-of-turn by
+   *  `ActiveEffect.cursedNoHitSelfDamage` (Bracer of Brutality). Call after any damage that
+   *  actually landed (`applied > 0`) with the attacking/casting token's id, if any. */
+  private markDealtDamage(tokenId: string | undefined): void {
+    if (!tokenId) return;
+    const attacker = this.state.tokens.find((t) => t.id === tokenId);
+    if (attacker) attacker.turnUsed = { ...attacker.turnUsed, dealtDamageThisTurn: true };
+  }
+
   /**
    * Path of the Experiment's Reconstruction serum: spend 1 Hit Die of `e.hitDieHeal.die`, roll
    * it + CON mod, heal for the total (clamped to max HP, same formula as the plain "dùng Hit
@@ -548,6 +557,25 @@ export class Room {
           actorName: 'Hệ thống',
           label: `${token.label}: ${e.name} → ${next > before ? `HP tạm ${before} → ${next}` : `giữ ${before} HP tạm`}`,
           result: externalRollResult('', { total: e.turnTempHp, faces: [] }),
+        });
+      }
+    }
+    if (phase === 'end-of-turn') {
+      // Bracer of Brutality: Necrotic self-damage if the bearer dealt no damage this turn —
+      // unreduced (no resistance/immunity applied, straight to HP/temp HP).
+      for (const e of token.effects ?? []) {
+        if (!e.cursedNoHitSelfDamage || token.turnUsed?.dealtDamageThisTurn) continue;
+        const sheet = this.linkedSheet(token);
+        const mod = sheet ? abilityMod(sheet.abilities[e.cursedNoHitSelfDamage.ability]) : 0;
+        const dmg = Math.max(1, mod);
+        const took = this.applyDamage(token, dmg);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: `${token.label}: ${e.name} — không gây sát thương lượt này → chịu ${took.applied} Necrotic (nguyền)`,
+          result: externalRollResult('', { total: dmg, faces: [] }),
         });
       }
     }
@@ -716,6 +744,7 @@ export class Room {
         const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
         const took = this.applyDamage(target, out.totalFinal);
         const amount = took.applied;
+        if (amount > 0) this.markDealtDamage(action.attackerTokenId);
         this.maybeBreakConcentration(target, out.totalFinal);
         this.pushRoll({
           id: nanoid(8),
@@ -936,6 +965,7 @@ export class Room {
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
           const took = this.applyDamage(target, outcome.totalFinal);
           const applied = took.applied;
+          if (applied > 0) this.markDealtDamage(action.attackerTokenId);
           this.maybeBreakConcentration(target, outcome.totalFinal);
           const critTag = effectiveCrit
             ? autoCrit && !res.crit
@@ -1379,6 +1409,7 @@ export class Room {
           const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           const took = this.applyDamage(target, dealt);
           const applied = took.applied;
+          if (applied > 0) this.markDealtDamage(action.sourceTokenId);
           this.pushRoll({
             id: nanoid(8),
             ts: Date.now(),

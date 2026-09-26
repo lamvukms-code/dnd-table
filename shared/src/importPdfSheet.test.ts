@@ -61,6 +61,14 @@ describe('sheetFromPdfFields', () => {
     expect(s.spellSlots.find((x) => x.level === 1)?.max).toBe(4);
     expect(s.spellSlots.find((x) => x.level === 2)?.max).toBe(2);
   });
+  it('proficiency bonus always follows level — never the PDF\'s own printed number', () => {
+    expect(s.proficiencyBonus).toBe(2); // level 3 → +2, matches the fixture's printed "+2"
+    // A player-miscalculated PDF (level 3, but printed PB "+4" as if level 9+) still imports as +2.
+    const wrong = fields.map((f) => (f.name === 'Infos 15' ? { ...f, value: '+4' } : f));
+    const badSheet = sheetFromPdfFields(wrong, 'owner', id)!.sheet;
+    expect(badSheet.level).toBe(3);
+    expect(badSheet.proficiencyBonus).toBe(2);
+  });
 });
 
 describe('newer template revision (fields renumbered +1, boxes moved)', () => {

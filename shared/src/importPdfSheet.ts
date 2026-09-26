@@ -177,7 +177,10 @@ export function sheetFromPdfFields(
   const className = cls ?? classText;
   const subclass = cls ? classText.slice(cls.length).replace(/^[\s\-–(),:]+|[\s)]+$/g, '') : '';
   const level = Math.max(1, Math.min(20, num(t(4)) ?? 1));
-  const proficiencyBonus = num(t(15)) ?? pbForLevel(level);
+  // Always derive from level — never trust the PDF's own printed number. A player-filled sheet
+  // can have a stale/miscalculated proficiency bonus (wrong level, copy-pasted from a template),
+  // and every downstream skill/save/attack bonus already assumes this field is correct.
+  const proficiencyBonus = pbForLevel(level);
 
   const abilities = {} as Record<Ability, number>;
   ABIL.forEach((a, i) => {

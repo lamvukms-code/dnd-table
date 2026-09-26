@@ -450,6 +450,11 @@ export interface ActiveEffect {
    *  above max HP is NOT banked as temp HP (a deliberate simplification, same as the plain
    *  "spend a Hit Die" button everyone already has). */
   hitDieHeal?: { die: number };
+  /** Bracer of Brutality (homebrew cursed item): at the end of the bearer's turn, if it dealt
+   *  no damage this turn (`TurnUsed.dealtDamageThisTurn` unset), it takes Necrotic damage equal
+   *  to this ability's modifier (min 1) — applied straight to HP, bypassing resistance/immunity
+   *  ("can't be reduced or prevented in any way"). */
+  cursedNoHitSelfDamage?: { ability: Ability };
 }
 
 /** What a token is currently concentrating on (one at a time). */
@@ -669,6 +674,11 @@ export interface TurnUsed {
    *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
    *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
   grapplerComboUsed?: boolean;
+  /** Set when this token dealt damage (>0, any target) via an attack/damage/spell-save action
+   *  this turn — checked by `ActiveEffect.cursedNoHitSelfDamage` (Bracer of Brutality) at the
+   *  end of the turn. A simplification of "a hostile creature": this app doesn't model
+   *  faction/hostility, so any damage dealt counts. */
+  dealtDamageThisTurn?: boolean;
 }
 
 export interface BattleMap {
