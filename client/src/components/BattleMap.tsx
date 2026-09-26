@@ -136,6 +136,15 @@ export function BattleMap() {
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+  // The dragger's own view of the token being moved: updated on every pointer move, no network
+  // round-trip. Without this, a token's position came only from `room.tokens` (the server echo of
+  // the last `updateToken` send), so every drag was as laggy as the connection's round-trip time,
+  // and an older echo arriving after a newer one (out-of-order over a slower link, e.g. Tailscale
+  // WAN vs LAN) visibly snapped the token back mid-drag. Cleared once the drag ends and the final
+  // authoritative position has been sent (see `onPointerUp`). Other viewers still see this token
+  // move via the throttled `send` in `onPointerMove` below — unaffected by this local state.
+  const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
+  const lastDragSendRef = useRef(0);
   // --- DM zone tool: click-drag on empty board to draw a room/area rectangle, click an
   //     existing one to view its read-aloud/DM text (see ZonePopup). ---
   const [zoneDraw, setZoneDraw] = useState(false);
@@ -227,7 +236,16 @@ export function BattleMap() {
     const rect = boardRef.current!.getBoundingClientRect();
     const x = (e.clientX - rect.left - drag.current.dx) / CELL;
     const y = (e.clientY - rect.top - drag.current.dy) / CELL;
-    send({ t: 'updateToken', id: drag.current.id, patch: { x, y } });
+    // Instant local feedback for the dragger — never waits on the network.
+    setDragPos({ id: drag.current.id, x, y });
+    // Everyone else's view of this token still comes from the synced store, so keep sending —
+    // just not on every single pointer-move tick (that's what made dragging feel slow and let a
+    // stale echo overtake a newer one). ~20/s is smooth enough for other viewers to follow.
+    const now = performance.now();
+    if (now - lastDragSendRef.current >= 50) {
+      lastDragSendRef.current = now;
+      send({ t: 'updateToken', id: drag.current.id, patch: { x, y } });
+    }
     if ((map.snap ?? true) && !e.shiftKey) setGhost({ x: Math.round(x), y: Math.round(y) });
     else setGhost(null);
   }
@@ -250,18 +268,23 @@ export function BattleMap() {
     }
     setGhost(null);
     if (!drag.current) return;
+    // Use the dragger's own local position, not the (possibly up-to-50ms-stale, throttled) store
+    // one, so the final snap lands where the cursor actually let go, not where the last network
+    // send happened to land.
     const token = tokens.find((t) => t.id === drag.current!.id);
-    if (token) {
+    const last = dragPos?.id === drag.current.id ? dragPos : token;
+    if (last) {
       const snap = (map.snap ?? true) && !e.shiftKey;
       send({
         t: 'updateToken',
-        id: token.id,
+        id: drag.current.id,
         patch: snap
-          ? { x: Math.max(0, Math.round(token.x)), y: Math.max(0, Math.round(token.y)) }
-          : { x: Math.max(0, token.x), y: Math.max(0, token.y) },
+          ? { x: Math.max(0, Math.round(last.x)), y: Math.max(0, Math.round(last.y)) }
+          : { x: Math.max(0, last.x), y: Math.max(0, last.y) },
       });
     }
     drag.current = null;
+    setDragPos(null);
   }
 
   function onBoardDrop(e: React.DragEvent) {
@@ -568,6 +591,10 @@ export function BattleMap() {
             .filter((t) => isDm || !t.hidden)
             .map((t) => {
               const span = SIZE_CELLS[t.size];
+              // While this token is the one being dragged, follow the local (instant) position
+              // instead of the throttled store one — see `dragPos`.
+              const px = dragPos?.id === t.id ? dragPos.x : t.x;
+              const py = dragPos?.id === t.id ? dragPos.y : t.y;
               return (
                 <div
                   key={t.id}
@@ -577,8 +604,8 @@ export function BattleMap() {
                     t.cover === 'total' ? 'cover-total' : ''
                   } ${aoeView?.hitIds.includes(t.id) ? 'aoe-hit' : ''}`}
                   style={{
-                    left: t.x * CELL,
-                    top: t.y * CELL,
+                    left: px * CELL,
+                    top: py * CELL,
                     width: span * CELL - 4,
                     height: span * CELL - 4,
                     background: t.imageUrl ? `center/cover url(${t.imageUrl})` : t.color,
