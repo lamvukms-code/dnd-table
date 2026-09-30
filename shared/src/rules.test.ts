@@ -518,6 +518,20 @@ describe('class features (Rogue / Barbarian)', () => {
     expect(actionDamageParts(s, atk)).toContainEqual({ dice: '3d6', type: 'piercing', label: 'Sneak Attack' });
   });
 
+  it('actionDamageParts adds Booming Blade Thunder when armed, scaled 5/11/17', () => {
+    const atk = { id: 'w', name: 'Longsword', actionType: 'action' as const, attackBonus: 5, damage: '1d8+3', damageType: 'slashing', source: 'weapon' as const };
+    expect(actionDamageParts(sheet({ className: 'Wizard', level: 1, boomingBladeArmed: true }), atk))
+      .toContainEqual({ dice: '1d8', type: 'thunder', label: 'Booming Blade' });
+    expect(actionDamageParts(sheet({ className: 'Wizard', level: 5, boomingBladeArmed: true }), atk))
+      .toContainEqual({ dice: '2d8', type: 'thunder', label: 'Booming Blade' });
+    expect(actionDamageParts(sheet({ className: 'Wizard', level: 11, boomingBladeArmed: true }), atk))
+      .toContainEqual({ dice: '3d8', type: 'thunder', label: 'Booming Blade' });
+    expect(actionDamageParts(sheet({ className: 'Wizard', level: 17, boomingBladeArmed: true }), atk))
+      .toContainEqual({ dice: '4d8', type: 'thunder', label: 'Booming Blade' });
+    // not armed -> no part
+    expect(actionDamageParts(sheet({ className: 'Wizard', level: 5, boomingBladeArmed: false }), atk).some((p) => p.label === 'Booming Blade')).toBe(false);
+  });
+
   it('derivedDefenses grants b/p/s resistance while raging', () => {
     const raging = derivedDefenses(sheet({ className: 'Barbarian', level: 5, raging: true }))!;
     expect(raging.resistances.sort()).toEqual(['bludgeoning', 'piercing', 'slashing']);

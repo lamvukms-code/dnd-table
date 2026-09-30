@@ -270,6 +270,9 @@ export interface CharacterSheet {
   rageUsed?: number;
   /** Rogue: Sneak Attack "armed" for the next attack (one-shot). */
   sneakAttackArmed?: boolean;
+  /** Booming Blade "armed" for the next melee weapon attack (one-shot) — same idea as
+   *  `sneakAttackArmed`: gated on knowing the cantrip, not on class. */
+  boomingBladeArmed?: boolean;
   /** Monk: Focus Points spent (max is derived from Monk level). */
   focusUsed?: number;
   /** Druid: Wild Shape uses spent (max is derived from Druid level). */
@@ -455,6 +458,11 @@ export interface ActiveEffect {
    *  to this ability's modifier (min 1) — applied straight to HP, bypassing resistance/immunity
    *  ("can't be reduced or prevented in any way"). */
   cursedNoHitSelfDamage?: { ability: Ability };
+  /** Booming Blade: if the bearer willingly moves before the caster's next turn, it takes this
+   *  Thunder damage once (normal resistance/immunity applies) and the effect ends. A
+   *  simplification: any `updateToken` position change counts as "willingly moves" — this app
+   *  doesn't distinguish that from forced movement (a shove, a push effect). */
+  boomingBladeMoveTrigger?: { dice: string };
 }
 
 /** What a token is currently concentrating on (one at a time). */

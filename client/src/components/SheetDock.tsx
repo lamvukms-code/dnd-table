@@ -916,9 +916,10 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   rollDice={rollDice}
                   attackRoll={attackRoll}
                   damageRoll={damageRoll}
-                  onFired={() =>
-                    draft.sneakAttackArmed && commit({ ...draft, sneakAttackArmed: false })
-                  }
+                  onFired={() => {
+                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed) return;
+                    commit({ ...draft, sneakAttackArmed: false, boomingBladeArmed: false });
+                  }}
                   grapple={
                     (a.id === 'unarmed' || a.id === 'monk-unarmed') && targetId
                       ? {
@@ -1457,7 +1458,8 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const spendEconomy = useStore((s) => s.spendEconomy);
   const spendTurn = (kind: 'action' | 'bonus' | 'reaction') => spendEconomy(draft.tokenId || undefined, kind);
   const feats = derivedClassFeatures(draft);
-  if (feats.length === 0) return null;
+  const hasBoomingBlade = draft.spells.some((sp) => sp.name === 'Booming Blade');
+  if (feats.length === 0 && !hasBoomingBlade) return null;
   const rl = rogueLevel(draft);
   const bl = barbarianLevel(draft);
   const ml = monkLevel(draft);
@@ -1468,6 +1470,8 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const wsUsed = Math.min(draft.wildShapeUsed ?? 0, wsMax);
 
   const sneakDice = sneakAttackDice(draft);
+  const boomingBladeTier =
+    totalLevelOf(draft) >= 17 ? 4 : totalLevelOf(draft) >= 11 ? 3 : totalLevelOf(draft) >= 5 ? 2 : 1;
   const rMax = rageMax(draft);
   const rUsed = Math.min(draft.rageUsed ?? 0, rMax);
   const rBonus = rageDamageBonus(draft);
@@ -1695,6 +1699,23 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           <span className="hint">
             Gạt trước khi tung đòn finesse/tầm xa; tự cộng vào damage rồi tự tắt. Cunning Action:
             Bonus Action Dash / Disengage / Hide.
+          </span>
+        </div>
+      )}
+
+      {hasBoomingBlade && (
+        <div className="cf-auto">
+          <button
+            className={`cf-btn ${draft.boomingBladeArmed ? 'on' : ''}`}
+            onClick={() => set({ boomingBladeArmed: !draft.boomingBladeArmed })}
+          >
+            💥 Booming Blade{' '}
+            {draft.boomingBladeArmed ? `— SẴN SÀNG (+${boomingBladeTier}d8)` : `(+${boomingBladeTier}d8)`}
+          </button>
+          <span className="hint">
+            Gạt trước khi tung đòn vũ khí cận chiến; tự cộng Thunder vào damage rồi tự tắt. Nếu
+            mục tiêu tự di chuyển trước lượt kế của bạn, app tự gây thêm đúng số dice đó 1 lần khi
+            mục tiêu bị kéo trên bản đồ.
           </span>
         </div>
       )}

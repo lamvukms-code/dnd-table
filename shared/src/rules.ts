@@ -366,6 +366,12 @@ export function actionDamageParts(
       const die = martialArtsDie(sheet);
       if (die) parts.push({ dice: die, type: 'necrotic', label: 'Claws of Pestilence' });
     }
+    // Booming Blade armed for this melee weapon attack (the sheet disarms it after the roll,
+    // same as Sneak Attack). The die count matches every other cantrip's 5/11/17 scaling.
+    if (sheet.boomingBladeArmed) {
+      const tier = totalLevelOf(sheet) >= 17 ? 4 : totalLevelOf(sheet) >= 11 ? 3 : totalLevelOf(sheet) >= 5 ? 2 : 1;
+      parts.push({ dice: `${tier}d8`, type: 'thunder', label: 'Booming Blade' });
+    }
   }
   return parts;
 }

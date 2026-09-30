@@ -966,6 +966,23 @@ export class Room {
           const took = this.applyDamage(target, outcome.totalFinal);
           const applied = took.applied;
           if (applied > 0) this.markDealtDamage(action.attackerTokenId);
+          // Booming Blade: a hit that carried the cantrip's Thunder rider (see `dmgParts`, tagged
+          // by the client when the sheet has it armed) leaves the target primed — one Thunder hit
+          // if it willingly moves before the caster's next turn (see `case 'updateToken'`).
+          const boomingPart = dmgParts.find((p) => p.label === 'Booming Blade');
+          if (applied > 0 && boomingPart) {
+            target.effects = [
+              ...(target.effects ?? []),
+              {
+                id: nanoid(8),
+                name: 'Booming Blade',
+                sourceSheetId: action.attackerSheetId,
+                sourceTokenId: action.attackerTokenId,
+                boomingBladeMoveTrigger: { dice: boomingPart.dice },
+                expiresRound: this.state.initiative.round + 1,
+              },
+            ];
+          }
           this.maybeBreakConcentration(target, outcome.totalFinal);
           const critTag = effectiveCrit
             ? autoCrit && !res.crit
@@ -1149,6 +1166,8 @@ export class Room {
           patch.x = gate.pos.x;
           patch.y = gate.pos.y;
         }
+        const beforeX = token.x;
+        const beforeY = token.y;
         const linked = this.linkedSheet(token);
         if (linked) delete patch.armorClass; // derived from the sheet
         Object.assign(token, patch);
@@ -1156,6 +1175,33 @@ export class Room {
           if (typeof patch.currentHp === 'number') linked.currentHp = patch.currentHp;
           if (typeof patch.maxHp === 'number') linked.maxHp = patch.maxHp;
           if (typeof patch.tempHp === 'number') linked.tempHp = patch.tempHp;
+        }
+        // Booming Blade: this token actually changed position (a simplification of "willingly
+        // moves" — see the field's doc comment) while primed from an earlier hit.
+        if (movingPos && (token.x !== beforeX || token.y !== beforeY)) {
+          const trig = token.effects?.find((e) => e.boomingBladeMoveTrigger);
+          if (trig) {
+            token.effects = (token.effects ?? []).filter((e) => e.id !== trig.id);
+            let rolled = 0;
+            try {
+              rolled = rollNotation(trig.boomingBladeMoveTrigger!.dice).total;
+            } catch {
+              rolled = 0;
+            }
+            const out = resolveDamageParts(
+              [{ part: { dice: trig.boomingBladeMoveTrigger!.dice, type: 'thunder' }, raw: rolled }],
+              this.effectiveDefenses(token),
+            );
+            const took = this.applyDamage(token, out.totalFinal);
+            this.pushRoll({
+              id: nanoid(8),
+              ts: Date.now(),
+              actorId: 'system',
+              actorName: 'Hệ thống',
+              label: `${token.label}: Booming Blade — di chuyển → chịu ${took.applied} Thunder`,
+              result: externalRollResult(trig.boomingBladeMoveTrigger!.dice, { total: out.totalFinal, faces: [] }),
+            });
+          }
         }
         this.touch();
         break;
