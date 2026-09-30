@@ -1325,6 +1325,15 @@ export class Room {
         break;
       }
 
+      case 'resetTurnUsed': {
+        const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        token.turnUsed = undefined;
+        this.touch();
+        break;
+      }
+
       case 'removeEffect': {
         const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
         if (!token) return 'Token không tồn tại';

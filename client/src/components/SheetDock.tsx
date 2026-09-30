@@ -473,6 +473,17 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const [rollMode, setRollMode] = useState<RollMode>('normal');
   const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
 
+  // Bug: attacking a target token that was removed/replaced from the map (e.g. the DM re-dragged
+  // a fresh copy from the Bestiary) sent `attack` with a dangling targetTokenId. The server
+  // rightly rejected it ("Target token not found") before ever rolling — but the Action/Bonus had
+  // already been marked spent client-side by `onSpend`, which fires before the roll. Net effect:
+  // no attack roll, no damage roll, action gone. Clearing the stale selection here means the
+  // dropdown falls back to "— không —" and the target-less "đánh" button (no server round trip
+  // to a token id) before the player can ever click into that state.
+  useEffect(() => {
+    if (targetId && !tokens.some((t) => t.id === targetId)) setTargetId('');
+  }, [targetId, tokens]);
+
   function toggleSaveProf(ab: Ability, on: boolean) {
     commit({
       ...draft,
@@ -804,6 +815,16 @@ function BasicTab({ draft, commit }: EditorCtx) {
             </button>
             <button className="rest" onClick={() => commit(applyLongRest(draft))}>
               Nghỉ dài
+            </button>
+            <button
+              className="rest"
+              title="Test-only: hồi hết Action/Bonus/Reaction của token + toàn bộ tài nguyên nhân vật (như Nghỉ dài), để tiện thử lại một tình huống mà không cần đợi qua lượt/qua đêm thật"
+              onClick={() => {
+                commit({ ...applyLongRest(draft), sneakAttackArmed: false, boomingBladeArmed: false });
+                if (linkedToken) send({ t: 'resetTurnUsed', tokenId: linkedToken.id });
+              }}
+            >
+              🔧 Reset (test)
             </button>
           </div>
 

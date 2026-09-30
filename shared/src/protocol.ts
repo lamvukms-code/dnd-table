@@ -62,6 +62,9 @@ export type ClientAction =
   | { t: 'applyEffect'; targetTokenId: string; effect: ActiveEffect }
   | { t: 'removeEffect'; tokenId: string; effectId: string }
   | { t: 'setTurnUsed'; tokenId: string; patch: Partial<TurnUsed> }
+  /** Test-only: fully clears a token's `turnUsed` (Action/Bonus/Reaction/attack counters/etc.) in
+   *  one step — `setTurnUsed`'s patch only merges fields in, it can't clear ones already set. */
+  | { t: 'resetTurnUsed'; tokenId: string }
   | { t: 'clearConcentration'; tokenId: string }
   // 2024 Unarmed Strike Grapple: server rolls the target's STR/DEX save (its
   // better modifier) vs `dc`; on a failure it gains the Grappled condition from
