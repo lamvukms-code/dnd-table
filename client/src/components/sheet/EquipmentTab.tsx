@@ -17,6 +17,7 @@ import {
   type InventoryItem,
   type ItemType,
   type WeaponAbility,
+  magicItemPresets,
 } from '@dnd-table/shared';
 import { useStore } from '../../store.js';
 import { nanoIdish } from '../../util.js';
@@ -150,6 +151,22 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
         <EquipmentPicker
           onAdd={(item) => commit({ ...draft, inventory: [...draft.inventory, item] })}
         />
+        <select
+          className="magic-picker"
+          value=""
+          title="Vật phẩm homebrew của bàn — thêm vào túi, app tự áp dụng hiệu ứng khi Equipped + Điều hợp"
+          onChange={(e) => {
+            const it = magicItemPresets(nanoIdish).find((m) => m.name === e.target.value);
+            if (it) commit({ ...draft, inventory: [...draft.inventory, it] });
+          }}
+        >
+          <option value="">+ vật phẩm homebrew…</option>
+          {magicItemPresets(nanoIdish).map((m) => (
+            <option key={m.name} value={m.name}>
+              {m.name}
+            </option>
+          ))}
+        </select>
       </div>
       <p className="hint">Chỉ mặc được 1 giáp và 1 khiên cùng lúc — mặc món khác sẽ tự cởi món cũ.</p>
 
@@ -479,11 +496,15 @@ function EquipmentPicker({ onAdd }: { onAdd: (item: InventoryItem) => void }) {
                 onClick={() => pick(d)}
                 title={d.notes}
               >
-                <span className="sp-name">{d.name}</span>
+                <span className="sp-name">
+                  {d.name}
+                  {d.rarity ? <span className="sp-rarity"> · {d.rarity}</span> : ''}
+                  {d.attunementRequired ? <span className="sp-attune" title="Cần điều hợp"> ⚡</span> : ''}
+                </span>
                 <span className="sp-hint">
                   {ITEM_TYPE_LABEL[d.type]}
                   {d.cost ? ` · ${d.cost}` : ''}
-                  {d.damage ? ` · ${d.damage}` : ''}
+                  {d.damage ? ` · ${d.damage}${d.attackBonusMisc ? ` (+${d.attackBonusMisc})` : ''}` : ''}
                   {d.armorBase !== undefined ? ` · AC ${d.armorBase}` : ''}
                   {d.healFormula ? ` · hồi ${d.healFormula}` : ''}
                   {d.scrollSpellName ? ` · ${d.scrollSpellName}` : ''}

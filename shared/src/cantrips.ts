@@ -999,6 +999,51 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
   };
 }
 
+/**
+ * Build a ready-to-cast spell for a MONSTER (DM's bestiary), pulling mechanics from the same
+ * SRD spell database the character sheet picker uses. Unlike `spellFromCantrip`, the DC / attack
+ * bonus are the fixed numbers a stat block prints, not derived from ability scores — and cantrip
+ * damage dice scale off `casterLevel` (unset = base/1st-tier die) instead of character level.
+ */
+export function monsterSpellFrom(
+  def: CantripDef,
+  opts: { spellSaveDc: number; spellAttackBonus: number; casterLevel?: number },
+  id: string,
+): Spell {
+  const wired = def.castKind === 'attack' || def.castKind === 'save' || def.castKind === 'damage';
+  const damage = def.fixedDamage
+    ? [{ dice: def.fixedDamage, type: def.damageType ?? '', label: def.name }]
+    : def.damageDie
+      ? [{ dice: scaleCantripDie(def.damageDie, opts.casterLevel ?? 1), type: def.damageType ?? '', label: def.name }]
+      : undefined;
+  return {
+    id,
+    name: def.name,
+    level: def.level ?? 0,
+    school: def.school,
+    prepared: true,
+    concentration: def.concentration ?? false,
+    castKind: def.castKind,
+    actionType: def.actionType ?? 'action',
+    damage: wired ? damage : undefined,
+    heal: def.castKind === 'heal' ? def.heal : undefined,
+    rider: def.castKind === 'rider' ? def.rider : undefined,
+    save:
+      def.castKind === 'save' && def.save
+        ? { ability: def.save, dcOverride: opts.spellSaveDc, halfOnSave: def.halfOnSave || undefined }
+        : undefined,
+    effect: def.rollBonus
+      ? { name: `${def.name} (+${def.rollBonus.dice})`, note: def.guidance, rollBonus: def.rollBonus }
+      : def.effect
+        ? { ...def.effect }
+        : undefined,
+    tempHp: def.tempHp,
+    range: def.range,
+    area: def.area,
+    notes: def.guidance,
+  };
+}
+
 /** Re-scale a cantrip spell's damage dice (and beam count, for Eldritch Blast) to the sheet's
  *  current level, or null. */
 export function rescaleCantripSpell(sp: Spell, sheet: CharacterSheet): Partial<Spell> | null {

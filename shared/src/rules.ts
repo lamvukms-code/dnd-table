@@ -24,6 +24,7 @@ import type {
 import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
 
 import { regainHitDice } from './derived.js';
+import { magicItemActive } from './magicItems.js';
 
 /** Guess melee vs ranged from a range text: "5 ft", "Chạm", "reach 10 ft" → melee; "80/320 ft", "60ft" → ranged. */
 export function inferAttackRange(range: string | undefined): AttackRange {
@@ -94,6 +95,54 @@ export function currencyInGp(c: Currency): number {
 
 export function totalCoins(c: Currency): number {
   return COIN_TYPES.reduce((sum, k) => sum + (c[k] || 0), 0);
+}
+
+/** Sum two purses coin-by-coin. */
+export function addCurrency(a: Currency, b: Currency): Currency {
+  const out = emptyCurrency();
+  for (const k of COIN_TYPES) out[k] = (a[k] || 0) + (b[k] || 0);
+  return out;
+}
+
+/** "1/4" / "1/2" / "5" → 0.25 / 0.5 / 5. */
+export function crToNumber(cr: string): number {
+  if (cr.includes('/')) {
+    const [n, d] = cr.split('/').map(Number);
+    return d ? n / d : 0;
+  }
+  return Number(cr) || 0;
+}
+
+/**
+ * Homebrew quick coin loot scaled to a monster's CR — NOT the DMG hoard tables, just a fast,
+ * reasonable starting purse so the DM doesn't have to hand-pick every amount. Coins only, on
+ * purpose: magic items stay a manual DM call so a random roll can't hand out something that
+ * unbalances the campaign.
+ */
+export function randomLootFor(cr: string): Currency {
+  const n = crToNumber(cr);
+  const baseGp =
+    n < 1 ? 2 + n * 8
+    : n <= 4 ? 8 + n * 12
+    : n <= 10 ? 60 + (n - 4) * 45
+    : n <= 16 ? 330 + (n - 10) * 130
+    : 1110 + (n - 16) * 420;
+  const gpValue = Math.max(1, Math.round(baseGp * (0.7 + Math.random() * 0.6)));
+
+  const currency = emptyCurrency();
+  if (n < 5) {
+    currency.cp = Math.round((2 + Math.random() * 6) * (n + 1) * 3);
+    currency.sp = Math.round((1 + Math.random() * 4) * (n + 1) * 2);
+    currency.gp = gpValue;
+  } else if (n <= 10) {
+    currency.sp = Math.round(10 + Math.random() * 20);
+    currency.ep = Math.round(Math.random() * 8);
+    currency.gp = gpValue;
+  } else {
+    currency.gp = Math.round(gpValue * (0.5 + Math.random() * 0.3));
+    currency.pp = Math.round((gpValue - currency.gp) / 10);
+  }
+  return currency;
 }
 
 /** Total carried weight (lb), coins included at 50 per pound (5e). */
@@ -528,7 +577,17 @@ export function martialArtsDie(sheet: CharacterSheet): string {
 /** Monk Focus Points = Monk level (from level 2). */
 export function monkFocusMax(sheet: CharacterSheet): number {
   const lvl = monkLevel(sheet);
-  return lvl >= 2 ? lvl : 0;
+  if (lvl < 2) return 0;
+  // Hood of Empowered Ki (homebrew): + proficiency-bonus extra ki points while worn and attuned.
+  return lvl + (magicItemActive(sheet, 'hood-ki') ? sheet.proficiencyBonus : 0);
+}
+
+/** Circlet of Natural Rejuvenation (homebrew): temp HP gained each time a Wild Shape use is spent —
+ *  proficiency bonus + Druid level. 0 when not worn / attuned or not a Druid. */
+export function circletTempHp(sheet: CharacterSheet): number {
+  if (!magicItemActive(sheet, 'circlet-rejuvenation')) return 0;
+  const d = druidLevel(sheet);
+  return d > 0 ? sheet.proficiencyBonus + d : 0;
 }
 /** Monk save DC for Stunning Strike etc: 8 + proficiency + WIS modifier. */
 export function monkDc(sheet: CharacterSheet): number {
@@ -608,7 +667,9 @@ export function hasFeat(sheet: CharacterSheet, name: string): boolean {
 /** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
 export function sneakAttackDice(sheet: CharacterSheet): number {
   const lvl = rogueLevel(sheet);
-  return lvl > 0 ? Math.ceil(lvl / 2) : 0;
+  if (lvl <= 0) return 0;
+  // Necklace of Wolf Fangs (homebrew): + proficiency-bonus d6s while worn and attuned.
+  return Math.ceil(lvl / 2) + (magicItemActive(sheet, 'wolf-fangs') ? sheet.proficiencyBonus : 0);
 }
 /** Barbarian rage damage bonus: +2, then +3 at level 9, +4 at 16. */
 export function rageDamageBonus(sheet: CharacterSheet): number {
@@ -685,14 +746,16 @@ export function spellcastingAbilityOf(
 }
 
 /** 5e 2024 spell save DC: 8 + proficiency bonus + spellcasting ability modifier. */
-export function spellSaveDc(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass'>): number | null {
+export function spellSaveDc(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass' | 'itemSource'>): number | null {
+  if (spell?.itemSource) return 8 + sheet.proficiencyBonus + abilityMod(sheet.abilities[spellcastingAbilityOf(sheet) ?? 'cha']);
   const ab = spellcastingAbilityOf(sheet, spell);
   if (!ab || casterTypeOf(sheet) === 'none') return null;
   return 8 + sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
 }
 
 /** Spell attack modifier: proficiency bonus + spellcasting ability modifier. */
-export function spellAttackBonus(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass'>): number | null {
+export function spellAttackBonus(sheet: CharacterSheet, spell?: Pick<Spell, 'castingClass' | 'itemSource'>): number | null {
+  if (spell?.itemSource) return sheet.proficiencyBonus + abilityMod(sheet.abilities[spellcastingAbilityOf(sheet) ?? 'cha']);
   const ab = spellcastingAbilityOf(sheet, spell);
   if (!ab || casterTypeOf(sheet) === 'none') return null;
   return sheet.proficiencyBonus + abilityMod(sheet.abilities[ab]);
@@ -1214,6 +1277,11 @@ export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
     initiativeMod: statblockInitiativeMod(sb),
     speed: sb.speed,
     actions: sb.actions.map((a) => ({ ...a })),
+    legendaryActionsPerRound: sb.legendaryActionsPerRound,
+    legendaryActions: sb.legendaryActions?.map((a) => ({ ...a })),
+    hasLairActions: sb.hasLairActions,
+    lairActions: sb.lairActions?.map((a) => ({ ...a })),
+    spellcasting: sb.spellcasting ? { ...sb.spellcasting, spellNames: [...sb.spellcasting.spellNames] } : undefined,
     traits: sb.traits.map((t) => ({ ...t })),
     defenses: sb.defenses ? { ...sb.defenses } : undefined,
     notes: sb.notes || undefined,

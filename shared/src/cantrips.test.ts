@@ -7,6 +7,7 @@ import {
   l1SpellsForSheet,
   l2SpellsForSheet,
   l3SpellsForSheet,
+  monsterSpellFrom,
   rescaleCantripSpell,
   scaleCantripDie,
   spellFromCantrip,
@@ -96,6 +97,29 @@ describe('spellFromCantrip', () => {
     expect(sp.castKind).toBe('utility');
     expect(sp.concentration).toBe(true);
     expect(sp.effect?.rollBonus).toEqual({ dice: '1d4', scope: 'check' });
+  });
+});
+
+describe('monsterSpellFrom', () => {
+  it('builds an attack cantrip with fixed DC/attack bonus, unscaled at casterLevel 1', () => {
+    const sp = monsterSpellFrom(findCantrip('Fire Bolt')!, { spellSaveDc: 15, spellAttackBonus: 7 }, 'm1');
+    expect(sp.castKind).toBe('attack');
+    expect(sp.damage).toEqual([{ dice: '1d10', type: 'fire', label: 'Fire Bolt' }]);
+  });
+
+  it('scales cantrip damage off casterLevel, not a character level', () => {
+    const sp = monsterSpellFrom(
+      findCantrip('Fire Bolt')!,
+      { spellSaveDc: 15, spellAttackBonus: 7, casterLevel: 11 },
+      'm2',
+    );
+    expect(sp.damage).toEqual([{ dice: '3d10', type: 'fire', label: 'Fire Bolt' }]);
+  });
+
+  it('save cantrips get the DC baked in as dcOverride', () => {
+    const sp = monsterSpellFrom(findCantrip('Sacred Flame')!, { spellSaveDc: 16, spellAttackBonus: 0 }, 'm3');
+    expect(sp.castKind).toBe('save');
+    expect(sp.save).toEqual({ ability: 'dex', dcOverride: 16, halfOnSave: undefined });
   });
 });
 

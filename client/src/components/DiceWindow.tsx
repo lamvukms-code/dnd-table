@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { d20Check } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 
 const QUICK = [20, 12, 10, 8, 6, 4, 100];
 
 /** Small floating window, bottom-left of the map: manual rolls + roll history. */
-export function DiceWindow() {
+function DiceWindowImpl() {
   const send = useStore((s) => s.send);
   const rollDice = useStore((s) => s.rollDice);
   const isDm = useStore((s) => s.isDm());
@@ -127,7 +127,8 @@ export function DiceWindow() {
               </div>
               {e.attack && (
                 <div className="rl-attack">
-                  → {e.attack.targetName} (AC {e.attack.targetAc}):{' '}
+                  → {e.attack.targetName}
+                  {typeof e.attack.targetAc === 'number' ? ` (AC ${e.attack.targetAc})` : ''}:{' '}
                   <strong>
                     {e.attack.crit ? 'CHÍ MẠNG' : e.attack.hit ? 'TRÚNG' : 'TRƯỢT'}
                   </strong>
@@ -155,3 +156,6 @@ export function DiceWindow() {
     </div>
   );
 }
+
+/** Memoised: takes no props, so it only re-renders when its own store selectors change. */
+export const DiceWindow = memo(DiceWindowImpl);

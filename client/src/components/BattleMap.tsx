@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   attackRangeOf,
+  addCurrency,
+  COIN_TYPES,
   computeSpeed,
+  coverAcBonus,
+  currencyInGp,
+  randomLootFor,
   aoeGeometry,
   aoeTokenIds,
   defaultAnchor,
@@ -12,11 +17,17 @@ import {
   CONDITIONS,
   d20Check,
   FEET_PER_CELL,
+  findCantrip,
   fmtMod,
   gridFeet,
+  HEALTH_TIER_VI,
+  monsterSpellFrom,
   parseRangeFeet,
   RIDER_PRESETS,
+  SRD_SPELLS,
   statblockDamageParts,
+  statblockHiddenFromPlayers,
+  statsHiddenFromPlayers,
   tokenIsGrappled,
   tokenSaveBonus,
   tokenStatblockFrom,
@@ -25,6 +36,7 @@ import {
   type CharacterSheet,
   type ConditionType,
   type CoverLevel,
+  type Currency,
   type MapZone,
   type Token,
   type TokenSize,
@@ -32,12 +44,37 @@ import {
 import { useStore } from '../store.js';
 import { uploadImage } from '../upload.js';
 import { statblockFromToken } from '../statblock.js';
+import { nanoIdish } from '../util.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
-import { ZonePopup, type ZonePopupState } from './ZonePopup.js';
+import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
+import zoneLayoutsRaw from '../data/crookedMoonZoneLayouts.json';
+
+interface ZoneLayoutRoom {
+  code: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+interface ZoneLayout {
+  chapter: string;
+  rooms: ZoneLayoutRoom[];
+}
+const ZONE_LAYOUTS = zoneLayoutsRaw as Record<string, ZoneLayout>;
+
+/** The imported map pack's own file id, e.g. "gl_12_1_the_crooked_house_1_21x24" — derived from
+ *  `backgroundUrl` (`/maps/battlemaps/<id>.webp`, see MapLibrary.tsx) so a known zone layout can
+ *  be looked up for whatever map is currently the scene's background. */
+function mapIdFromBackgroundUrl(url: string | undefined): string | null {
+  if (!url) return null;
+  const file = url.split('/').pop();
+  return file ? file.replace(/\.\w+$/, '') : null;
+}
 
 const CELL = 56; // display px per grid cell
+const NO_ZONES: MapZone[] = [];
 
 /** A token's walking speed for the client move tracker. */
 function tokenWalkSpeed(token: Token, sheets: CharacterSheet[]): number {
@@ -53,25 +90,31 @@ const SIZE_CELLS: Record<TokenSize, number> = {
   gargantuan: 4,
 };
 
-export function BattleMap() {
-  const room = useStore((s) => s.room)!;
+function BattleMapImpl() {
+  // Narrow selectors (not the whole `room`): with structural sharing in the store, a sheet/log/homebrew
+  // change no longer re-renders the map, and a token drag no longer re-renders unrelated slices.
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
   const me = useStore((s) => s.me());
   const castingSpell = useStore((s) => s.castingSpell);
+  const castingMonsterSpell = useStore((s) => s.castingMonsterSpell);
+  const resolveMonsterCastOnToken = useStore((s) => s.resolveMonsterCastOnToken);
   const cancelCast = useStore((s) => s.cancelCast);
   const aoe = useStore((s) => s.aoe);
   const confirmAoe = useStore((s) => s.confirmAoe);
   const [aoeAim, setAoeAim] = useState<{ x: number; y: number } | null>(null);
   const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
-  const { map, tokens, diceTray } = room;
-  const zones = room.zones ?? [];
-  const sheets = room.sheets;
+  const map = useStore((s) => s.room?.map)!;
+  const tokens = useStore((s) => s.room?.tokens)!;
+  const diceTray = useStore((s) => s.room?.diceTray)!;
+  const zones = useStore((s) => s.room?.zones) ?? NO_ZONES;
+  const sheets = useStore((s) => s.room?.sheets)!;
+  const initiative = useStore((s) => s.room?.initiative)!;
 
   // --- movement tracker (active combatant) ---
-  const activeEntry = room.initiative.running
-    ? room.initiative.entries.find((e) => e.isActive)
+  const activeEntry = initiative.running
+    ? initiative.entries.find((e) => e.isActive)
     : undefined;
   const activeToken = activeEntry?.tokenId
     ? tokens.find((t) => t.id === activeEntry.tokenId)
@@ -86,26 +129,26 @@ export function BattleMap() {
     : null;
 
   // --- spell range ring (while a cast is armed) ---
-  const castRing = castingSpell
+  const activeCastSpell = castingSpell?.spell ?? castingMonsterSpell?.spell;
+  const castRing = activeCastSpell
     ? (() => {
-        const casterTokenId = sheets.find((s) => s.id === castingSpell.sheetId)?.tokenId;
+        const casterTokenId = castingSpell
+          ? sheets.find((s) => s.id === castingSpell.sheetId)?.tokenId
+          : castingMonsterSpell?.tokenId;
         const tk = casterTokenId ? tokens.find((t) => t.id === casterTokenId) : undefined;
         // "how far does this reach": casting range, or the area for a Self spell
-        const feet = Math.max(
-          parseRangeFeet(castingSpell.spell.range),
-          parseRangeFeet(castingSpell.spell.area),
-        );
+        const feet = Math.max(parseRangeFeet(activeCastSpell.range), parseRangeFeet(activeCastSpell.area));
         if (!tk || !feet) return null;
         return { tk, feet, radiusPx: (feet / FEET_PER_CELL) * CELL };
       })()
     : null;
 
   useEffect(() => {
-    if (!castingSpell && !aoe) return;
+    if (!castingSpell && !castingMonsterSpell && !aoe) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && cancelCast();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [castingSpell, aoe, cancelCast]);
+  }, [castingSpell, castingMonsterSpell, aoe, cancelCast]);
 
   // AoE template placement: origin (caster centre or chosen grid point), aim, and who is inside.
   const aoeView = (() => {
@@ -135,6 +178,7 @@ export function BattleMap() {
   const [groupSel, setGroupSel] = useState<Set<string>>(new Set());
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const boardScrollRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
   // The dragger's own view of the token being moved: updated on every pointer move, no network
   // round-trip. Without this, a token's position came only from `room.tokens` (the server echo of
@@ -145,14 +189,93 @@ export function BattleMap() {
   // move via the throttled `send` in `onPointerMove` below — unaffected by this local state.
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const lastDragSendRef = useRef(0);
+  // Free camera pan: click-drag empty board space to scroll the view, like most VTTs — previously
+  // the only way to move the view was the browser's own scrollbars / mouse wheel, which read as
+  // "the map is stuck" since there was no drag-to-pan at all. `moved` distinguishes an actual pan
+  // (suppresses the board's own click-to-deselect below) from a plain click.
+  const panDrag = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number; moved: boolean } | null>(
+    null,
+  );
+  const suppressBoardClick = useRef(false);
   // --- DM zone tool: click-drag on empty board to draw a room/area rectangle, click an
   //     existing one to view its read-aloud/DM text (see ZonePopup). ---
   const [zoneDraw, setZoneDraw] = useState(false);
   const [drawRect, setDrawRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const zoneDragStart = useRef<{ x: number; y: number } | null>(null);
   const [zonePopup, setZonePopup] = useState<ZonePopupState>(null);
+  const [zoom, setZoom] = useState(1);
+  const ZOOM_MIN = 0.3;
+  const ZOOM_MAX = 2.5;
+  /** Empty scrollable margin (px, constant regardless of zoom) around the board so it isn't
+   *  pinned to the top-left corner — lets the DM drag it away from the edge to re-centre it. */
+  const PAN_PAD = 600;
+  const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+  /** Zoom by `factor`, keeping the point under (clientX, clientY) — or the viewport centre
+   *  if omitted — visually fixed, by adjusting the scroll container's scroll offset to match. */
+  function zoomBy(factor: number, clientX?: number, clientY?: number) {
+    const scroller = boardScrollRef.current;
+    if (!scroller) return;
+    const rect = scroller.getBoundingClientRect();
+    const cx = clientX ?? rect.left + rect.width / 2;
+    const cy = clientY ?? rect.top + rect.height / 2;
+    const offsetX = cx - rect.left + scroller.scrollLeft;
+    const offsetY = cy - rect.top + scroller.scrollTop;
+    setZoom((prev) => {
+      const next = clampZoom(prev * factor);
+      const ratio = next / prev;
+      requestAnimationFrame(() => {
+        if (!boardScrollRef.current) return;
+        boardScrollRef.current.scrollLeft = offsetX * ratio - (cx - rect.left);
+        boardScrollRef.current.scrollTop = offsetY * ratio - (cy - rect.top);
+      });
+      return next;
+    });
+  }
 
   const selectedToken = tokens.find((t) => t.id === selected) ?? null;
+
+  // Start scrolled past the pan padding so the board still opens flush top-left, same as before
+  // PAN_PAD was added — but now there's room to scroll further to re-centre it. Deferred a frame
+  // and keyed on the map's own size: right after mount the `.board-scroll` flex container hasn't
+  // been laid out yet (height reads 0/wrong), so setting scrollTop synchronously here got clamped
+  // to whatever tiny scroll range existed at that instant — visually pinning the board near the
+  // BOTTOM of the viewport instead of flush top-left. Re-running once real dimensions land (and
+  // once layout has actually settled, via rAF) fixes that.
+  useEffect(() => {
+    const el = boardScrollRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      const el2 = boardScrollRef.current;
+      if (!el2) return;
+      el2.scrollLeft = PAN_PAD;
+      el2.scrollTop = PAN_PAD;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [map.cols, map.rows]);
+
+  // Native (non-passive) wheel listener: React's onWheel is registered passive, so
+  // e.preventDefault() inside it silently does nothing and Ctrl+wheel still triggers the
+  // BROWSER's own page zoom underneath our map zoom — the two stack, feel overly sensitive,
+  // drift the whole page's zoom (affecting UI like the bestiary panel), and can't be reset from
+  // our +/-/% controls since those only touch our own zoom state.
+  useEffect(() => {
+    const el = boardScrollRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      // Scale the step to how hard the gesture was rather than a fixed multiplier per event —
+      // a trackpad fires many more (and smaller) wheel events per physical gesture than a mouse
+      // wheel notch, so a flat step compounded across those events zoomed far too fast. Capped so
+      // one big jump (fast mouse-wheel spin) can't overshoot either.
+      const raw = Math.exp(-e.deltaY * 0.0012);
+      const factor = Math.min(1.05, Math.max(1 / 1.05, raw));
+      zoomBy(factor, e.clientX, e.clientY);
+    }
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -186,6 +309,10 @@ export function BattleMap() {
       void resolveCastOnToken(token.id);
       return;
     }
+    if (castingMonsterSpell) {
+      void resolveMonsterCastOnToken(token.id);
+      return;
+    }
     if (groupMode && isDm) {
       toggleGroup(token.id);
       return;
@@ -196,28 +323,51 @@ export function BattleMap() {
     const rect = boardRef.current!.getBoundingClientRect();
     drag.current = {
       id: token.id,
-      dx: e.clientX - rect.left - token.x * CELL,
-      dy: e.clientY - rect.top - token.y * CELL,
+      dx: e.clientX - rect.left - token.x * CELL * zoom,
+      dy: e.clientY - rect.top - token.y * CELL * zoom,
     };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function onBoardPointerDown(e: React.PointerEvent) {
-    if (!zoneDraw || !isDm) return;
-    if (e.target !== e.currentTarget || !boardRef.current) return; // only start on empty board
-    const rect = boardRef.current.getBoundingClientRect();
-    const gx = (e.clientX - rect.left) / CELL;
-    const gy = (e.clientY - rect.top) / CELL;
-    zoneDragStart.current = { x: gx, y: gy };
-    setDrawRect({ x: gx, y: gy, w: 0, h: 0 });
+    if (zoneDraw && isDm) {
+      if (e.target !== e.currentTarget || !boardRef.current) return; // only start on empty board
+      const rect = boardRef.current.getBoundingClientRect();
+      const gx = (e.clientX - rect.left) / (CELL * zoom);
+      const gy = (e.clientY - rect.top) / (CELL * zoom);
+      zoneDragStart.current = { x: gx, y: gy };
+      setDrawRect({ x: gx, y: gy, w: 0, h: 0 });
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
+    // Free camera pan (see `panDrag` above) — only when clicking truly empty board (not a token,
+    // not while casting/AoE, where a click means something else).
+    if (e.target !== e.currentTarget || !boardScrollRef.current) return;
+    if (castingSpell || castingMonsterSpell || aoe) return;
+    const scroller = boardScrollRef.current;
+    panDrag.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: scroller.scrollLeft,
+      scrollTop: scroller.scrollTop,
+      moved: false,
+    };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    if (panDrag.current && boardScrollRef.current) {
+      const dx = e.clientX - panDrag.current.x;
+      const dy = e.clientY - panDrag.current.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panDrag.current.moved = true;
+      boardScrollRef.current.scrollLeft = panDrag.current.scrollLeft - dx;
+      boardScrollRef.current.scrollTop = panDrag.current.scrollTop - dy;
+      return;
+    }
     if (zoneDragStart.current && boardRef.current) {
       const rect = boardRef.current.getBoundingClientRect();
-      const gx = (e.clientX - rect.left) / CELL;
-      const gy = (e.clientY - rect.top) / CELL;
+      const gx = (e.clientX - rect.left) / (CELL * zoom);
+      const gy = (e.clientY - rect.top) / (CELL * zoom);
       const start = zoneDragStart.current;
       setDrawRect({
         x: Math.min(start.x, gx),
@@ -229,13 +379,13 @@ export function BattleMap() {
     }
     if (aoe && boardRef.current) {
       const r = boardRef.current.getBoundingClientRect();
-      setAoeAim({ x: (e.clientX - r.left) / CELL, y: (e.clientY - r.top) / CELL });
+      setAoeAim({ x: (e.clientX - r.left) / (CELL * zoom), y: (e.clientY - r.top) / (CELL * zoom) });
       return;
     }
     if (!drag.current) return;
     const rect = boardRef.current!.getBoundingClientRect();
-    const x = (e.clientX - rect.left - drag.current.dx) / CELL;
-    const y = (e.clientY - rect.top - drag.current.dy) / CELL;
+    const x = (e.clientX - rect.left - drag.current.dx) / (CELL * zoom);
+    const y = (e.clientY - rect.top - drag.current.dy) / (CELL * zoom);
     // Instant local feedback for the dragger — never waits on the network.
     setDragPos({ id: drag.current.id, x, y });
     // Everyone else's view of this token still comes from the synced store, so keep sending —
@@ -251,6 +401,11 @@ export function BattleMap() {
   }
 
   function onPointerUp(e: React.PointerEvent) {
+    if (panDrag.current) {
+      suppressBoardClick.current = panDrag.current.moved;
+      panDrag.current = null;
+      return;
+    }
     if (zoneDragStart.current) {
       zoneDragStart.current = null;
       const r = drawRect;
@@ -291,13 +446,18 @@ export function BattleMap() {
     if (!boardRef.current) return;
     const sbId = e.dataTransfer.getData('text/statblock-id');
     const id = e.dataTransfer.getData('text/token-id');
-    if (!id && !sbId) return;
+    const sheetId = e.dataTransfer.getData('text/sheet-id');
+    if (!id && !sbId && !sheetId) return;
     e.preventDefault();
     const rect = boardRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.round((e.clientX - rect.left) / CELL - 0.5));
-    const y = Math.max(0, Math.round((e.clientY - rect.top) / CELL - 0.5));
+    const x = Math.max(0, Math.round((e.clientX - rect.left) / (CELL * zoom) - 0.5));
+    const y = Math.max(0, Math.round((e.clientY - rect.top) / (CELL * zoom) - 0.5));
     if (sbId) {
       if (isDm) send({ t: 'spawnStatblock', id: sbId, x, y, rollHp: e.shiftKey });
+      return;
+    }
+    if (sheetId) {
+      send({ t: 'placeSheetToken', sheetId, x, y });
       return;
     }
     send({ t: 'copyToken', id, x, y });
@@ -343,6 +503,7 @@ export function BattleMap() {
 
       {isDm && <BestiaryPalette />}
       {isDm && <NpcPalette />}
+      <CharacterPalette />
 
       {tokens.length > 0 && (
         <details className="token-palette">
@@ -393,6 +554,15 @@ export function BattleMap() {
         </div>
       )}
 
+      {castingMonsterSpell && (
+        <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
+          🪄 Ra <strong>{castingMonsterSpell.spell.name}</strong>
+          {castingMonsterSpell.spell.range ? ` · tầm ${castingMonsterSpell.spell.range}` : ''}
+          {castingMonsterSpell.spell.area ? ` · vùng ${castingMonsterSpell.spell.area}` : ''} — bấm token mục
+          tiêu (Esc / bấm đây để hủy)
+        </div>
+      )}
+
       {isDm && tokens.some((t) => t.cover === 'total') && (
         <div className="cover-warning">
           ⚠ Che hoàn toàn (đừng đánh tầm xa):{' '}
@@ -437,7 +607,17 @@ export function BattleMap() {
         </details>
       )}
 
-      <div className="board-scroll">
+      <div className="board-scroll" ref={boardScrollRef}>
+        {/* Sized to the SCALED board so the native scrollbars cover the zoomed-out/in extent.
+            Padded on all sides so the board isn't pinned to the top-left corner — scroll into
+            the padding to drag the map away from the edge and re-centre it. */}
+        <div
+          style={{
+            width: map.cols * CELL * zoom,
+            height: map.rows * CELL * zoom,
+            padding: PAN_PAD,
+          }}
+        >
         <div
           ref={boardRef}
           className="board"
@@ -446,6 +626,8 @@ export function BattleMap() {
             height: map.rows * CELL,
             backgroundImage: map.backgroundUrl ? `url(${map.backgroundUrl})` : undefined,
             backgroundSize: '100% 100%',
+            transform: `scale(${zoom})`,
+            transformOrigin: '0 0',
           }}
           onPointerDown={onBoardPointerDown}
           onPointerMove={onPointerMove}
@@ -465,6 +647,10 @@ export function BattleMap() {
           }}
           onDrop={onBoardDrop}
           onClick={(e) => {
+            if (suppressBoardClick.current) {
+              suppressBoardClick.current = false; // was a pan, not a click — don't deselect
+              return;
+            }
             if (e.target === e.currentTarget) setSelected(null);
           }}
         >
@@ -560,8 +746,28 @@ export function BattleMap() {
                 background: `${z.color}22`,
                 pointerEvents: zoneDraw ? 'none' : 'auto',
               }}
+              onPointerDown={(e) => {
+                // A zone sits on top of the board and would otherwise swallow the drag-to-pan
+                // gesture whenever it starts over one — let it pan too, same as empty board (see
+                // `panDrag`); `onClick` below only opens the popup when it wasn't actually a drag.
+                if (zoneDraw || castingSpell || castingMonsterSpell || aoe || !boardScrollRef.current) return;
+                e.stopPropagation();
+                const scroller = boardScrollRef.current;
+                panDrag.current = {
+                  x: e.clientX,
+                  y: e.clientY,
+                  scrollLeft: scroller.scrollLeft,
+                  scrollTop: scroller.scrollTop,
+                  moved: false,
+                };
+                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+              }}
               onClick={(e) => {
                 e.stopPropagation();
+                if (suppressBoardClick.current) {
+                  suppressBoardClick.current = false;
+                  return;
+                }
                 if (castingSpell || groupMode || aoe) return;
                 setZonePopup({ kind: 'existing', zone: z });
               }}
@@ -660,6 +866,11 @@ export function BattleMap() {
                       />
                     </div>
                   )}
+                  {t.healthTier && HEALTH_TIER_VI[t.healthTier].icon && (
+                    <span className="tk-tier" title={`Tình trạng: ${HEALTH_TIER_VI[t.healthTier].text}`}>
+                      {HEALTH_TIER_VI[t.healthTier].icon}
+                    </span>
+                  )}
                   <span className="tk-label">{t.label}</span>
                 </div>
               );
@@ -676,11 +887,24 @@ export function BattleMap() {
             </div>
           )}
         </div>
+        </div>
+      </div>
+      <div className="zoom-controls">
+        <button title="Thu nhỏ (Ctrl+cuộn chuột để zoom quanh con trỏ)" onClick={() => zoomBy(1 / 1.1)}>
+          −
+        </button>
+        <button title="Đặt lại 100%" onClick={() => setZoom(1)}>
+          {Math.round(zoom * 100)}%
+        </button>
+        <button title="Phóng to (Ctrl+cuộn chuột để zoom quanh con trỏ)" onClick={() => zoomBy(1.1)}>
+          +
+        </button>
       </div>
       <DddiceCanvas />
 
       {selectedToken && (
         <TokenInspector
+          key={selectedToken.id}
           token={selectedToken}
           onClose={() => setSelected(null)}
           inGroup={groupSel.has(selectedToken.id)}
@@ -711,7 +935,40 @@ function MapToolbar() {
   const room = useStore((s) => s.room)!;
   const send = useStore((s) => s.send);
   const { map } = room;
+  const zones = room.zones ?? [];
   const [aspect, setAspect] = useState<number | null>(null);
+
+  const mapId = mapIdFromBackgroundUrl(map.backgroundUrl);
+  const layout = mapId ? ZONE_LAYOUTS[mapId] : undefined;
+  const missingRooms = layout ? layout.rooms.filter((r) => !zones.some((z) => z.code === r.code)) : [];
+
+  /** One-click fill-in for a map we already have a book-keyed layout for (see
+   *  `crookedMoonZoneLayouts.json`) — pulls each room's code/coords from the layout and its
+   *  name/read-aloud/DM notes from the zone library (`ZONE_LIBRARY`), same source `ZonePopup`'s
+   *  own search box uses. Coordinates are hand-estimated off the book's own numbered map, so
+   *  they're close but not pixel-perfect — nudge a zone's X/Y/Rộng/Cao in its popup if needed. */
+  function importKnownZones() {
+    if (!layout) return;
+    for (const r of missingRooms) {
+      const lib = ZONE_LIBRARY.find((e) => e.code === r.code && e.chapter === layout.chapter);
+      send({
+        t: 'zoneUpsert',
+        zone: {
+          id: nanoIdish(),
+          name: lib?.name ?? r.code,
+          code: r.code,
+          x: r.x,
+          y: r.y,
+          w: r.w,
+          h: r.h,
+          color: '#8a5a3b',
+          readAloud: lib?.readAloud ?? '',
+          dmNotes: lib?.dmNotes ?? '',
+          source: lib?.source,
+        },
+      });
+    }
+  }
 
   // Auto grid: keep rows in step with the background's aspect ratio.
   function loadAspect(url: string | undefined) {
@@ -781,6 +1038,15 @@ function MapToolbar() {
         />
         Snap (giữ Shift để tắt tạm)
       </label>
+      {layout && missingRooms.length > 0 && (
+        <button
+          className="link"
+          title="Tự tạo vùng H1, H2… theo tọa độ ước lượng từ bản đồ gốc trong sách — bấm vào từng vùng sau đó để chỉnh lại vị trí/kích thước nếu lệch"
+          onClick={importKnownZones}
+        >
+          📥 Nạp {missingRooms.length} mã vùng có sẵn cho bản đồ này
+        </button>
+      )}
     </div>
   );
 }
@@ -1031,6 +1297,7 @@ function TokenInspector({
   const tokens = useStore((s) => s.room?.tokens ?? []);
   const sheets = useStore((s) => s.room?.sheets ?? []);
   const initiative = useStore((s) => s.room?.initiative);
+  const beginMonsterCast = useStore((s) => s.beginMonsterCast);
   const mySheets = sheets.filter((s) => isDm || s.ownerId === meId);
   const linkedSheet = sheets.find((s) => s.tokenId === token.id) ?? null;
   const [atkName, setAtkName] = useState('Đòn đánh');
@@ -1040,15 +1307,40 @@ function TokenInspector({
   const [attackerId, setAttackerId] = useState('');
   const [sbTargetId, setSbTargetId] = useState('');
   const [sbRollMode, setSbRollMode] = useState<RollMode>('normal');
+  const [spellPickerOpen, setSpellPickerOpen] = useState(false);
+  const [spellSearch, setSpellSearch] = useState('');
+  const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
+  const [lootTargetSheetId, setLootTargetSheetId] = useState('');
   const sbd20 = (mod: number) => d20Check(mod, sbRollMode);
   const mtag =
     sbRollMode === 'advantage' ? ' (lợi thế)' : sbRollMode === 'disadvantage' ? ' (bất lợi)' : '';
+
+  useEffect(() => {
+    if (!spellPickerOpen) return;
+    function onDown(e: MouseEvent) {
+      const el = e.target as HTMLElement;
+      if (el.closest('.monster-spell-picker') || el.closest('.spell-picker-toggle')) return;
+      setSpellPickerOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSpellPickerOpen(false);
+    }
+    window.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [spellPickerOpen]);
 
   const sb = token.statblock;
   const canSeeStatblock = sb && (isDm || token.controllerId === meId);
   const sbTargetName = tokens.find((t) => t.id === sbTargetId)?.label ?? '';
 
   const canControl = isDm || token.controllerId === meId;
+  // Enemy numbers are stripped server-side for players (see `tokenForPlayers`); don't show empty editable boxes.
+  const statsHidden = !isDm && statsHiddenFromPlayers(token);
+  const statblockHidden = !isDm && statblockHiddenFromPlayers(token);
   const isActiveTurn =
     !!initiative?.running &&
     initiative.entries.find((e) => e.isActive)?.tokenId === token.id;
@@ -1148,6 +1440,14 @@ function TokenInspector({
               📖 Mở statblock
             </button>
           )}
+          {linkedEntry && (
+            <button
+              title="Nạp lại statblock từ Bestiary vào token này (ghi đè chỉnh sửa riêng trên token, nếu có) — dùng khi Bestiary vừa được cập nhật (vd thêm DC/mod phép) sau khi token đã spawn"
+              onClick={() => patch({ statblock: tokenStatblockFrom(linkedEntry) })}
+            >
+              🔄 Đồng bộ từ Bestiary
+            </button>
+          )}
           <button
             title={
               linkedEntry
@@ -1218,7 +1518,15 @@ function TokenInspector({
         </div>
       )}
 
+      {statsHidden && token.healthTier && (
+        <p className="hint insp-tier">
+          {HEALTH_TIER_VI[token.healthTier].icon} Tình trạng: <strong>{HEALTH_TIER_VI[token.healthTier].text}</strong>
+          <span> — AC / HP của kẻ địch được giấu</span>
+        </p>
+      )}
       <div className="insp-grid">
+        {!statsHidden && (
+          <>
         <label>
           HP
           <input
@@ -1248,7 +1556,16 @@ function TokenInspector({
               patch({ armorClass: e.target.value === '' ? undefined : Number(e.target.value) })
             }
           />
+          {/* Cover's +AC is applied automatically when an attack rolls to hit — it's kept off this
+              field itself (so the printed/base AC doesn't drift), just previewed here. */}
+          {typeof token.armorClass === 'number' && coverAcBonus(token.cover) > 0 && (
+            <span className="hint">
+              hiệu lực {token.armorClass + coverAcBonus(token.cover)} (do che chắn)
+            </span>
+          )}
         </label>
+          </>
+        )}
         <label>
           Cỡ
           <select
@@ -1285,6 +1602,16 @@ function TokenInspector({
             Ẩn với người chơi
           </label>
         )}
+        {isDm && token.statblock && (
+          <label className="chk" title="Mặc định người chơi KHÔNG thấy AC / HP / statblock của quái — chỉ thấy tình trạng (nguyên vẹn → gục ngã). Bật để lộ hết.">
+            <input
+              type="checkbox"
+              checked={!!token.revealStats}
+              onChange={(e) => patch({ revealStats: e.target.checked || undefined })}
+            />
+            Hiện AC / HP cho người chơi
+          </label>
+        )}
         <label>
           Che chắn (cover)
           <select
@@ -1305,19 +1632,69 @@ function TokenInspector({
         </p>
       )}
 
-      <details className="def-details">
-        <summary>Phòng thủ (kháng / miễn / DR)</summary>
-        <DefensesEditor
-          defenses={token.defenses}
-          onChange={(d) => patch({ defenses: d })}
-        />
-      </details>
+      {!statblockHidden && (
+        <details className="def-details">
+          <summary>Phòng thủ (kháng / miễn / DR)</summary>
+          <DefensesEditor
+            defenses={token.defenses}
+            onChange={(d) => patch({ defenses: d })}
+          />
+        </details>
+      )}
 
       <EffectsPanel token={token} />
 
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
           {sb.meta && <div className="sb-meta">{sb.meta}</div>}
+          {isDm && linkedEntry && (
+            <div className="loot-roller">
+              <button
+                className="roll-btn"
+                title="Roll nhanh tiền rơi ra theo CR — homebrew, không phải bảng DMG, chỉ để đỡ tự set tay. Vật phẩm ma thuật vẫn do DM tự thêm."
+                onClick={() => setRolledLoot(randomLootFor(linkedEntry.cr))}
+              >
+                🎲 random loot (CR {linkedEntry.cr})
+              </button>
+              {rolledLoot && (
+                <div className="loot-result">
+                  <span>
+                    {COIN_TYPES.filter((c) => rolledLoot[c] > 0)
+                      .map((c) => `${rolledLoot[c]} ${c}`)
+                      .join(' · ') || '0'}
+                    {' '}(≈ {currencyInGp(rolledLoot).toFixed(2)} gp)
+                  </span>
+                  <select value={lootTargetSheetId} onChange={(e) => setLootTargetSheetId(e.target.value)}>
+                    <option value="">— cộng vào nhân vật —</option>
+                    {sheets.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="roll-btn strong"
+                    disabled={!lootTargetSheetId}
+                    onClick={() => {
+                      const target = sheets.find((s) => s.id === lootTargetSheetId);
+                      if (!target) return;
+                      send({
+                        t: 'upsertSheet',
+                        sheet: { ...target, currency: addCurrency(target.currency, rolledLoot) },
+                      });
+                      setRolledLoot(null);
+                      setLootTargetSheetId('');
+                    }}
+                  >
+                    + cộng
+                  </button>
+                  <button className="link" onClick={() => setRolledLoot(null)}>
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <RollModeToggle mode={sbRollMode} onChange={setSbRollMode} />
 
           <div className="sb-ability-roll">
@@ -1436,7 +1813,33 @@ function TokenInspector({
                     🔺 vùng
                   </button>
                 )}
-                {parts.length > 0 && (
+                {a.save && !parseArea(a.description) && (
+                  <button
+                    className="roll-btn strong"
+                    disabled={!sbTargetId}
+                    title={
+                      sbTargetId
+                        ? 'Roll saving throw cho mục tiêu đã chọn, tự roll sát thương nếu fail'
+                        : 'Chọn mục tiêu ở trên trước'
+                    }
+                    onClick={() =>
+                      sbTargetId &&
+                      send({
+                        t: 'spellSave',
+                        targetTokenId: sbTargetId,
+                        ability: a.save!.ability,
+                        dc: a.save!.dc,
+                        label: `${base} → ${sbTargetName}`,
+                        damageOnFail: parts.length ? parts : undefined,
+                        damageHalfOnSave: /half damage/i.test(a.description ?? ''),
+                        sourceTokenId: token.id,
+                      })
+                    }
+                  >
+                    🎯 save
+                  </button>
+                )}
+                {parts.length > 0 && !a.save && (
                   <button
                     className="roll-btn"
                     onClick={() =>
@@ -1466,6 +1869,119 @@ function TokenInspector({
                   <strong>{t.name}.</strong> {t.description}
                 </p>
               ))}
+            </details>
+          )}
+          {(sb.legendaryActions?.length ?? 0) > 0 && (
+            <details className="sb-traits-view" open>
+              <summary>
+                ⚡ Legendary actions ({token.legendaryActionsRemaining ?? sb.legendaryActionsPerRound ?? 0}/
+                {sb.legendaryActionsPerRound})
+              </summary>
+              {sb.legendaryActions!.map((a, i) => (
+                <p key={i}>
+                  <strong>{a.name}.</strong> {a.description}
+                </p>
+              ))}
+            </details>
+          )}
+          {sb.hasLairActions && (sb.lairActions?.length ?? 0) > 0 && (
+            <details className="sb-traits-view">
+              <summary>🏰 Lair actions</summary>
+              {sb.lairActions!.map((a, i) => (
+                <p key={i}>
+                  <strong>{a.name}.</strong> {a.description}
+                </p>
+              ))}
+            </details>
+          )}
+          {sb.spellcasting && (
+            <details className="sb-traits-view" open>
+              <summary>
+                🔮 Phép (DC {sb.spellcasting.spellSaveDc} · {fmtMod(sb.spellcasting.spellAttackBonus)} đánh)
+                {isDm && (
+                  <button
+                    className="roll-btn sm spell-picker-toggle"
+                    title="Tìm & chọn phép bất kỳ trong SRD, cast bằng DC/mod của con quái này"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSpellPickerOpen((v) => !v);
+                      setSpellSearch('');
+                    }}
+                  >
+                    {spellPickerOpen ? '✕ đóng tìm phép' : '🔍 tìm phép khác'}
+                  </button>
+                )}
+              </summary>
+              {/* Inline, not a floating/fixed panel — avoids ever overlapping or fighting the
+                  sidebar's own layout regardless of window width or scroll position. */}
+              {spellPickerOpen && (
+                <div className="monster-spell-picker">
+                  <input
+                    autoFocus
+                    placeholder="Tìm phép (SRD)…"
+                    value={spellSearch}
+                    onChange={(e) => setSpellSearch(e.target.value)}
+                  />
+                  <div className="spell-picker-list">
+                    {SRD_SPELLS.filter((d) =>
+                      d.name.toLowerCase().includes(spellSearch.trim().toLowerCase()),
+                    )
+                      .slice(0, 60)
+                      .map((def) => (
+                        <button
+                          key={def.id}
+                          className="spell-picker-row"
+                          onClick={() => {
+                            const spell = monsterSpellFrom(def, sb.spellcasting!, `${token.id}-${def.id}-${Date.now()}`);
+                            beginMonsterCast(token.id, spell, sb.spellcasting!.spellAttackBonus);
+                            setSpellPickerOpen(false);
+                          }}
+                        >
+                          <span className="spell-picker-name">{def.name}</span>
+                          <span className="spell-picker-meta">
+                            {def.level ? `lv${def.level}` : 'cantrip'}
+                            {def.school ? ` · ${def.school}` : ''}
+                          </span>
+                        </button>
+                      ))}
+                    {SRD_SPELLS.filter((d) =>
+                      d.name.toLowerCase().includes(spellSearch.trim().toLowerCase()),
+                    ).length === 0 && <p className="hint">Không tìm thấy phép nào khớp.</p>}
+                  </div>
+                </div>
+              )}
+              {sb.spellcasting.spellNames.map((name) => {
+                const def = findCantrip(name);
+                if (!def) return <p key={name} className="hint">{name} — không tìm thấy trong database</p>;
+                const spell = monsterSpellFrom(def, sb.spellcasting!, `${token.id}-${def.id}`);
+                return (
+                  <div key={name} className="sb-act">
+                    <span className="sb-act-name" title={spell.notes}>
+                      {spell.name}
+                      <em> · lv{spell.level}{spell.school ? ` ${spell.school}` : ''}</em>
+                    </span>
+                    <span className="sb-act-detail">
+                      {spell.range ?? ''}
+                      {spell.area ? ` · ${spell.area}` : ''}
+                    </span>
+                    {isDm && (
+                      <button
+                        className="roll-btn strong"
+                        title="Chọn mục tiêu như người chơi cast từ char sheet"
+                        onClick={() => beginMonsterCast(token.id, spell, sb.spellcasting!.spellAttackBonus)}
+                      >
+                        🪄 ra phép
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+              {sb.spellcasting.spellNames.length === 0 && (
+                <p className="hint">
+                  Chưa gán tên phép cố định — bấm "🔍 tìm phép khác" để tra SRD và cast trực tiếp.
+                </p>
+              )}
             </details>
           )}
           {sb.notes && <p className="hint">{sb.notes}</p>}
@@ -1564,7 +2080,6 @@ function BestiaryPalette() {
   );
 }
 
-
 /** DM-only: drag an NPC (from `room.bestiary`, tag "npc") straight onto the map to spawn its
  *  token — same mechanism as BestiaryPalette, filtered to the story-NPC subset so they don't
  *  get lost in the monster list. Entries land here once opened/spawned from the NPC tab. */
@@ -1611,3 +2126,39 @@ function NpcPalette() {
     </details>
   );
 }
+
+/** Drag a character's chip onto the map — a "token bank" for player characters, mirroring
+ *  BestiaryPalette's drag-to-spawn for monsters. Reuses the sheet's existing token if it's
+ *  already on this scene, otherwise places (and links) a fresh one, e.g. after switching maps. */
+function CharacterPalette() {
+  const sheets = useStore((s) => s.room?.sheets ?? []);
+  const isDm = useStore((s) => s.isDm());
+  const meId = useStore((s) => s.participantId);
+  const list = sheets.filter((s) => isDm || s.ownerId === meId);
+  if (list.length === 0) return null;
+  return (
+    <details className="token-palette" open>
+      <summary>🧑 Kéo nhân vật vào bản đồ ({list.length})</summary>
+      <div className="tp-list">
+        {list.map((s) => (
+          <div
+            key={s.id}
+            className="tp-chip"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('text/sheet-id', s.id);
+              e.dataTransfer.effectAllowed = 'copy';
+            }}
+            title={`Kéo "${s.name}" vào bản đồ — đặt token đại diện tại đây (dùng lại token cũ nếu đã có trên map này)`}
+          >
+            <span className="tp-dot" style={{ background: '#c0392b' }} />
+            {s.name}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+/** Memoised: takes no props, so it only re-renders when its own store selectors change. */
+export const BattleMap = memo(BattleMapImpl);

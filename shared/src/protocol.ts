@@ -16,12 +16,12 @@ import type {
   Token,
 } from './types.js';
 
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 7;
 
 /** Actions sent client -> server. */
 export type ClientAction =
   // `role` is a hint only; the server assigns roles (room creator becomes DM).
-  | { t: 'join'; name: string; role?: 'dm' | 'player'; participantId?: string }
+  | { t: 'join'; name: string; role?: 'dm' | 'player'; participantId?: string; secret?: string }
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
   | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
@@ -46,6 +46,9 @@ export type ClientAction =
       attackerTokenId?: string;
       /** Melee or ranged delivery (drives Armor of Agathys retaliation, ranged-in-melee). */
       attackRange?: AttackRange;
+      /** Repelling Blast (2024): on a hit, push the target this many feet straight away from the
+       *  attacker. Gated server-side to once per attacker turn via `turnUsed.repellingPush`. */
+      pushFeetOnHit?: number;
       /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target
        *  (same save-vs-DC resolution as the standalone 'grapple' action). Client gates this to
        *  once per turn via `turnUsed.grapplerComboUsed`; the server doesn't re-check the feat. */
@@ -66,6 +69,12 @@ export type ClientAction =
    *  one step — `setTurnUsed`'s patch only merges fields in, it can't clear ones already set. */
   | { t: 'resetTurnUsed'; tokenId: string }
   | { t: 'clearConcentration'; tokenId: string }
+  /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
+  | { t: 'levelUpOpen' }
+  | { t: 'levelUpClose' }
+  /** A player claims their level-up: +1 level in `classIndex` (default: first class) and a rolled HP
+   *  gain. `external` carries the dddice dice (the 2nd one only when the 1st was a 1 — pity reroll). */
+  | { t: 'levelUp'; sheetId: string; classIndex?: number; external?: { first: ExternalRoll; second?: ExternalRoll } }
   // 2024 Unarmed Strike Grapple: server rolls the target's STR/DEX save (its
   // better modifier) vs `dc`; on a failure it gains the Grappled condition from
   // the grappler. `release: true` removes the grapple instead.
@@ -113,6 +122,7 @@ export type ClientAction =
       label: string;
       external?: number;
       sourceSheetId?: string;
+      sourceTokenId?: string;
     }
   // spend one hit die (Short Rest): the server rolls 1dX + CON and heals the sheet
   | { t: 'spendHitDie'; sheetId: string; die: number }
@@ -137,7 +147,15 @@ export type ClientAction =
   | { t: 'initNext' }
   | { t: 'initPrev' }
   | { t: 'initReset' }
+  /** Swap two ADJACENT player-character entries' turn order (drag & drop on the initiative bar).
+   *  Any participant can call this (not just the DM) — the server only allows it between two
+   *  entries that are both linked to a character sheet and sit next to each other, so a monster's
+   *  turn timing relative to the party can never be reordered this way. */
+  | { t: 'initSwapAdjacent'; entryIdA: string; entryIdB: string }
   | { t: 'initStart' }
+  // DM answers the "use this legendary/lair action?" prompt (see `DmPrompt`)
+  | { t: 'dmPromptUse'; actionId?: string }
+  | { t: 'dmPromptDismiss' }
   // roll initiative for oneself from the character sheet (goes through dddice)
   | {
       t: 'rollInitiative';
@@ -157,14 +175,22 @@ export type ClientAction =
   | { t: 'homebrewUpsert'; entry: HomebrewEntry }
   | { t: 'homebrewRemove'; id: string }
   | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean }
+  /** Drag a character sheet's chip onto the map: reuses its existing token if that token is
+   *  already on the active scene, otherwise spawns a fresh one there (e.g. after switching maps)
+   *  and re-links the sheet to it. DM or the sheet's own owner only. */
+  | { t: 'placeSheetToken'; sheetId: string; x: number; y: number }
   // map zones (DM only) — a drawn region on the active scene's map + its read-aloud/DM text
   | { t: 'zoneUpsert'; zone: MapZone }
   | { t: 'zoneRemove'; id: string };
 
 /** Events sent server -> client. */
 export type ServerEvent =
-  | { t: 'welcome'; participantId: string; protocol: number; state: RoomState }
+  | { t: 'welcome'; participantId: string; secret?: string; protocol: number; state: RoomState }
   | { t: 'state'; state: RoomState }
+  /** Slow-changing, large collections (bestiary: DM only; homebrew: role-filtered) are NOT part of
+   *  every `state` push — they ride in their own event, sent before the first state and again only when
+   *  they actually change. `state.bestiary` / `state.homebrew` arrive empty; the client splices these in. */
+  | { t: 'static'; bestiary?: Statblock[]; homebrew?: HomebrewEntry[] }
   | { t: 'error'; message: string };
 
 export interface ClientEnvelope {

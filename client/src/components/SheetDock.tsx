@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   ABILITIES,
+  circletTempHp,
+  HEALTH_TIER_VI,
   SKILLS,
   abilityMod,
   actionDamageParts,
@@ -46,6 +48,7 @@ import {
   RIDER_PRESETS,
   rogueLevel,
   saveBonus,
+  MAX_LEVEL,
   sheetClasses,
   attacksPerAction,
   economyKindOf,
@@ -113,6 +116,8 @@ const ACTION_LABEL: Record<ActionType, string> = {
   reaction: 'Reaction',
   free: 'Free',
   other: 'Khác',
+  legendary: 'Legendary',
+  lair: 'Lair',
 };
 
 export const SKILL_LABEL_VI: Record<string, string> = {
@@ -198,16 +203,16 @@ type SubTab = 'basic' | 'skills' | 'equipment' | 'spells' | 'feats' | 'abilities
 
 const DOCK_H_KEY = 'dnd-table.dockHeight';
 
-export function SheetDock() {
-  const room = useStore((s) => s.room)!;
+function SheetDockImpl() {
+  const sheets = useStore((s) => s.room?.sheets)!;
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId)!;
 
-  const mine = room.sheets.filter((s) => s.ownerId === meId || isDm);
+  const mine = sheets.filter((s) => s.ownerId === meId || isDm);
   const [openId, setOpenId] = useState<string | null>(mine[0]?.id ?? null);
   const [sub, setSub] = useState<SubTab>('basic');
-  const sheet = room.sheets.find((s) => s.id === openId) ?? mine[0] ?? null;
+  const sheet = sheets.find((s) => s.id === openId) ?? mine[0] ?? null;
   const pdfRef = useRef<HTMLInputElement>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
 
@@ -229,9 +234,13 @@ export function SheetDock() {
     }
   }
 
+  // 260px is the shortest height that still fits the ability strip + AC/HP row without
+  // clipping CHA (the last ability cell) — see the "CHA bị AC/HP đè" bug: a saved dock
+  // height below this, from an older/narrower layout, silently clips the last ability cell.
+  const MIN_DOCK_H = 260;
   const [height, setHeight] = useState(() => {
     const v = Number(localStorage.getItem(DOCK_H_KEY));
-    return v >= 160 && v <= 900 ? v : Math.round(window.innerHeight * 0.27);
+    return v >= MIN_DOCK_H && v <= 900 ? v : Math.max(MIN_DOCK_H, Math.round(window.innerHeight * 0.27));
   });
   const drag = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -239,7 +248,7 @@ export function SheetDock() {
     const startH = height;
     let lastH = height;
     const move = (ev: PointerEvent) => {
-      lastH = Math.max(160, Math.min(window.innerHeight - 140, startH + (startY - ev.clientY)));
+      lastH = Math.max(MIN_DOCK_H, Math.min(window.innerHeight - 140, startH + (startY - ev.clientY)));
       setHeight(lastH);
     };
     const up = () => {
@@ -374,8 +383,40 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
   }
   const ctx: EditorCtx = { draft, commit };
 
+  const meId = useStore((st) => st.participantId);
+  const round = useStore((st) => st.room?.levelUp);
+  const pending = useStore((st) => st.levelUpPending);
+  const claimLevelUp = useStore((st) => st.claimLevelUp);
+  const [classIdx, setClassIdx] = useState(0);
+  const lvlClasses = sheetClasses(draft);
+  const canLevelUp =
+    !!round &&
+    sheet.ownerId === meId &&
+    !round.claimed.includes(sheet.id) &&
+    !pending.includes(`${round.id}:${sheet.id}`) &&
+    totalLevelOf(draft) < MAX_LEVEL;
+
   return (
     <div className="sheet-editor">
+      {canLevelUp && (
+        <div className="levelup-banner">
+          <button className="levelup-btn" onClick={() => void claimLevelUp(sheet.id, Math.min(classIdx, lvlClasses.length - 1))}>
+            ⬆ LÊN CẤP {totalLevelOf(draft)} → {totalLevelOf(draft) + 1}
+          </button>
+          {lvlClasses.length > 1 && (
+            <select value={classIdx} onChange={(e) => setClassIdx(Number(e.target.value))} title="Chọn class sẽ tăng cấp">
+              {lvlClasses.map((c, i) => (
+                <option key={i} value={i}>
+                  {c.name || '?'} {c.level}
+                </option>
+              ))}
+            </select>
+          )}
+          <span className="hint">
+            DM đã mở thăng cấp — tự roll Hit Die + CON để tăng máu (ra 1 thì roll lại, lấy kết quả sau).
+          </span>
+        </div>
+      )}
       {sub === 'basic' && <BasicTab {...ctx} />}
       {sub === 'skills' && <SkillsTab {...ctx} />}
       {sub === 'equipment' && <EquipmentTab {...ctx} />}
@@ -471,7 +512,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const [showSetup, setShowSetup] = useState(false);
   const multiClass = (draft.classes?.length ?? 0) > 0;
   const [rollMode, setRollMode] = useState<RollMode>('normal');
-  const targetName = tokens.find((t) => t.id === targetId)?.label ?? '';
+  const targetToken = tokens.find((t) => t.id === targetId);
+  const targetName = targetToken?.label ?? '';
 
   // Bug: attacking a target token that was removed/replaced from the map (e.g. the DM re-dragged
   // a fresh copy from the Bestiary) sent `attack` with a dangling targetTokenId. The server
@@ -745,6 +787,17 @@ function BasicTab({ draft, commit }: EditorCtx) {
         {/* combat + resources */}
         <div className="bt-col">
           <div className="bt-combat">
+            <button
+              className={`insp-badge ${draft.heroicInspiration ? 'on' : ''}`}
+              title={
+                draft.heroicInspiration
+                  ? 'Đang có Heroic Inspiration — dùng cho 1 D20 Test bất kỳ (tự chọn Lợi thế khi tung), rồi bấm lại để tắt.'
+                  : 'Chưa có Heroic Inspiration — bấm khi DM cấp.'
+              }
+              onClick={() => set('heroicInspiration', !draft.heroicInspiration)}
+            >
+              ✨
+            </button>
             <div className="ac-badge">
               <span className="ac-num">{ac.ac}</span>
               <span className="ac-label">AC</span>
@@ -833,28 +886,44 @@ function BasicTab({ draft, commit }: EditorCtx) {
         </div>
       </div>
 
-      <ClassFeatures draft={draft} commit={commit} />
-      <SpeciesFeatures draft={draft} commit={commit} />
-      <BackgroundFeatures draft={draft} />
-      <SubclassFeatures draft={draft} commit={commit} />
-
-      {/* actions economy */}
+      {/* actions economy — kept right after stats, above the reference text below, since this is
+          what gets used every turn */}
       <div className="bt-actions">
-        <div className="bta-head">
-          <h4>Hành động</h4>
-          <label className="target-pick">
-            Mục tiêu
-            <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-              <option value="">— không —</option>
-              {tokens.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <h4 className="bta-title">Hành động</h4>
+        {/* Target bar: big, always visible (sticky while the sheet scrolls) — every attack/spell
+            row below aims at this, so it must be impossible to miss. */}
+        <div className={`target-bar ${targetId ? 'has' : ''}`}>
+          <span className="tb-title">🎯 Mục tiêu</span>
+          <select
+            className="tb-select"
+            value={targetId}
+            onChange={(e) => setTargetId(e.target.value)}
+            title="Chọn token mục tiêu cho các nút đánh / phép bên dưới"
+          >
+            <option value="">— chưa chọn mục tiêu —</option>
+            {tokens.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+          {targetToken && (
+            <span className="tb-stats">
+              {typeof targetToken.armorClass === 'number' && <span>🛡 AC {targetToken.armorClass}</span>}
+              {targetToken.healthTier && (
+                <span title="AC / HP của kẻ địch được giấu — chỉ thấy tình trạng">
+                  {HEALTH_TIER_VI[targetToken.healthTier].icon} {HEALTH_TIER_VI[targetToken.healthTier].text}
+                </span>
+              )}
+              {typeof targetToken.currentHp === 'number' && typeof targetToken.maxHp === 'number' && (
+                <span>
+                  ♥ {targetToken.currentHp}/{targetToken.maxHp}
+                </span>
+              )}
+            </span>
+          )}
           {targetId && (
-            <label className="target-pick">
+            <label className="tb-mark">
               Đánh dấu
               <select
                 value=""
@@ -1040,6 +1109,15 @@ function BasicTab({ draft, commit }: EditorCtx) {
             onChange={(r) => set('damageRiders', r)}
           />
         </details>
+      </div>
+
+      {/* reference text — class/species/background/subclass; collapsed by default below the
+          quick-action toggles and the action list, so they don't push actual gameplay out of view */}
+      <div className="cf-reference">
+        <ClassFeatures draft={draft} commit={commit} />
+        <SpeciesFeatures draft={draft} commit={commit} />
+        <BackgroundFeatures draft={draft} />
+        <SubclassFeatures draft={draft} commit={commit} />
       </div>
     </div>
   );
@@ -1489,6 +1567,10 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
   const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
   const wsMax = wildShapeMax(draft);
   const wsUsed = Math.min(draft.wildShapeUsed ?? 0, wsMax);
+  // Circlet of Natural Rejuvenation: each Wild Shape use spent grants temp HP (never stacks — larger wins).
+  const circletHp = circletTempHp(draft);
+  const spendWildShape = (used: number) =>
+    set({ wildShapeUsed: used, ...(circletHp > 0 ? { tempHp: Math.max(draft.tempHp ?? 0, circletHp) } : {}) });
 
   const sneakDice = sneakAttackDice(draft);
   const boomingBladeTier =
@@ -1526,7 +1608,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
     }
     if (wsUsed >= wsMax) return;
     if (!spendTurn('bonus')) return;
-    set({ wildShapeUsed: wsUsed + 1 });
+    spendWildShape(wsUsed + 1);
     activateWoodWose({ ...draft, wildShapeUsed: wsUsed + 1 });
   }
 
@@ -1580,17 +1662,12 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
     set(rUsed < rMax ? { raging: true, rageUsed: rUsed + 1 } : { raging: true });
   }
 
-  return (
-    <details className="class-features" open>
-      <summary>
-        Class features
-        {rl > 0 && <em> · Rogue {rl}</em>}
-        {bl > 0 && <em> · Barbarian {bl}</em>}
-        {ml > 0 && <em> · Monk {ml}</em>}
-        {wl > 0 && <em> · Warlock {wl}</em>}
-        {dl > 0 && <em> · Druid {dl}</em>}
-      </summary>
+  const hasQuickActions = bl > 0 || ml > 0 || wl > 0 || dl > 0 || rl > 0 || hasBoomingBlade;
 
+  return (
+    <div className="cf-block">
+      {hasQuickActions && (
+      <div className="cf-quick">
       {bl > 0 && (
         <div className="cf-auto">
           <button className={`cf-btn ${draft.raging ? 'on' : ''}`} onClick={toggleRage}>
@@ -1678,11 +1755,11 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
                 disabled={wsUsed >= wsMax}
                 onClick={() => {
                   if (!spendTurn('bonus')) return;
-                  set({ wildShapeUsed: Math.min(wsMax, wsUsed + 1) });
+                  spendWildShape(Math.min(wsMax, wsUsed + 1));
                 }}
                 title="Dùng 1 lần Wild Shape (hồi 1 khi nghỉ ngắn, hết khi nghỉ dài)"
               >
-                Wild Shape −1
+                Wild Shape −1{circletHp > 0 ? ` (+${circletHp} HP tạm)` : ''}
               </button>
               {isOldWays && (
                 <button
@@ -1740,18 +1817,33 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           </span>
         </div>
       )}
-
-      <div className="cf-list">
-        {feats.map((f) => (
-          <div key={f.id} className="cf-row">
-            <span className="cf-lvl">L{f.level}</span>
-            <span className="cf-body">
-              <strong>{f.name}.</strong> {f.description}
-            </span>
-          </div>
-        ))}
       </div>
-    </details>
+      )}
+
+      {feats.length > 0 && (
+        <details className="class-features">
+          <summary>
+            📖 Class features
+            <span className="cf-count">{feats.length}</span>
+            {rl > 0 && <em> · Rogue {rl}</em>}
+            {bl > 0 && <em> · Barbarian {bl}</em>}
+            {ml > 0 && <em> · Monk {ml}</em>}
+            {wl > 0 && <em> · Warlock {wl}</em>}
+            {dl > 0 && <em> · Druid {dl}</em>}
+          </summary>
+          <div className="cf-list">
+            {feats.map((f) => (
+              <div key={f.id} className="cf-row">
+                <span className="cf-lvl">L{f.level}</span>
+                <span className="cf-body">
+                  <strong>{f.name}.</strong> {f.description}
+                </span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -1829,9 +1921,9 @@ function SpeciesFeatures({ draft, commit }: EditorCtx) {
   ].filter(Boolean);
 
   return (
-    <details className="class-features species-features" open>
+    <details className="class-features species-features">
       <summary>
-        Species — {def.name}
+        🧬 Species — {def.name}
         {def.blurb ? ` (${def.blurb})` : ''}
       </summary>
       <p className="hint">{meta.join(' · ')}</p>
@@ -1889,7 +1981,7 @@ function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
   if (!def) return null;
   return (
     <details className="class-features background-features">
-      <summary>Background — {def.name}</summary>
+      <summary>📜 Background — {def.name}</summary>
       <p className="hint">Chỉ số: {def.abilityScores}</p>
       <div className="cf-list">
         <div className="cf-row">
@@ -1942,8 +2034,11 @@ function SubclassFeatures({ draft, commit }: EditorCtx) {
     commit({ ...draft, subclassUses: { ...used, [id]: Math.max(0, n) } });
 
   return (
-    <details className="class-features subclass-features" open>
-      <summary>Subclass features</summary>
+    <details className="class-features subclass-features">
+      <summary>
+        ✦ Subclass features
+        <span className="cf-count">{feats.length}</span>
+      </summary>
       <div className="cf-list">
         {feats.map((f) => {
           const max = f.uses ? subclassUsesMax(f.uses.max, draft) : 0;
@@ -2533,7 +2628,8 @@ function SpellRow({
   canCast: boolean;
   /** Multiclass: the sheet's casting classes (a spell picks one → its ability / DC). */
   castingClasses: string[];
-  /** Has Warlock levels: offer the Agonizing Blast toggle on damage cantrips (2024 — any one, not just Eldritch Blast). */
+  /** Has Warlock levels: offer the Agonizing Blast / Repelling Blast toggles on damage cantrips
+   *  (2024 — any one, not just Eldritch Blast). */
   showAgonizingBlast?: boolean;
   /** Vancian casters (full/half/third) can pick a higher slot to "Nâng ô" (upcast) — Pact Magic
    *  always auto-casts at its single slot level, so no picker for those. */
@@ -2548,6 +2644,10 @@ function SpellRow({
   const [castLevel, setCastLevel] = useState(sp.level);
   useEffect(() => setCastLevel(sp.level), [sp.level]);
   const eligibleForAgonizingBlast = sp.level === 0 && (sp.damage?.length ?? 0) > 0;
+  // Repelling Blast pushes on a HIT, so — unlike Agonizing Blast — it only makes sense on an
+  // attack-roll cantrip, not a save-based damaging one.
+  const eligibleForRepellingBlast =
+    sp.level === 0 && sp.castKind === 'attack' && (sp.damage?.length ?? 0) > 0;
   const upcastLevels =
     sp.level > 0 && caster && caster !== 'pact' && caster !== 'none'
       ? (spellSlots ?? []).filter((s) => s.level >= sp.level).sort((a, b) => a.level - b.level)
@@ -2588,6 +2688,18 @@ function SpellRow({
             onClick={() => onChange({ agonizingBlast: !sp.agonizingBlast })}
           >
             ⚡ Agonizing Blast
+          </button>
+        )}
+        {showAgonizingBlast && eligibleForRepellingBlast && (
+          <button
+            className={`sr-agonizing ${sp.repellingBlast ? 'on' : ''}`}
+            title={
+              'Repelling Blast (2024): chọn MỘT cantrip Warlock gây sát thương (phải là đòn tấn công, không phải save) — ' +
+              'khi trúng, đẩy mục tiêu 10ft, 1 lần mỗi lượt của bạn. Không chỉ Eldritch Blast. Bấm để bật/tắt cho phép này.'
+            }
+            onClick={() => onChange({ repellingBlast: !sp.repellingBlast })}
+          >
+            💨 Repelling Blast
           </button>
         )}
         {castingClasses.length > 1 && (
@@ -3189,3 +3301,6 @@ function EconomyBar({ token, sheet }: { token: Token | null; sheet: CharacterShe
     </div>
   );
 }
+
+/** Memoised: takes no props, so it only re-renders when its own store selectors change. */
+export const SheetDock = memo(SheetDockImpl);

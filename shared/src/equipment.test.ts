@@ -37,6 +37,19 @@ describe('equipmentPresetFromDef', () => {
     expect(equipmentPresetFromDef(scroll, id)).toMatchObject({ type: 'consumable', consumableKind: 'spell', scrollSpellName: 'Cure Wounds' });
     expect(equipmentPresetFromDef(scroll, id).proficient).toBeUndefined();
   });
+  it('carries rarity, attunement and magic to-hit/damage bonuses (SRD magic item presets)', () => {
+    const magicSword: EquipmentPreset = {
+      id: 'p7', name: '+1 Longsword', type: 'weapon', weaponAbility: 'str', damage: '1d8', damageType: 'slashing',
+      rarity: 'không phổ biến', attunementRequired: false, attackBonusMisc: 1, damageBonusMisc: 1,
+    };
+    expect(equipmentPresetFromDef(magicSword, id)).toMatchObject({
+      rarity: 'không phổ biến', attunementRequired: false, attackBonusMisc: 1, damageBonusMisc: 1,
+    });
+    const ring: EquipmentPreset = { id: 'p8', name: 'Ring of Protection', type: 'gear', rarity: 'hiếm', attunementRequired: true };
+    const item = equipmentPresetFromDef(ring, id);
+    expect(item).toMatchObject({ rarity: 'hiếm', attunementRequired: true });
+    expect(item.attuned).toBeUndefined();
+  });
 });
 
 describe('inventoryItemFromHomebrew', () => {

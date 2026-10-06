@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { applySpellProgression, emptyCurrency, proficiencyByLevel } from '@dnd-table/shared';
+import { applySpellProgression, applyToughFeat, emptyCurrency, proficiencyByLevel, syncMagicItemSpells } from '@dnd-table/shared';
 import type {
   Ability,
   CharacterSheet,
@@ -137,7 +137,7 @@ export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
   // Proficiency bonus is always derived from total level (never typed in).
   next.proficiencyBonus = proficiencyByLevel(next.level);
   // Auto spell-slot progression (5e 2024) — keeps `used`, recomputes the maxima.
-  return applySpellProgression(next);
+  return applyToughFeat(syncMagicItemSpells(applySpellProgression(next)));
 }
 
 export function createToken(partial: Partial<Token>): Token {

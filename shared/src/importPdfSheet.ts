@@ -297,8 +297,11 @@ export function sheetFromPdfFields(
     currentHp: Math.min(currentHp, maxHp),
     tempHp: num(t(19)) ?? 0,
     armorClass: num(t(114)) ?? 10,
-    // the AC printed on the sheet wins: the inventory is plain text, so armor / shield / spells can't be derived from it
-    acOverride: printedAc !== null && printedAc !== 10 + dexMod ? printedAc : null,
+    // Don't freeze AC to whatever was printed on the PDF: the inventory is plain text, so armor /
+    // shield can't be derived from it, and a permanent acOverride would silently stop future AC
+    // changes from ever taking effect once the player actually adds their armor to Trang bị. Leave
+    // it unset so AC auto-computes (10 + DEX until armor is equipped) — see the report note below.
+    acOverride: null,
     speed: num(t(116)) ?? 30,
     initiativeMisc: initTotal === null ? 0 : initTotal - dexMod,
     actions,
@@ -312,6 +315,11 @@ export function sheetFromPdfFields(
     currency,
     notes,
   };
+  if (printedAc !== null && printedAc !== 10 + dexMod) {
+    report.push(
+      `AC trên PDF ghi ${printedAc}, nhưng chưa rõ giáp cụ thể (ô đồ đạc chỉ là chữ) → để trống, AC tạm tính 10 + DEX. Thêm đúng giáp vào tab "Trang bị" để AC tự lên lại ${printedAc}.`,
+    );
+  }
   // The player's printed "SP CASTING ABILITY" (if it names an ability) wins over the class default.
   const ab = ABIL.find((a) => {
     const v = t('Infos 10101033').toLowerCase();

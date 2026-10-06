@@ -17,6 +17,9 @@ import {
   conditionAttackMode,
   conditionAutoCrit,
   coverAcBonus,
+  crToNumber,
+  randomLootFor,
+  totalCoins,
   currencyInGp,
   derivedActions,
   derivedDefenses,
@@ -666,6 +669,22 @@ describe('cover + damage defences (homebrew)', () => {
     expect(coverAcBonus('half')).toBe(2);
     expect(coverAcBonus('threequarters')).toBe(5);
     expect(coverAcBonus('total')).toBe(0); // handled separately
+  });
+
+  it('crToNumber parses fractions and whole numbers', () => {
+    expect(crToNumber('1/8')).toBe(0.125);
+    expect(crToNumber('1/4')).toBe(0.25);
+    expect(crToNumber('1/2')).toBe(0.5);
+    expect(crToNumber('5')).toBe(5);
+    expect(crToNumber('20')).toBe(20);
+  });
+
+  it('randomLootFor scales with CR and never goes negative', () => {
+    for (const cr of ['1/8', '1/4', '1', '5', '10', '15', '20']) {
+      const loot = randomLootFor(cr);
+      for (const v of Object.values(loot)) expect(v).toBeGreaterThanOrEqual(0);
+      expect(totalCoins(loot)).toBeGreaterThan(0);
+    }
   });
 
   it('resistance halves, vulnerability doubles, DR subtracts, immunity zeroes', () => {

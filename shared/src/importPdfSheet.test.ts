@@ -41,6 +41,11 @@ describe('sheetFromPdfFields', () => {
     expect([s.maxHp, s.currentHp, s.armorClass, s.speed]).toEqual([28, 20, 15, 30]);
     expect(s.currency.gp).toBe(15);
   });
+  it('never freezes AC via acOverride on import, even when the printed AC implies armor', () => {
+    // Printed AC 15 vs DEX 15 (10 + 2 baseline) — used to silently set acOverride: 15 forever.
+    expect(s.acOverride).toBeNull();
+    expect(res.report.some((r) => r.includes('AC trên PDF ghi 15'))).toBe(true);
+  });
   it('infers proficiencies from bonuses / check boxes', () => {
     expect([...s.saveProficiencies].sort()).toEqual(['int', 'wis']); // WIS from the +5 bonus, INT added from the Druid class
     expect(s.skillProficiencies.sort()).toEqual(['perception', 'religion']);

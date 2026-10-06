@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
 import {
@@ -31,8 +31,16 @@ import {
   emptyDefenses,
   grantTempHp,
   hitDicePools,
+  bumpLevel,
+  levelUpDie,
+  levelUpHp,
+  MAX_LEVEL,
+  needsPityReroll,
+  sheetClasses,
+  totalLevelOf,
   spendHitDie,
   gridFeet,
+  FEET_PER_CELL,
   abilityMod as abilityModOf,
   diceFacesOf,
   rollNotation,
@@ -65,6 +73,7 @@ export class Room {
     this.bestiaryFile = bestiaryFile;
     this.state = this.load();
     this.state.bestiary = this.loadBestiary();
+    this.savedBestiary = this.state.bestiary; // just read from disk — nothing to rewrite until it changes
   }
 
   private load(): RoomState {
@@ -109,9 +118,25 @@ export class Room {
     return [];
   }
 
+  /** Bestiary array last written to disk — it is large and changes only on an explicit edit (every
+   *  bestiary action assigns a NEW array), so identity tells us when a rewrite is actually needed. */
+  private savedBestiary: Statblock[] | null = null;
+
+  /** Write via a temp file + rename so a crash mid-write can never leave a truncated JSON behind;
+   *  falls back to an in-place write if the rename is refused (e.g. an antivirus lock on Windows). */
+  private writeAtomic(file: string, json: string): void {
+    mkdirSync(dirname(file), { recursive: true });
+    const tmp = file + '.tmp';
+    try {
+      writeFileSync(tmp, json);
+      renameSync(tmp, file);
+    } catch {
+      writeFileSync(file, json);
+    }
+  }
+
   save(): void {
     try {
-      mkdirSync(dirname(this.file), { recursive: true });
       // room.json never carries the bestiary (its own file); `map` / `tokens` / `zones`
       // are just live aliases of the active scene, so they're not persisted either.
       const { bestiary, map, tokens, zones, ...room } = this.state;
@@ -119,15 +144,17 @@ export class Room {
       void map;
       void tokens;
       void zones;
-      writeFileSync(this.file, JSON.stringify(room, null, 2));
+      this.writeAtomic(this.file, JSON.stringify(room));
     } catch (err) {
       console.error('Failed to persist room:', err);
     }
-    try {
-      mkdirSync(dirname(this.bestiaryFile), { recursive: true });
-      writeFileSync(this.bestiaryFile, JSON.stringify(this.state.bestiary, null, 2));
-    } catch (err) {
-      console.error('Failed to persist bestiary:', err);
+    if (this.savedBestiary !== this.state.bestiary) {
+      try {
+        this.writeAtomic(this.bestiaryFile, JSON.stringify(this.state.bestiary));
+        this.savedBestiary = this.state.bestiary;
+      } catch (err) {
+        console.error('Failed to persist bestiary:', err);
+      }
     }
   }
 
@@ -638,6 +665,71 @@ export class Room {
     }
   }
 
+  /**
+   * After a turn/round change: raise a `dmPrompt` if a legendary or lair action is available.
+   * Lair actions fire once per round, the instant the active initiative count drops below 20
+   * (matching "on initiative count 20, losing ties" without needing a fake count-20 entry).
+   * Legendary actions fire whenever another creature's turn just ended and a legendary token —
+   * neither the one whose turn just ended nor the one whose turn is now starting, since a
+   * creature can never use legendary actions during its own turn — still has uses left this
+   * round. Only one prompt shows at a time — lair wins the tie, since it's the rarer/more
+   * consequential of the two; the DM can trigger the skipped legendary action again on the next
+   * `initNext` if it's still relevant. `includeLegendary: false` from `initStart`: combat hasn't
+   * had a first turn yet, so there's no "between turns" moment for a legendary action, only the
+   * lair check (which can legitimately fire before anyone has acted, if nobody rolled 20+).
+   */
+  private checkDmPrompts(ctx?: { endingId?: string; prevActiveInit?: number; includeLegendary?: boolean }): void {
+    if (this.state.dmPrompt) return; // don't clobber an unanswered prompt
+    const init = this.state.initiative;
+    if (!init.running) return;
+    const alive = (t: Token) => typeof t.currentHp !== 'number' || t.currentHp > 0;
+    const active = init.entries.find((e) => e.isActive);
+    const activeInit = active?.initiative;
+
+    // Lair action: crossed below count 20 this round (or the round opens already below 20).
+    if (
+      typeof activeInit === 'number' &&
+      activeInit < 20 &&
+      init.lastLairRound !== init.round &&
+      (ctx?.prevActiveInit === undefined || ctx.prevActiveInit >= 20)
+    ) {
+      const lairToken = this.state.tokens.find((t) => t.statblock?.hasLairActions && alive(t));
+      if (lairToken) {
+        init.lastLairRound = init.round;
+        this.state.dmPrompt = {
+          kind: 'lairAction',
+          tokenId: lairToken.id,
+          tokenName: lairToken.label,
+          options: lairToken.statblock?.lairActions ?? [],
+          round: init.round,
+        };
+        return;
+      }
+      init.lastLairRound = init.round; // no lair owner on the map — don't re-check all round
+    }
+
+    // Legendary action: any other legendary creature still has uses left this round.
+    if (ctx?.includeLegendary === false) return;
+    const legendaryToken = this.state.tokens.find(
+      (t) =>
+        t.id !== ctx?.endingId &&
+        t.id !== active?.tokenId &&
+        (t.legendaryActionsRemaining ?? 0) > 0 &&
+        t.statblock?.legendaryActions?.length &&
+        alive(t),
+    );
+    if (legendaryToken) {
+      this.state.dmPrompt = {
+        kind: 'legendaryAction',
+        tokenId: legendaryToken.id,
+        tokenName: legendaryToken.label,
+        remaining: legendaryToken.legendaryActionsRemaining ?? 0,
+        options: legendaryToken.statblock?.legendaryActions ?? [],
+        round: init.round,
+      };
+    }
+  }
+
   /** Whether `actor` may move `token` right now, and (for players in combat) how far. */
   private moveGate(
     actor: Participant,
@@ -827,6 +919,76 @@ export class Room {
         break;
       }
 
+      case 'levelUpOpen': {
+        if (!isDm) return 'Chỉ DM được mở đợt thăng cấp';
+        this.state.levelUp = { id: nanoid(8), ts: Date.now(), claimed: [] };
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
+          result: externalRollResult('', { total: 0, faces: [] }),
+        });
+        this.touch();
+        break;
+      }
+
+      case 'levelUpClose': {
+        if (!isDm) return 'Chỉ DM được đóng đợt thăng cấp';
+        this.state.levelUp = null;
+        this.touch();
+        break;
+      }
+
+      case 'levelUp': {
+        const round = this.state.levelUp;
+        if (!round) return 'Chưa có đợt thăng cấp nào đang mở';
+        const sheet = this.state.sheets.find((x) => x.id === action.sheetId);
+        if (!sheet) return 'Không tìm thấy nhân vật';
+        if (sheet.ownerId !== actor.id && !isDm) return 'Bạn không sở hữu nhân vật này';
+        if (round.claimed.includes(sheet.id)) return 'Nhân vật này đã lên cấp trong đợt này rồi';
+        if (totalLevelOf(sheet) >= MAX_LEVEL) return `Đã đạt cấp tối đa (${MAX_LEVEL})`;
+        const classIndex = Math.max(0, Math.min(sheetClasses(sheet).length - 1, action.classIndex ?? 0));
+        const die = levelUpDie(sheet, classIndex);
+        if (!die) return 'Nhân vật chưa chọn class có Hit Die — chọn class trước khi lên cấp';
+        // Claim first (before any rolling) so a double click / race can never grant two levels.
+        round.claimed = [...round.claimed, sheet.id];
+
+        const pick = (ext: { total: number } | undefined): number => {
+          // dddice reports its own totals; accept only a legal face of this die, else roll on the server.
+          if (ext && Number.isInteger(ext.total) && ext.total >= 1 && ext.total <= die) return ext.total;
+          return rollNotation(`1d${die}`).total;
+        };
+        const first = pick(action.external?.first);
+        const second = needsPityReroll(first) ? pick(action.external?.second) : undefined;
+        const hp = levelUpHp(die, sheet.abilities.con, first, second);
+
+        const before = totalLevelOf(sheet);
+        const grown = bumpLevel(sheet, classIndex);
+        const leveled = normalizeSheet({ ...grown, maxHp: sheet.maxHp + hp.gain, currentHp: sheet.currentHp + hp.gain });
+        this.state.sheets = this.state.sheets.map((x) => (x.id === leveled.id ? leveled : x));
+        this.mirrorSheetToToken(leveled);
+
+        const className = sheetClasses(leveled)[classIndex]?.name || leveled.className;
+        const conTxt = `${hp.conMod >= 0 ? '+' : '−'}${Math.abs(hp.conMod)}`;
+        const pityTxt = hp.second !== undefined ? ` — ra 1 → roll lại (luật pity): ${hp.second}` : '';
+        const toughGain = (leveled.toughBonus ?? 0) - (sheet.toughBonus ?? 0);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `⬆ ${leveled.name} lên cấp ${before} → ${before + 1} (${className}): d${die}=${hp.first}${pityTxt}, CON ${conTxt} → +${hp.gain} HP${toughGain > 0 ? ` (+${toughGain} Tough)` : ''} · tối đa ${leveled.maxHp}`,
+          result: externalRollResult(`1d${die}${hp.conMod >= 0 ? '+' : ''}${hp.conMod}`, {
+            total: hp.gain,
+            faces: hp.second !== undefined ? [hp.first, hp.second] : [hp.first],
+          }),
+        });
+        this.touch();
+        break;
+      }
+
       case 'spendHitDie': {
         const sheet = this.state.sheets.find((s) => s.id === action.sheetId);
         if (!sheet) return 'Không tìm thấy nhân vật';
@@ -1009,6 +1171,30 @@ export class Room {
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
         }
+        // Repelling Blast (2024): once on the attacker's own turn, push a hit target straight
+        // away along the attacker→target line.
+        if (res.hit && action.pushFeetOnHit && action.attackerTokenId) {
+          const attacker = this.state.tokens.find((tk) => tk.id === action.attackerTokenId);
+          if (attacker && !attacker.turnUsed?.repellingPush) {
+            const dx = target.x - attacker.x;
+            const dy = target.y - attacker.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0.01) {
+              const cells = action.pushFeetOnHit / FEET_PER_CELL;
+              target.x = Math.max(0, Math.min(this.state.map.cols, target.x + (dx / dist) * cells));
+              target.y = Math.max(0, Math.min(this.state.map.rows, target.y + (dy / dist) * cells));
+              attacker.turnUsed = { ...attacker.turnUsed, repellingPush: true };
+              this.pushRoll({
+                id: nanoid(8),
+                ts: Date.now(),
+                actorId: actor.id,
+                actorName: actor.name,
+                label: `${action.label || 'Attack'} · Repelling Blast — đẩy ${target.label} ${action.pushFeetOnHit}ft`,
+                result: externalRollResult('', { total: 0, faces: [] }),
+              });
+            }
+          }
+        }
         // Grappler feat "Punch and Grab" (2024): damage + grapple on the same hit.
         if (res.hit && action.grappleOnHit) {
           this.applyGrappleAttempt(
@@ -1155,7 +1341,10 @@ export class Room {
         const canMove = isDm || token.controllerId === actor.id;
         if (!canMove) return 'Bạn không điều khiển token này';
         const patch = { ...action.patch };
-        if (!isDm) delete patch.hidden;
+        if (!isDm) {
+          delete patch.hidden;
+          delete patch.revealStats; // only the DM decides what players may see of a token
+        }
         // Movement tracker: on their turn a player can only move up to Speed
         // (+ Dash); off-turn moves in combat are blocked. The server clamps.
         const movingPos = typeof patch.x === 'number' || typeof patch.y === 'number';
@@ -1567,9 +1756,15 @@ export class Room {
         this.state.initiative.running = this.state.initiative.entries.length > 0;
         this.state.initiative.round = 1;
         this.state.initiative.turnIndex = 0;
-        for (const tk of this.state.tokens) tk.turnUsed = undefined;
+        this.state.initiative.lastLairRound = undefined;
+        this.state.dmPrompt = null;
+        for (const tk of this.state.tokens) {
+          tk.turnUsed = undefined;
+          tk.legendaryActionsRemaining = tk.statblock?.legendaryActionsPerRound ?? undefined;
+        }
         markActive(this.state.initiative);
         this.syncTurnAnchors();
+        this.checkDmPrompts({ includeLegendary: false });
         this.touch();
         break;
       }
@@ -1578,14 +1773,21 @@ export class Room {
         if (!isDm && !this.actorOwnsActiveTurn(actor)) {
           return 'Chỉ DM hoặc người đang tới lượt được kết thúc lượt';
         }
+        const prevActiveInit = this.state.initiative.entries.find((e) => e.isActive)?.initiative;
         const endingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
         advanceTurn(this.state.initiative, 1);
         const startingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
         const ending = endingId && this.state.tokens.find((t) => t.id === endingId);
         if (ending) this.processTurnEffects(ending, 'end-of-turn');
         const starting = startingId && this.state.tokens.find((t) => t.id === startingId);
-        if (starting) this.processTurnEffects(starting, 'start-of-turn');
+        if (starting) {
+          if (starting.statblock?.legendaryActionsPerRound) {
+            starting.legendaryActionsRemaining = starting.statblock.legendaryActionsPerRound;
+          }
+          this.processTurnEffects(starting, 'start-of-turn');
+        }
         this.syncTurnAnchors();
+        this.checkDmPrompts({ endingId, prevActiveInit });
         this.touch();
         break;
       }
@@ -1601,8 +1803,65 @@ export class Room {
       case 'initReset': {
         if (!isDm) return 'Chỉ DM được reset initiative';
         this.state.initiative = { entries: [], round: 1, turnIndex: 0, running: false };
-        for (const tk of this.state.tokens) tk.turnUsed = undefined;
+        this.state.dmPrompt = null;
+        for (const tk of this.state.tokens) {
+          tk.turnUsed = undefined;
+          tk.legendaryActionsRemaining = undefined;
+        }
         this.syncTurnAnchors();
+        this.touch();
+        break;
+      }
+
+      case 'initSwapAdjacent': {
+        const entries = this.state.initiative.entries;
+        const i = entries.findIndex((e) => e.id === action.entryIdA);
+        const j = entries.findIndex((e) => e.id === action.entryIdB);
+        if (i < 0 || j < 0) return 'Không tìm thấy entry initiative';
+        if (Math.abs(i - j) !== 1) return 'Chỉ đổi được 2 lượt liền kề nhau';
+        const isPlayerEntry = (e: (typeof entries)[number]) =>
+          !!e.tokenId && this.state.sheets.some((s) => s.tokenId === e.tokenId);
+        if (!isPlayerEntry(entries[i]) || !isPlayerEntry(entries[j])) {
+          return 'Chỉ đổi được lượt giữa 2 nhân vật người chơi, không được có quái chen giữa';
+        }
+        [entries[i], entries[j]] = [entries[j], entries[i]];
+        // isActive travels with its entry object; turnIndex is a plain array index, so re-derive
+        // it after reordering to keep pointing at whichever entry is actually flagged active.
+        const activeIdx = entries.findIndex((e) => e.isActive);
+        if (activeIdx >= 0) this.state.initiative.turnIndex = activeIdx;
+        this.touch();
+        break;
+      }
+
+      case 'dmPromptUse': {
+        if (!isDm) return 'Chỉ DM được dùng legendary/lair action';
+        const prompt = this.state.dmPrompt;
+        if (!prompt) break;
+        const chosen = action.actionId ? prompt.options.find((o) => o.id === action.actionId) : undefined;
+        if (prompt.kind === 'legendaryAction') {
+          const token = this.state.tokens.find((t) => t.id === prompt.tokenId);
+          if (token && token.legendaryActionsRemaining) token.legendaryActionsRemaining -= 1;
+        }
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label:
+            prompt.kind === 'legendaryAction'
+              ? `${prompt.tokenName} · Legendary Action${chosen ? ` — ${chosen.name}` : ''}`
+              : `${prompt.tokenName} · Lair Action${chosen ? ` — ${chosen.name}` : ''}`,
+          result: { notation: '', terms: [], total: 0 },
+        });
+        this.state.dmPrompt = null;
+        this.checkDmPrompts();
+        this.touch();
+        break;
+      }
+
+      case 'dmPromptDismiss': {
+        if (!isDm) return 'Chỉ DM được bỏ qua legendary/lair action';
+        this.state.dmPrompt = null;
         this.touch();
         break;
       }
@@ -1639,6 +1898,15 @@ export class Room {
         if (!sheet) return null;
         if (sheet.ownerId !== actor.id && !isDm) return 'Bạn không sở hữu sheet này';
         this.state.sheets = this.state.sheets.filter((s) => s.id !== action.id);
+        // Deleting the sheet should take its token off the map/initiative too — otherwise a
+        // "ghost" token with no owning sheet lingers in combat (e.g. still shown on the init bar).
+        if (sheet.tokenId) {
+          const tIdx = this.state.tokens.findIndex((tk) => tk.id === sheet.tokenId);
+          if (tIdx >= 0) this.state.tokens.splice(tIdx, 1);
+          this.state.initiative.entries = this.state.initiative.entries.filter(
+            (e) => e.tokenId !== sheet.tokenId,
+          );
+        }
         this.touch();
         break;
       }
@@ -1713,6 +1981,34 @@ export class Room {
             defenses: sb.defenses ? { ...sb.defenses } : undefined,
           }),
         );
+        this.touch();
+        break;
+      }
+
+      case 'placeSheetToken': {
+        const sheet = this.state.sheets.find((s) => s.id === action.sheetId);
+        if (!sheet) return 'Không tìm thấy nhân vật';
+        if (!isDm && sheet.ownerId !== actor.id) return 'Bạn không sở hữu nhân vật này';
+        // Only counts as "already placed" if the token is on the ACTIVE scene — a token left
+        // behind on a different map doesn't get moved, a fresh one is placed here instead.
+        const existing = sheet.tokenId ? this.state.tokens.find((tk) => tk.id === sheet.tokenId) : undefined;
+        if (existing) {
+          existing.x = action.x;
+          existing.y = action.y;
+        } else {
+          const owner = this.state.participants.find((p) => p.id === sheet.ownerId);
+          const token = createToken({
+            label: sheet.name,
+            x: action.x,
+            y: action.y,
+            color: owner?.color ?? '#c0392b',
+            controllerId: sheet.ownerId,
+          });
+          this.state.tokens.push(token);
+          sheet.tokenId = token.id;
+          this.mirrorSheetToToken(sheet);
+          this.syncLinkedAc();
+        }
         this.touch();
         break;
       }

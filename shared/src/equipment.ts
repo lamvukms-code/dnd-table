@@ -14,9 +14,13 @@ export function equipmentPresetFromDef(def: EquipmentPreset, newId: () => string
     damage: def.damage,
     damageType: def.damageType,
     rangeText: def.rangeText,
+    attackBonusMisc: def.attackBonusMisc,
+    damageBonusMisc: def.damageBonusMisc,
     armorBase: def.armorBase,
     armorCategory: def.armorCategory,
     stealthDisadvantage: def.stealthDisadvantage,
+    rarity: def.rarity,
+    attunementRequired: def.attunementRequired,
     // a preset is a real weapon/armor a class can train with — default to proficient, like a blank weapon row;
     // the player unchecks it if their class doesn't actually train with it
     proficient: def.type === 'weapon' ? true : undefined,

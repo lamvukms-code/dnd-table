@@ -239,8 +239,11 @@ export function convert5eToolsMonster(raw: J): Statblock {
     ...mkActions('action', 'action'),
     ...mkActions('bonus', 'bonus'),
     ...mkActions('reaction', 'reaction'),
-    ...mkActions('legendary', 'other'),
   ];
+  const legendaryActions = mkActions('legendary', 'legendary');
+  const lairActions = mkActions('lairAction', 'lair'); // rarely present on the monster entry itself —
+  // most sources key lair actions off a separate legendarygroup lookup this importer doesn't follow;
+  // the DM can fill them in by hand in the bestiary editor.
 
   const meta = [`${size[0].toUpperCase()}${size.slice(1)}`, typeString(raw.type), alignmentString(raw.alignment)]
     .filter(Boolean)
@@ -265,6 +268,10 @@ export function convert5eToolsMonster(raw: J): Statblock {
     languages: Array.isArray(raw.languages) ? (raw.languages as string[]).join(', ') : undefined,
     traits,
     actions,
+    legendaryActionsPerRound: legendaryActions.length ? 3 : undefined,
+    legendaryActions: legendaryActions.length ? legendaryActions : undefined,
+    hasLairActions: lairActions.length ? true : undefined,
+    lairActions: lairActions.length ? lairActions : undefined,
     defenses: hasDefenses ? defenses : undefined,
     color: '#8e44ad',
     tags: source ? [source] : [],

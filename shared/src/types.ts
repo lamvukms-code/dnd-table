@@ -36,7 +36,7 @@ export interface Attack {
 /** How an attack is delivered: a melee attack, or a ranged one (which may still be made at close quarters). */
 export type AttackRange = 'melee' | 'ranged';
 
-export type ActionType = 'action' | 'bonus' | 'reaction' | 'free' | 'other';
+export type ActionType = 'action' | 'bonus' | 'reaction' | 'free' | 'other' | 'legendary' | 'lair';
 export const ACTION_TYPES: ActionType[] = ['action', 'bonus', 'reaction', 'free', 'other'];
 export type Recharge = 'short' | 'long' | 'other';
 
@@ -157,11 +157,20 @@ export interface EquipmentPreset {
   /** Display-only cost ("15 gp") — not tracked as currency automatically. */
   cost?: string;
   notes?: string;
+  /** Magic items only — common/uncommon/rare/very rare/legendary/artifact (free text). */
+  rarity?: string;
+  /** Magic items only — whether this item needs Attunement to use (SRS FR — see `ATTUNEMENT_SLOTS`).
+   *  Purely informational on the preset/picker; the actual 3-slot cap is enforced generically on any
+   *  `InventoryItem` with `attuned: true`, magic or not, the same way it already was before this field existed. */
+  attunementRequired?: boolean;
   // weapon
   weaponAbility?: WeaponAbility;
   damage?: string;
   damageType?: string;
   rangeText?: string;
+  /** Magic weapons (+1/+2/+3 …) — carried straight into the InventoryItem's to-hit/damage bonus. */
+  attackBonusMisc?: number;
+  damageBonusMisc?: number;
   // armor / shield
   armorBase?: number;
   armorCategory?: ArmorCategory;
@@ -202,6 +211,11 @@ export interface InventoryItem {
   grantsCritImmune?: boolean;
   /** Magic item the character is currently attuned to (max 3 — `ATTUNEMENT_SLOTS`). */
   attuned?: boolean;
+  /** Informational only — this item needs Attunement to use its magic. Doesn't gate `attuned`
+   *  itself; the 3-slot cap already applies to any item once `attuned` is set, same as before. */
+  attunementRequired?: boolean;
+  /** Magic items only — common/uncommon/rare/very rare/legendary/artifact (free text). */
+  rarity?: string;
   proficient?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
@@ -246,6 +260,10 @@ export interface CharacterSheet {
   armorClass: number;
   /** Explicit AC that wins over any computed value (e.g. Unarmored Defense). */
   acOverride?: number | null;
+  /** 2024 Heroic Inspiration: gives Advantage on one D20 Test of the player's choice, spent when
+   *  used. Tracked as a simple on/off flag — the player picks which roll to apply it to and
+   *  toggles it off themselves (the app doesn't auto-consume it on a specific roll). */
+  heroicInspiration?: boolean;
   speed: number;
   initiativeMisc: number;
   /** Action economy. Equipped weapons add derived entries at render time. */
@@ -298,6 +316,12 @@ export interface CharacterSheet {
   currency: Currency;
   notes: string;
   tokenId?: string; // linked map token
+  /** Max HP currently granted by the Tough feat (2 × level) — lets the server apply it exactly once
+   *  and keep it in step as the character levels. Server-maintained. */
+  toughBonus?: number;
+  /** Present (true) only on the empty placeholder a player receives for ANOTHER player's sheet:
+   *  id / owner / name / linked token survive, every stat is blanked. Never stored. */
+  redacted?: boolean;
 }
 
 export type TokenSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
@@ -502,6 +526,9 @@ export interface Spell {
   prepared: boolean;
   /** Set when a species grants this spell (removed if the species changes). */
   fromSpecies?: string;
+  /** Granted by a worn magic item (`MagicItemKey`) — removed automatically when it is taken off.
+   *  Casts with the sheet's spellcasting ability, or Charisma if it has none. */
+  itemSource?: string;
   castKind: SpellCastKind;
   actionType?: ActionType;
   /** 'save' spells: the save the target rolls. DC defaults to the sheet's spell save DC.
@@ -552,6 +579,13 @@ export interface Spell {
    * once to this cantrip's damage roll.
    */
   agonizingBlast?: boolean;
+  /**
+   * 2024 Repelling Blast: reworded to match Agonizing Blast's flexibility — chosen per Warlock
+   * cantrip (any one that deals damage, repeatable across multiple cantrips), not fixed to
+   * Eldritch Blast. When set, a hit with this cantrip can push the target 10 feet straight away
+   * from the caster, once on the caster's own turn.
+   */
+  repellingBlast?: boolean;
   notes?: string;
 }
 
@@ -589,6 +623,16 @@ export interface StatblockTrait {
   description: string;
 }
 
+/** DM-entered monster spellcasting stats — see `Statblock.spellcasting`. */
+export interface MonsterSpellcasting {
+  spellSaveDc: number;
+  spellAttackBonus: number;
+  /** Scales cantrip damage dice like a PC's level would (unset = base/1st-tier die). */
+  casterLevel?: number;
+  /** Looked up by name against the SRD spell database at cast time. */
+  spellNames: string[];
+}
+
 /** A reusable NPC / monster stat block in the DM's bestiary. */
 export interface Statblock {
   id: string;
@@ -610,6 +654,18 @@ export interface Statblock {
   languages?: string;
   traits: StatblockTrait[];
   actions: SheetAction[];
+  /** How many legendary actions it can spend between other creatures' turns (usually 3); regains at the
+   *  start of its own turn. Unset/0 = not a legendary creature. */
+  legendaryActionsPerRound?: number;
+  legendaryActions?: SheetAction[];
+  /** Has a lair action, usable on initiative count 20 (losing ties) each round while it's alive in its lair. */
+  hasLairActions?: boolean;
+  lairActions?: SheetAction[];
+  /** Monster spellcasting — DC/attack bonus are stated directly (as printed stat blocks do),
+   *  not derived from ability scores. Spells are matched by name against the same SRD spell
+   *  database the character sheet picker uses (`findCantrip`), so the mechanics come from there —
+   *  spell names that don't resolve just don't show up (no crunch to fall back on). */
+  spellcasting?: MonsterSpellcasting;
   defenses?: Defenses;
   color: string;
   imageUrl?: string;
@@ -629,11 +685,19 @@ export interface TokenStatblock {
   initiativeMod: number;
   speed?: number; // walking speed, ft
   actions: SheetAction[];
+  legendaryActionsPerRound?: number;
+  legendaryActions?: SheetAction[];
+  hasLairActions?: boolean;
+  lairActions?: SheetAction[];
+  spellcasting?: MonsterSpellcasting;
   traits: StatblockTrait[];
   defenses?: Defenses;
   notes?: string;
   fromId?: string; // bestiary entry it was spawned from
 }
+
+/** Coarse, spoiler-free health read-out players get for an enemy whose real HP is hidden. */
+export type HealthTier = 'full' | 'hurt' | 'bloodied' | 'critical' | 'down';
 
 export interface Token {
   id: string;
@@ -662,6 +726,15 @@ export interface Token {
   extraMove?: number;
   /** Action economy spent this turn (reset when this token's turn starts). */
   turnUsed?: TurnUsed;
+  /** Legendary actions left to spend this round — resets to `statblock.legendaryActionsPerRound`
+   *  at the start of this token's own turn. Undefined for non-legendary tokens. */
+  legendaryActionsRemaining?: number;
+  /** DM override: show this NPC/monster token's AC / HP / statblock to players. Default (unset) =
+   *  hidden — the server strips them from what players receive (see `tokenForPlayers`). */
+  revealStats?: boolean;
+  /** Only ever present in a PLAYER's copy of a stat-hidden token (computed on the way out, never
+   *  stored): the creature's rough condition in place of its HP numbers. */
+  healthTier?: HealthTier;
 }
 
 /** What a creature has spent of its action economy since its turn started. */
@@ -678,15 +751,17 @@ export interface TurnUsed {
    *  bonus-action Unarmed Strike's cap from 1 (the free Martial Arts strike) to 2, or 3 from
    *  level 10 (Heightened Focus). Cleared automatically with the rest of `turnUsed`. */
   monkFlurryActive?: boolean;
-  /** Grappler feat "Punch and Grab" (2024): damage + grapple on the same Unarmed Strike hit —
-   *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
-   *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
-  grapplerComboUsed?: boolean;
+  /** Repelling Blast (2024): "once on each of your turns" — set on the attacker once used. */
+  repellingPush?: boolean;
   /** Set when this token dealt damage (>0, any target) via an attack/damage/spell-save action
    *  this turn — checked by `ActiveEffect.cursedNoHitSelfDamage` (Bracer of Brutality) at the
    *  end of the turn. A simplification of "a hostile creature": this app doesn't model
    *  faction/hostility, so any damage dealt counts. */
   dealtDamageThisTurn?: boolean;
+  /** Grappler feat "Punch and Grab" (2024): damage + grapple on the same Unarmed Strike hit —
+   *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
+   *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
+  grapplerComboUsed?: boolean;
 }
 
 export interface BattleMap {
@@ -702,9 +777,9 @@ export interface BattleMap {
 
 /**
  * A DM-drawn rectangular region on a scene's map — e.g. "V4: Mayor's Home and Office" on the
- * Wickermoor Village map. Clicking it shows `description` (read-aloud text / DM notes) as a
- * quick-reference popup, so the DM doesn't have to flip through the book mid-session. DM-only:
- * never sent to player clients (stripped the same way `bestiary` is, see `RoomState.zones`).
+ * Wickermoor Village map. Clicking it shows `readAloud`/`dmNotes` as a quick-reference popup, so
+ * the DM doesn't have to flip through the book mid-session. DM-only: never sent to player clients
+ * (stripped the same way `bestiary` is, see `RoomState.zones`).
  */
 export interface MapZone {
   id: string;
@@ -715,7 +790,12 @@ export interface MapZone {
   w: number; // width, in grid cells
   h: number; // height, in grid cells
   color: string;
-  description: string;
+  /** Verbatim/faithful "boxed text" read straight to players — shown in its own framed box,
+   *  separate from `dmNotes`, so the DM can read it aloud without mechanics text mixed in. */
+  readAloud?: string;
+  /** Behind-the-screen notes: mechanics, DCs, secrets, monster reactions. Never confused with
+   *  `readAloud` in the popup — shown below it in the normal (non-boxed) style. */
+  dmNotes?: string;
   source?: string; // attribution, e.g. "The Crooked Moon — chương 11"
 }
 
@@ -746,7 +826,26 @@ export interface Initiative {
   round: number;
   turnIndex: number;
   running: boolean;
+  /** Round number the lair-action prompt (initiative count 20) last fired in — avoids re-firing
+   *  every turn once the active count has dropped below 20 for the round. */
+  lastLairRound?: number;
 }
+
+/**
+ * A yes/no combat prompt the server raises for the DM — "a legendary/lair action is available,
+ * use it now?" — cleared by `dmPromptUse` (spend it, log it) or `dmPromptDismiss` (skip it).
+ * DM-only: stripped from the state players receive (see server's `stateFor`).
+ */
+export type DmPrompt =
+  | {
+      kind: 'legendaryAction';
+      tokenId: string;
+      tokenName: string;
+      remaining: number;
+      options: SheetAction[];
+      round: number;
+    }
+  | { kind: 'lairAction'; tokenId: string; tokenName: string; options: SheetAction[]; round: number };
 
 export interface RollLogEntry {
   id: string;
@@ -759,7 +858,8 @@ export interface RollLogEntry {
   attack?: {
     targetTokenId?: string;
     targetName: string;
-    targetAc: number;
+    /** Omitted from a player's copy when the target's AC is hidden from them. */
+    targetAc?: number;
     hit: boolean;
     crit: boolean;
     fumble: boolean;
@@ -794,6 +894,10 @@ export interface Participant {
   color: string;
   connected: boolean;
   lastSeen: number;
+  /** Server-only proof that a reconnecting client really is this participant (stops anyone who
+   *  merely reads another player's public id from taking over their identity and sheets).
+   *  Persisted in room.json, stripped from every state sent to clients. */
+  secret?: string;
 }
 
 export interface DiceTray {
@@ -814,6 +918,13 @@ export interface DddiceConfig {
   enabled: boolean;
   roomSlug?: string; // shared dddice room every client connects to
   theme?: string; // default dice theme slug (client may override locally)
+}
+
+/** A DM-opened "everyone may level up now" round. Each sheet claims it once (`claimed` = sheet ids). */
+export interface LevelUpRound {
+  id: string;
+  ts: number;
+  claimed: string[];
 }
 
 export interface RoomState {
@@ -837,6 +948,10 @@ export interface RoomState {
   rollLog: RollLogEntry[]; // capped, newest last
   diceTray: DiceTray;
   dddice: DddiceConfig;
+  /** DM-only "use this legendary/lair action now?" prompt — see `DmPrompt`. */
+  dmPrompt?: DmPrompt | null;
+  /** Open level-up round, if any — players see a "Lên cấp" button on their sheet until they claim it. */
+  levelUp?: LevelUpRound | null;
   /**
    * DM's NPC/monster stat block library. Persisted to a SEPARATE file
    * (BESTIARY_FILE, default server/data/bestiary.json — point it at OneDrive to

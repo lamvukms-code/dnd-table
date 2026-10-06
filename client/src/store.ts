@@ -9,6 +9,8 @@ import {
   homebrewCritDamage,
   mergeDefenses,
   rollNotation,
+  levelUpDie,
+  needsPityReroll,
   spellAttackBonus,
   spellAttackParts,
   spellcastingAbilityOf,
@@ -50,8 +52,10 @@ import {
   rollEquation as dddiceRollEquation,
   setLocalKey as persistDddiceKey,
 } from './dddice.js';
+import { shareStructure } from './share.js';
 
 const PID_KEY = 'dnd-table.participantId';
+const SECRET_KEY = 'dnd-table.secret';
 const IDENTITY_KEY = 'dnd-table.identity';
 
 interface Identity {
@@ -82,6 +86,8 @@ interface AttackParams {
   attackerTokenId?: string;
   /** Melee / ranged tag of the attack (ranged at ≤5 ft ⇒ Disadvantage). */
   attackRange?: AttackRange;
+  /** Repelling Blast (2024): on a hit, push the target this many feet from the attacker. */
+  pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
   grappleOnHit?: { dc: number };
 }
@@ -113,6 +119,11 @@ interface StoreState {
   rollDice: (label: string, notation: string, opts?: { private?: boolean }) => Promise<void>;
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
+  /** Level-up round keys (`<roundId>:<sheetId>`) already claimed from this browser — hides the button at once. */
+  levelUpPending: string[];
+  levelUpOpen: () => void;
+  levelUpClose: () => void;
+  claimLevelUp: (sheetId: string, classIndex?: number) => Promise<void>;
   /** Roll damage parts and subtract the (post-defence) total from a target's HP. */
   damageRoll: (
     label: string,
@@ -136,6 +147,11 @@ interface StoreState {
    *  is unaffected (still adjusted by hand, per this codebase's spell-math convention). */
   castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number } | null;
   beginCast: (sheetId: string, spell: Spell, castAtLevel?: number) => void;
+  /** Same point-click flow as `castingSpell`, but the caster is a monster token (DM only) — the
+   *  fixed spell attack bonus travels with it since a token has no ability scores to derive it from. */
+  castingMonsterSpell: { tokenId: string; spell: Spell; spellAttackBonus: number } | null;
+  beginMonsterCast: (tokenId: string, spell: Spell, spellAttackBonus: number) => void;
+  resolveMonsterCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean }) => Promise<void>;
   /**
    * Spend Action / Bonus Action / Reaction for a token (only while initiative is running). Returns false when the
    * player declines to go on after a "already spent" warning. Attack rows count against Extra Attack.
@@ -183,6 +199,10 @@ interface StoreState {
 
 let socket: WebSocket | null = null;
 let reconnectTimer: number | undefined;
+// The bestiary / homebrew arrive in their own `static` events (see protocol.ts) and are spliced into
+// every `room` the store holds, so the rest of the app keeps reading `room.bestiary` / `room.homebrew`.
+let staticBestiary: RoomState['bestiary'] = [];
+let staticHomebrew: RoomState['homebrew'] = [];
 
 export const useStore = create<StoreState>((set, get) => {
   function connect() {
@@ -198,7 +218,12 @@ export const useStore = create<StoreState>((set, get) => {
       const identity = get().identity;
       if (identity) {
         const stored = localStorage.getItem(PID_KEY) ?? undefined;
-        rawSend({ t: 'join', name: identity.name, participantId: stored });
+        rawSend({
+          t: 'join',
+          name: identity.name,
+          participantId: stored,
+          secret: localStorage.getItem(SECRET_KEY) ?? undefined,
+        });
       }
     };
 
@@ -209,13 +234,23 @@ export const useStore = create<StoreState>((set, get) => {
       } catch {
         return;
       }
-      if (event.t === 'welcome') {
+      if (event.t === 'static') {
+        if (event.bestiary) staticBestiary = event.bestiary;
+        if (event.homebrew) staticHomebrew = event.homebrew;
+        set((st) =>
+          st.room ? { room: { ...st.room, bestiary: staticBestiary, homebrew: staticHomebrew } } : {},
+        );
+      } else if (event.t === 'welcome') {
         localStorage.setItem(PID_KEY, event.participantId);
-        set({ participantId: event.participantId, room: event.state, error: null });
+        if (event.secret) localStorage.setItem(SECRET_KEY, event.secret);
+        const room = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
+        set({ participantId: event.participantId, room, error: null });
       } else if (event.t === 'state') {
-        set({ room: event.state });
+        // Keep the identity of every sub-object that did not change (see share.ts).
+        const next = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
+        set((st) => ({ room: shareStructure(st.room, next) }));
       } else if (event.t === 'error') {
-        set({ error: event.message });
+        set({ error: event.message, levelUpPending: [] });
       }
     };
 
@@ -258,6 +293,8 @@ export const useStore = create<StoreState>((set, get) => {
     dddiceKey: getLocalKey(),
     dddiceConnected: false,
     castingSpell: null,
+    castingMonsterSpell: null,
+    levelUpPending: [],
 
     join: (identity) => {
       localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
@@ -267,6 +304,7 @@ export const useStore = create<StoreState>((set, get) => {
           t: 'join',
           name: identity.name,
           participantId: localStorage.getItem(PID_KEY) ?? undefined,
+          secret: localStorage.getItem(SECRET_KEY) ?? undefined,
         });
       } else {
         connect();
@@ -341,6 +379,7 @@ export const useStore = create<StoreState>((set, get) => {
       attackerSheetId,
       attackerTokenId,
       attackRange,
+      pushFeetOnHit,
       grappleOnHit,
     }) => {
       const room = get().room;
@@ -379,6 +418,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackerSheetId,
           attackerTokenId,
           attackRange,
+          pushFeetOnHit,
           grappleOnHit,
         });
       if (!dddiceActive()) return plain();
@@ -387,6 +427,23 @@ export const useStore = create<StoreState>((set, get) => {
 
       const token = room?.tokens.find((tk) => tk.id === targetTokenId);
       const linked = room?.sheets.find((s) => s.tokenId === targetTokenId);
+      // An enemy whose AC is hidden from this player: we cannot pre-resolve hit/crit here, so send just
+      // the d20 and let the server (which knows the AC) decide and roll the damage.
+      if ((token && !linked && typeof token.armorClass !== 'number') || linked?.redacted) {
+        return rawSend({
+          t: 'attack',
+          label: finalLabel,
+          attackNotation: notation,
+          damageParts,
+          targetTokenId,
+          attackerSheetId,
+          attackerTokenId,
+          attackRange,
+          pushFeetOnHit,
+          grappleOnHit,
+          external: { attack },
+        });
+      }
       const ac =
         (linked ? effectiveArmorClass(linked, token?.effects).ac : npcArmorClass(token?.armorClass ?? 10, token?.effects)) +
         coverAcBonus(token?.cover);
@@ -419,9 +476,38 @@ export const useStore = create<StoreState>((set, get) => {
         targetTokenId,
         attackerSheetId,
         attackerTokenId,
+        pushFeetOnHit,
         grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },
       });
+    },
+
+    levelUpOpen: () => rawSend({ t: 'levelUpOpen' }),
+    levelUpClose: () => rawSend({ t: 'levelUpClose' }),
+    claimLevelUp: async (sheetId, classIndex = 0) => {
+      const { room, levelUpPending } = get();
+      const round = room?.levelUp;
+      const sheet = room?.sheets.find((x) => x.id === sheetId);
+      if (!round || !sheet) return;
+      const key = `${round.id}:${sheetId}`;
+      if (levelUpPending.includes(key) || round.claimed.includes(sheetId)) return;
+      const die = levelUpDie(sheet, classIndex);
+      if (!die) {
+        set({ error: 'Chọn class cho nhân vật trước khi lên cấp' });
+        return;
+      }
+      // The button vanishes immediately, before any dice finish rolling.
+      set({ levelUpPending: [...levelUpPending, key] });
+      // dddice: the 3D die decides the HP; a 1 triggers one more die (pity rule) whose result stands.
+      let external: { first: ExternalRoll; second?: ExternalRoll } | undefined;
+      if (dddiceActive()) {
+        const first = await externalRoll(`1d${die}`);
+        if (first) {
+          const second = needsPityReroll(first.total) ? ((await externalRoll(`1d${die}`)) ?? undefined) : undefined;
+          external = { first, second };
+        }
+      }
+      rawSend({ t: 'levelUp', sheetId, classIndex, external });
     },
 
     applyEffect: (targetTokenId, effect) =>
@@ -486,7 +572,34 @@ export const useStore = create<StoreState>((set, get) => {
       }
       set({ castingSpell: { sheetId, spell, castAtLevel } });
     },
-    cancelCast: () => set({ castingSpell: null, aoe: null }),
+    cancelCast: () => set({ castingSpell: null, castingMonsterSpell: null, aoe: null }),
+    beginMonsterCast: (tokenId, spell, spellAttackBonus) => {
+      // Save spells with a parseable area template: place the AoE on the map instead of
+      // clicking one target, same as a player casting the same spell would.
+      const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
+      if (spec) {
+        const selfRange = /bản thân|self/i.test(spell.range ?? '');
+        const rangeFeet = selfRange ? 0 : parseRangeFeet(spell.range);
+        set({
+          castingMonsterSpell: null,
+          aoe: {
+            label: spell.name,
+            spec,
+            anchor: defaultAnchor(spec, rangeFeet, selfRange),
+            casterTokenId: tokenId,
+            rangeFeet,
+            onConfirm: (ids, aoeId) => {
+              ids.forEach((id, i) => {
+                set({ castingMonsterSpell: { tokenId, spell, spellAttackBonus } });
+                void get().resolveMonsterCastOnToken(id, { aoeId, skipConc: i > 0 });
+              });
+            },
+          },
+        });
+        return;
+      }
+      set({ castingMonsterSpell: { tokenId, spell, spellAttackBonus }, castingSpell: null });
+    },
     aoe: null,
     beginAoe: (mode) => set({ aoe: mode, castingSpell: null }),
     cancelAoe: () => set({ aoe: null }),
@@ -631,6 +744,7 @@ export const useStore = create<StoreState>((set, get) => {
             attackerSheetId: sheetId,
             attackerTokenId: sheet.tokenId,
             attackRange: inferAttackRange(spell.range),
+            pushFeetOnHit: spell.repellingBlast ? 10 : undefined,
           });
         }
         return;
@@ -678,6 +792,119 @@ export const useStore = create<StoreState>((set, get) => {
             expiresRound: fx.expiresInRounds
               ? (room.initiative.round ?? 1) + fx.expiresInRounds
               : undefined,
+          },
+        });
+      }
+    },
+
+    /** Monster spell cast, resolved against `targetTokenId` — mirrors `resolveCastOnToken` but the
+     *  caster is a token with fixed DC/attack bonus (no ability scores, no multiclass, no wild
+     *  shape special-cases) instead of a character sheet. */
+    resolveMonsterCastOnToken: async (targetTokenId, opts) => {
+      const cast = get().castingMonsterSpell;
+      const room = get().room;
+      if (!cast || !room) return;
+      const { tokenId, spell, spellAttackBonus } = cast;
+      const caster = room.tokens.find((t) => t.id === tokenId);
+      set({ castingMonsterSpell: null });
+      if (!caster) return;
+      const label = `${caster.label} · ${spell.name}`;
+      const dc = spell.save?.dcOverride ?? 10;
+
+      // Concentration spells whose branch places the concentration effect on the TARGET
+      // (rider, or save+effect) establish concentration there — see effectOnFail /
+      // the rider branch below. Only the rest need a separate marker on the caster's own
+      // token. Applying BOTH (as this used to) makes two differently-named concentration
+      // records fight over the caster's single `.concentration` slot, endlessly dropping
+      // and re-adding each other on every re-apply.
+      const placesConcOnTarget = spell.castKind === 'rider' || (spell.castKind === 'save' && !!spell.effect);
+      if (spell.concentration && !placesConcOnTarget && tokenId && !opts?.skipConc) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId: tokenId,
+          effect: { id: '', name: `Đang tập trung: ${spell.name}`, sourceTokenId: tokenId, concentration: true, note: spell.notes },
+        });
+      }
+
+      if (spell.castKind === 'heal' && spell.heal) {
+        await get().healRoll(`${label} (hồi máu)`, spell.heal, targetTokenId, undefined);
+        return;
+      }
+      if (spell.castKind === 'damage') {
+        await get().damageRoll(`${label} (phép)`, spell.damage ?? [], targetTokenId, { tokenId });
+        return;
+      }
+      if (spell.castKind === 'rider' && spell.rider) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId,
+          effect: { id: '', name: spell.name, sourceTokenId: tokenId, concentration: spell.concentration, rider: spell.rider },
+        });
+        return;
+      }
+      if (spell.castKind === 'save' && spell.save) {
+        rawSend({
+          t: 'spellSave',
+          targetTokenId,
+          ability: spell.save.ability,
+          dc,
+          label,
+          sourceTokenId: tokenId,
+          damageOnFail: spell.damage && spell.damage.length ? spell.damage : undefined,
+          damageHalfOnSave: spell.save.halfOnSave,
+          aoeId: opts?.aoeId,
+          effectOnFail: spell.effect
+            ? {
+                id: '',
+                name: spell.effect.name || spell.name,
+                sourceTokenId: tokenId,
+                concentration: spell.concentration,
+                condition: spell.effect.condition,
+                note: spell.effect.note,
+                save:
+                  spell.save.repeat && spell.save.repeat !== 'none'
+                    ? { ability: spell.save.ability, dc, repeat: spell.save.repeat }
+                    : undefined,
+                expiresRound: spell.effect.expiresInRounds ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds : undefined,
+              }
+            : undefined,
+        });
+        return;
+      }
+      if (spell.castKind === 'attack') {
+        await get().attackRoll({
+          label: `${label} (phép)`,
+          attackBonus: spellAttackBonus,
+          rollMode: 'normal',
+          damageParts: spell.damage ?? [],
+          targetTokenId,
+          attackerTokenId: tokenId,
+          attackRange: inferAttackRange(spell.range),
+        });
+        return;
+      }
+      // utility: temp HP and/or a plain effect
+      if (spell.tempHp) {
+        rawSend({ t: 'grantTempHp', targetTokenId, notation: spell.tempHp, label: `${label} (HP tạm)`, sourceTokenId: tokenId });
+      }
+      if (spell.effect) {
+        rawSend({
+          t: 'applyEffect',
+          targetTokenId,
+          effect: {
+            id: '',
+            name: spell.effect.name || spell.name,
+            sourceTokenId: tokenId,
+            concentration: spell.concentration,
+            condition: spell.effect.condition,
+            note: spell.effect.note,
+            rollBonus: spell.effect.rollBonus,
+            acBonus: spell.effect.acBonus,
+            acMin: spell.effect.acMin,
+            acBase: spell.effect.acBase,
+            retaliate: spell.effect.retaliate,
+            weaponImbue: spell.effect.weaponImbue,
+            expiresRound: spell.effect.expiresInRounds ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds : undefined,
           },
         });
       }

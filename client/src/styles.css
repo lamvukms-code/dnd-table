@@ -88,6 +88,87 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   z-index: 60;
 }
 
+.dm-prompt {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(560px, 90vw);
+}
+.dm-prompt-title { font-weight: 700; font-size: 13px; }
+.dm-prompt-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.dm-prompt-opts button { font-size: 12px; }
+
+/* map zoom controls (floating, bottom-right of the map) */
+.zoom-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 8;
+  display: flex;
+  gap: 2px;
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 3px;
+}
+.zoom-controls button {
+  min-width: 32px;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+/* DM monster spell picker — renders INLINE inside the statblock's "🔮 Phép" section (not a
+   floating/fixed panel): avoids ever overlapping the sidebar or fighting its layout regardless
+   of window width. Also note: `.monster-spell-picker`, not `.spell-picker` — that name is already
+   used by SheetDock's own (unrelated) player spell-search row; reusing it here previously meant
+   this picker silently inherited THAT rule's `position: relative; display: flex` instead of its
+   own, so the `top`/`left` viewport coordinates meant for a `position: fixed` panel got applied
+   as a `position: relative` offset instead — shifting the whole sidebar hundreds of pixels. */
+.spell-picker-toggle { margin-left: 6px; font-size: 10px; padding: 1px 6px; }
+.monster-spell-picker {
+  width: 100%;
+  max-height: 280px;
+  margin-top: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.monster-spell-picker > input {
+  margin: 6px;
+  width: calc(100% - 12px);
+}
+.spell-picker-list { overflow-y: auto; padding: 4px; max-height: 220px; }
+.spell-picker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 5px 7px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.spell-picker-row:hover { background: var(--panel-2); }
+.spell-picker-name { font-weight: 600; }
+.spell-picker-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+
 /* dice window (floating, bottom-left of the map) */
 .dice-window-fab {
   position: absolute;
@@ -224,13 +305,16 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 }
 .ib-track li.active { border-color: var(--accent); background: #2c2718; }
 .ib-track li.gone { opacity: 0.5; }
+.ib-track li.swappable { cursor: grab; }
+.ib-track li.drop-ok { outline: 2px dashed var(--accent-2); outline-offset: 1px; }
 .ib-track .ib-val { color: var(--accent); font-weight: 700; }
 .ib-track .empty { color: var(--muted); border: none; background: none; }
 .ib-controls { flex: none; display: flex; gap: 4px; }
 .ib-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 6px; align-items: center; }
 .ib-tools input { width: 90px; }
 .ib-tools input[type="number"] { width: 56px; }
-.board { position: relative; background-size: cover; background-position: center; }
+.board { position: relative; background-size: cover; background-position: center; cursor: grab; }
+.board:active { cursor: grabbing; }
 .grid-overlay {
   position: absolute;
   inset: 0;
@@ -364,11 +448,25 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .ac-badge .ac-num { font-size: 22px; font-weight: 800; color: var(--accent); line-height: 1; }
 .ac-badge .ac-label { font-size: 9px; letter-spacing: 1px; color: var(--muted); }
 .ac-badge .ac-src { font-size: 9px; color: var(--muted); text-align: center; }
+.insp-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 4px 12px;
+  min-width: 62px;
+  font-size: 22px;
+  opacity: 0.4;
+}
+.insp-badge.on { border-color: var(--accent); color: var(--accent); opacity: 1; }
 
 /* ------- character sheet dock (bottom horizontal panel) ------- */
 .sheet-dock {
   flex: none;
-  min-height: 160px;
+  min-height: 260px;
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--line);
@@ -399,7 +497,7 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .sheet-editor input, .sheet-editor select, .sheet-editor textarea { font-size: 12px; padding: 3px 5px; }
 .sheet-editor label { flex-direction: column; gap: 2px; font-size: 11px; }
 
-.basic-tab { display: flex; flex-direction: column; gap: 10px; }
+.basic-tab { display: flex; flex-direction: column; gap: 14px; }
 .bt-header { display: flex; gap: 10px; align-items: flex-start; }
 .bt-header-mid { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .bt-tokenlink { flex-direction: row; align-items: center; gap: 6px; font-size: 11px; }
@@ -458,8 +556,11 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   font-size: 11px;
   color: var(--muted);
 }
-.ability-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-.ability-strip.expanded { grid-template-columns: repeat(3, 1fr); }
+/* minmax(0, 1fr), not bare 1fr: a bare 1fr track won't shrink below its content's natural
+   width, so on a narrow-enough .bt-col (e.g. a scaled-down display) the grid overflows its
+   column and the combat column's AC/HP paints over the last cell(s) — the "CHA bị AC/HP đè" bug. */
+.ability-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+.ability-strip.expanded { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ab-cell {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -510,11 +611,40 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .pip.full { background: var(--accent); }
 .res-add { display: flex; gap: 6px; margin-top: 2px; }
 
-.bt-actions { display: flex; flex-direction: column; gap: 6px; }
-.bta-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.bta-head h4 { margin: 0; }
+.bt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.bta-title { margin: 0; }
 .target-pick { flex-direction: row; align-items: center; gap: 6px; }
 .target-pick select { min-width: 120px; }
+/* Target bar — the one control every attack row depends on, so it is large, accented and sticky. */
+.target-bar {
+  position: sticky;
+  top: -8px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border: 2px dashed color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+.target-bar.has { border-style: solid; border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.target-bar .tb-title { font-size: 14px; font-weight: 800; letter-spacing: 0.5px; white-space: nowrap; }
+.sheet-editor .target-bar select { font-size: 15px; padding: 7px 10px; }
+.target-bar .tb-select { flex: 1 1 220px; min-width: 200px; max-width: 420px; min-height: 38px; font-weight: 700; }
+.target-bar .tb-stats { display: inline-flex; gap: 10px; font-size: 14px; font-weight: 700; }
+.sheet-editor .target-bar .tb-mark { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; margin-left: auto; }
+.target-bar .tb-mark select { min-height: 34px; font-size: 13px; }
 .action-group { display: flex; flex-direction: column; gap: 3px; }
 .action-group .ag-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .action-row {
@@ -749,10 +879,48 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .mc-type { font-size: 10px; color: var(--muted); text-transform: uppercase; }
 
 /* class features */
-.class-features { margin: 6px 0; border-top: 1px solid var(--line); padding-top: 4px; }
-.class-features > summary { font-size: 12px; font-weight: 600; cursor: pointer; }
+/* Quick-action toggles (Rage, Sneak Attack, Wild Shape, ...) stay outside any <details> so they're
+   always visible — only the long reference text below is collapsed by default (see `.cf-reference`
+   and `.class-features`). */
+.cf-block { display: flex; flex-direction: column; gap: 6px; }
+.cf-quick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel-2));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+.cf-reference { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.class-features {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: var(--panel-2);
+}
+.class-features > summary {
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .class-features > summary em { color: var(--muted); font-weight: 400; }
-.cf-auto { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; font-size: 11px; }
+.class-features[open] > summary { margin-bottom: 6px; }
+.cf-count {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 6px;
+  line-height: 15px;
+}
+.cf-auto { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0; font-size: 11px; }
 .cf-btn {
   font-size: 11px; padding: 3px 8px; border-radius: 4px;
   border: 1px solid var(--line); background: rgba(255,255,255,0.05); cursor: pointer;
@@ -766,10 +934,11 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .cf-pip { background: none; border: none; color: var(--line); cursor: pointer; font-size: 12px; padding: 0 1px; }
 .cf-pip.used { color: var(--accent-2); }
 .cf-pips em { color: var(--muted); margin-left: 3px; }
-.cf-list { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
-.cf-row { display: flex; gap: 6px; font-size: 11px; }
+.cf-list { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+.cf-row { display: flex; gap: 6px; font-size: 11px; line-height: 1.4; }
 .cf-row .cf-lvl { flex: none; color: var(--muted); width: 26px; }
 .cf-row .cf-body { flex: 1; }
+.cf-row + .cf-row { border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent); padding-top: 6px; }
 .subclass-features > summary { color: var(--accent, #a06cd5); }
 .cf-uses { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; }
 .cf-uses em { color: var(--muted); font-size: 10px; }
@@ -837,7 +1006,27 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
   z-index: 2;
 }
 .modal.zone-modal { width: min(560px, 92vw); }
-.zone-desc { white-space: pre-wrap; line-height: 1.5; max-height: 50vh; overflow-y: auto; }
+/* "Boxed text" read-aloud, styled after the book's own read-aloud boxes — distinct from the plain
+   DM notes below it so the DM never accidentally reads mechanics out loud to players. */
+.zone-readaloud {
+  margin: 0 0 10px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--panel-2));
+  font-style: italic;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.zone-dmnotes {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  color: var(--muted);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.zone-readaloud-input { font-style: italic; }
 .zone-lib-matches {
   max-height: 160px;
   overflow-y: auto;
@@ -1058,7 +1247,7 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .sb-row .grow { flex: 1; }
 .sb-row .grow input { width: 100%; }
 .sb-row input:not([type="color"]):not(.grow *), .sb-row select { width: 84px; }
-.sb-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.sb-abilities { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
 .sb-ab {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -1094,6 +1283,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 }
 .sb-inspect .sb-meta { font-size: 11px; color: var(--muted); font-style: italic; }
 .sb-inspect .sb-target { flex-direction: row; align-items: center; gap: 5px; font-size: 11px; }
+.loot-roller { display: flex; flex-direction: column; gap: 4px; }
+.loot-result { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 11px; background: var(--panel-2); border-radius: 5px; padding: 4px 6px; }
+.loot-result select { font-size: 11px; padding: 1px 3px; }
 .sb-ability-roll { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
 .sb-abr { display: flex; gap: 2px; }
 .sb-abr .roll-btn { flex: 1; padding: 2px 3px; font-size: 10px; }
@@ -1125,6 +1317,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 
 /* settings modal */
 .gear { margin-left: 8px; padding: 4px 8px; font-size: 15px; line-height: 1; }
+.sfx-vol { display: flex; align-items: center; gap: 3px; margin-left: 6px; }
+.sfx-vol button { padding: 4px 6px; font-size: 14px; line-height: 1; }
+.sfx-vol input[type='range'] { width: 60px; }
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1296,3 +1491,19 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .eco-attacks { font-size: 12px; color: var(--muted); }
 .mc-limits { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; }
 .mc-limits .over { color: #c0392b; font-weight: 600; }
+
+/* coarse health badge on an enemy token whose real HP is hidden from players */
+.tk-tier { position: absolute; top: -9px; right: -7px; font-size: 14px; line-height: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.8)); pointer-events: none; }
+.insp-tier { margin: 2px 0 6px; font-size: 13px; }
+.insp-tier span { color: var(--muted); }
+
+/* level-up: DM topbar button + the player's big "LÊN CẤP" banner on their sheet */
+.levelup-dm.on { background: var(--accent); color: #201a08; border-color: var(--accent); font-weight: 700; }
+.levelup-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 8px; padding: 8px 12px;
+  border: 2px solid var(--accent); border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+  animation: levelup-pulse 1.6s ease-in-out infinite;
+}
+.levelup-btn { font-size: 16px; font-weight: 800; padding: 8px 18px; background: var(--accent); color: #201a08; border-color: var(--accent); }
+@keyframes levelup-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 55%, transparent); } }

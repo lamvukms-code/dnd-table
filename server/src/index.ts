@@ -3,14 +3,21 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import express from 'express';
+import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
 import { nanoid } from 'nanoid';
 import { Room } from './room.js';
 import {
   PROTOCOL_VERSION,
   type ClientEnvelope,
+  type HomebrewEntry,
   type Participant,
   type RoomState,
+  type Token,
+  rollLogForPlayers,
+  sheetsForPlayer,
+  statsHiddenFromPlayers,
+  tokenForPlayers,
   type ServerEvent,
 } from '@dnd-table/shared';
 
@@ -32,6 +39,8 @@ const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);
 const app = express();
+// gzip/deflate for JS/CSS/JSON (images are already compressed and skipped by the default filter).
+app.use(compression());
 app.use(express.json({ limit: '12mb' }));
 
 mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -96,12 +105,36 @@ app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));
 
 const clientDist = process.env.CLIENT_DIST ?? join(__dirname, '..', '..', 'client', 'dist');
 if (existsSync(clientDist)) {
-  app.use(express.static(clientDist));
-  app.get('*', (_req, res) => res.sendFile(join(clientDist, 'index.html')));
+  // Vite emits content-hashed files under /assets — safe to cache forever; index.html must always revalidate.
+  app.use(
+    express.static(clientDist, {
+      setHeaders: (res, filePath) => {
+        if (/[\\/]assets[\\/]/.test(filePath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        else res.setHeader('Cache-Control', 'no-cache');
+      },
+    }),
+  );
+  app.get('*', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(join(clientDist, 'index.html'));
+  });
 }
 
 const httpServer = createServer(app);
-const wss = new WebSocketServer({ server: httpServer, path: '/ws', maxPayload: 2 * 1024 * 1024 });
+const wss = new WebSocketServer({
+  server: httpServer,
+  path: '/ws',
+  maxPayload: 2 * 1024 * 1024,
+  // State pushes are repetitive JSON (tokens, sheets, log) — deflate shrinks them ~6-10x, which matters
+  // most over a WAN/Tailscale link. Small frames skip it; no context takeover keeps per-socket memory flat.
+  perMessageDeflate: {
+    threshold: 1024,
+    zlibDeflateOptions: { level: 3 },
+    serverNoContextTakeover: true,
+    clientNoContextTakeover: true,
+    concurrencyLimit: 4,
+  },
+});
 
 const sockets = new Map<WebSocket, string>(); // socket -> participantId
 
@@ -110,30 +143,158 @@ function send(ws: WebSocket, event: ServerEvent): void {
 }
 
 /**
- * The bestiary and map zones are DM-only — players never get them (zones often hold spoilers:
- * traps, secrets, DCs). Homebrew entries players DO get, minus `secret` ones, and minus the DM's
- * own `notes` on the entries they do see.
+ * What a client gets in each `state` push. The bestiary and map zones are DM-only — players never
+ * get them (zones often hold spoilers: traps, secrets, DCs). The two big, slow-changing collections
+ * (bestiary, homebrew) are left EMPTY here and shipped separately by `staticEventFor` — only when
+ * they change — so a token drag no longer drags ~1MB of monster library across the wire 20x/second.
  */
-function stateFor(isDm: boolean): RoomState {
-  if (isDm) return room.state;
+function stateFor(isDm: boolean, participantId?: string): RoomState {
+  if (isDm) return { ...room.state, bestiary: [], homebrew: [], participants: publicParticipants() };
+  return playerStateFor(participantId ?? '', playerView());
+}
+
+/** The shared player view plus the one thing that differs per player: sheets. A player gets their
+ *  own character sheet(s) in full and only blank stubs for everyone else's. */
+/** Participants as clients see them — everything except the server-only `secret`. */
+function publicParticipants(): Participant[] {
+  return room.state.participants.map(({ secret: _secret, ...p }) => (void _secret, p));
+}
+
+function playerStateFor(participantId: string, base: RoomState): RoomState {
+  return { ...base, sheets: sheetsForPlayer(room.state.sheets, participantId) };
+}
+
+/**
+ * Everything a PLAYER may see. Beyond the DM-only collections it also hides what would otherwise
+ * spoil the game: DM-hidden tokens are removed, NPC/monster tokens lose AC / HP / defenses / statblock
+ * (they get a coarse `healthTier` instead — see `tokenForPlayers`), attack log entries against such
+ * targets lose `targetAc`, and the per-scene copies of tokens and map zones (`scenes[]` also carries
+ * every scene's tokens and the DM's room notes) get the same treatment — redacting only the top-level
+ * `tokens` / `zones` would leave all of it readable in the network traffic.
+ */
+function playerView(): RoomState {
+  const st = room.state;
+  const cache = new Map<Token, Token | null>();
+  const conv = (t: Token): Token | null => {
+    if (!cache.has(t)) cache.set(t, tokenForPlayers(t));
+    return cache.get(t) ?? null;
+  };
+  const redact = (ts: Token[]): Token[] => ts.map(conv).filter((t): t is Token => t !== null);
+  const visibleIds = new Set<string>();
+  for (const sc of st.scenes ?? []) {
+    for (const t of sc.tokens) if (!statsHiddenFromPlayers(t)) visibleIds.add(t.id);
+  }
   return {
-    ...room.state,
+    ...st,
     bestiary: [],
     zones: [],
-    homebrew: room.state.homebrew
-      .filter((h) => !h.secret)
-      .map((h) => ({ ...h, notes: undefined })),
+    homebrew: [],
+    participants: publicParticipants(),
+    dmPrompt: null,
+    tokens: redact(st.tokens),
+    scenes: (st.scenes ?? []).map((sc) => ({ ...sc, zones: [], tokens: redact(sc.tokens) })),
+    rollLog: rollLogForPlayers(st.rollLog, visibleIds),
   };
 }
 
-function broadcastState(): void {
+// Homebrew as a player may see it (no `secret` entries, no DM `notes`), rebuilt only when the
+// source array is replaced (homebrewUpsert/Remove always assign a new array — see room.ts).
+let playerHomebrewSrc: HomebrewEntry[] | undefined;
+let playerHomebrewCache: HomebrewEntry[] = [];
+function playerHomebrew(): HomebrewEntry[] {
+  if (room.state.homebrew !== playerHomebrewSrc) {
+    playerHomebrewSrc = room.state.homebrew;
+    playerHomebrewCache = room.state.homebrew.filter((h) => !h.secret).map((h) => ({ ...h, notes: undefined }));
+  }
+  return playerHomebrewCache;
+}
+
+// Per-socket record of which bestiary/homebrew arrays (by identity) that client already holds.
+interface StaticSent {
+  bestiary: unknown;
+  homebrew: unknown;
+  dm: boolean;
+}
+const staticSent = new WeakMap<WebSocket, StaticSent>();
+const EMPTY_BESTIARY: unknown[] = [];
+
+/** The `static` event this socket still needs (or null if it is up to date). Role changes count:
+ *  a promoted player needs the bestiary + unfiltered homebrew, a demoted DM must drop them. */
+function staticEventFor(ws: WebSocket, isDm: boolean): string | null {
+  const sent = staticSent.get(ws);
+  const wantBestiary: unknown = isDm ? room.state.bestiary : EMPTY_BESTIARY;
+  const wantHomebrew: unknown = isDm ? room.state.homebrew : playerHomebrew();
+  const needBestiary = !sent || sent.bestiary !== wantBestiary;
+  const needHomebrew = !sent || sent.homebrew !== wantHomebrew || sent.dm !== isDm;
+  if (!needBestiary && !needHomebrew) return null;
+  staticSent.set(ws, { bestiary: wantBestiary, homebrew: wantHomebrew, dm: isDm });
+  // Skip the (large) bestiary entirely for players who never had one.
+  const bestiaryField = needBestiary && (isDm || sent) ? `"bestiary":${isDm ? bestiaryJson() : '[]'}` : '';
+  const homebrewField = needHomebrew ? `"homebrew":${JSON.stringify(wantHomebrew)}` : '';
+  return `{"t":"static"${bestiaryField ? ',' + bestiaryField : ''}${homebrewField ? ',' + homebrewField : ''}}`;
+}
+
+// JSON of the bestiary, rebuilt only when the array is replaced (bestiaryUpsert/Remove/ReplaceAll).
+let bestiaryJsonCache = '';
+let bestiaryRefCache: unknown = undefined;
+function bestiaryJson(): string {
+  if (room.state.bestiary !== bestiaryRefCache) {
+    bestiaryRefCache = room.state.bestiary;
+    bestiaryJsonCache = JSON.stringify(room.state.bestiary);
+  }
+  return bestiaryJsonCache;
+}
+
+function sendStateNow(): void {
   const dmPayload = JSON.stringify({ t: 'state', state: stateFor(true) } satisfies ServerEvent);
-  let playerPayload: string | null = null;
+  // Tokens / scenes / log are redacted once per broadcast; only `sheets` differs per player.
+  let playerBase: RoomState | null = null;
+  const playerPayloads = new Map<string, string>();
   for (const [ws, pid] of sockets) {
     if (ws.readyState !== WebSocket.OPEN) continue;
-    if (getParticipant(pid)?.role === 'dm') ws.send(dmPayload);
-    else ws.send((playerPayload ??= JSON.stringify({ t: 'state', state: stateFor(false) } satisfies ServerEvent)));
+    const isDm = getParticipant(pid)?.role === 'dm';
+    const extra = staticEventFor(ws, isDm);
+    if (extra) ws.send(extra);
+    if (isDm) {
+      ws.send(dmPayload);
+      continue;
+    }
+    let payload = playerPayloads.get(pid);
+    if (!payload) {
+      playerBase ??= playerView();
+      payload = JSON.stringify({ t: 'state', state: playerStateFor(pid, playerBase) } satisfies ServerEvent);
+      playerPayloads.set(pid, payload);
+    }
+    ws.send(payload);
   }
+}
+
+let broadcastTimer: NodeJS.Timeout | null = null;
+let broadcastQueued = false;
+// Matches the client's own ~20/s drag-send throttle (see BattleMap.tsx `lastDragSendRef`).
+const BROADCAST_THROTTLE_MS = 50;
+
+/**
+ * Coalesces rapid-fire state pushes (a throttled token drag, or several players/rolls landing
+ * in the same tick) into at most one broadcast per BROADCAST_THROTTLE_MS. Without this, every
+ * single action re-serialized and resent the FULL room state — including the DM's whole
+ * bestiary (megabyte-scale once the library grows) — so a drag alone could re-stringify+resend
+ * that payload ~20x/second, blocking Node's single event loop and making both dragging and dice
+ * rolling feel laggy for everyone connected, not just whoever triggered the action.
+ */
+function broadcastState(): void {
+  if (broadcastTimer) {
+    broadcastQueued = true;
+    return;
+  }
+  sendStateNow();
+  broadcastTimer = setTimeout(() => {
+    broadcastTimer = null;
+    if (broadcastQueued) {
+      broadcastQueued = false;
+      broadcastState();
+    }
+  }, BROADCAST_THROTTLE_MS);
 }
 
 let saveTimer: NodeJS.Timeout | null = null;
@@ -166,14 +327,20 @@ wss.on('connection', (ws) => {
     }
 
     if (action.t === 'join') {
-      let participant = action.participantId ? getParticipant(action.participantId) : undefined;
+      const claimedId = action.participantId;
+      let participant = claimedId ? getParticipant(claimedId) : undefined;
+      // Once a participant holds a secret, only the client that holds it may resume that identity.
+      if (participant?.secret && participant.secret !== action.secret) participant = undefined;
       if (!participant) {
         // The server decides the role: the first person into a room without a DM
         // becomes the DM; everyone else joins as a player. The client's `role`
         // hint is ignored so a player cannot self-promote.
         const hasDm = room.state.participants.some((p) => p.role === 'dm');
         participant = {
-          id: nanoid(10),
+          // Re-use the id the browser already had (e.g. after the participant list was pruned or the
+          // server restarted) so it keeps owning its character sheets; only a free, well-formed id.
+          id: claimedId && /^[\w-]{6,32}$/.test(claimedId) && !getParticipant(claimedId) ? claimedId : nanoid(10),
+          secret: nanoid(16),
           name: action.name || 'Người chơi',
           role: hasDm ? 'player' : 'dm',
           color: pickColor(room.state.participants.length),
@@ -186,6 +353,7 @@ wss.on('connection', (ws) => {
         participant.name = action.name || participant.name;
         participant.connected = true;
         participant.lastSeen = Date.now();
+        participant.secret ??= nanoid(16);
       }
       // A room must always have at least one DM (covers older rooms / all DMs pruned).
       if (!room.state.participants.some((p) => p.role === 'dm')) {
@@ -193,11 +361,15 @@ wss.on('connection', (ws) => {
       }
       room.state.rev++;
       sockets.set(ws, participant.id);
+      staticSent.delete(ws); // a (re)join always starts from "client holds nothing"
+      const joinStatic = staticEventFor(ws, participant.role === 'dm');
+      if (joinStatic) ws.send(joinStatic);
       send(ws, {
         t: 'welcome',
         participantId: participant.id,
+        secret: participant.secret,
         protocol: PROTOCOL_VERSION,
-        state: stateFor(participant.role === 'dm'),
+        state: stateFor(participant.role === 'dm', participant.id),
       });
       broadcastState();
       scheduleSave();

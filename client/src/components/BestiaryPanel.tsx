@@ -3,6 +3,7 @@ import {
   ABILITIES,
   abilityMod,
   d20Check,
+  findCantrip,
   fmtMod,
   parse5eToolsBestiary,
   type SheetAction,
@@ -367,6 +368,118 @@ export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: (
       />
 
       <TraitsEditor traits={sb.traits} onChange={(traits) => set('traits', traits)} />
+
+      <details className="sb-def-details">
+        <summary>Legendary / Lair actions</summary>
+        <div className="sb-row">
+          <label>
+            Legendary actions / lượt
+            <input
+              type="number"
+              min={0}
+              value={sb.legendaryActionsPerRound ?? 0}
+              onChange={(e) => set('legendaryActionsPerRound', Number(e.target.value) || undefined)}
+            />
+          </label>
+          <label className="chk">
+            <input
+              type="checkbox"
+              checked={sb.hasLairActions ?? false}
+              onChange={(e) => set('hasLairActions', e.target.checked || undefined)}
+            />
+            Có lair action (initiative 20)
+          </label>
+        </div>
+        {(sb.legendaryActionsPerRound ?? 0) > 0 && (
+          <ActionsEditor
+            actions={sb.legendaryActions ?? []}
+            onChange={(a) => set('legendaryActions', a)}
+            label="Legendary actions"
+          />
+        )}
+        {sb.hasLairActions && (
+          <ActionsEditor actions={sb.lairActions ?? []} onChange={(a) => set('lairActions', a)} label="Lair actions" />
+        )}
+      </details>
+
+      <details className="sb-def-details">
+        <summary>Spellcasting</summary>
+        <p className="hint">
+          Tên phép được tra trong database SRD (giống ô "+ preset" của người chơi) — DC/bonus đánh ghi trực tiếp
+          như statblock in, không tự tính theo chỉ số.
+        </p>
+        <div className="sb-row">
+          <label>
+            Spell save DC
+            <input
+              type="number"
+              value={sb.spellcasting?.spellSaveDc ?? ''}
+              onChange={(e) =>
+                set('spellcasting', {
+                  spellSaveDc: Number(e.target.value) || 0,
+                  spellAttackBonus: sb.spellcasting?.spellAttackBonus ?? 0,
+                  casterLevel: sb.spellcasting?.casterLevel,
+                  spellNames: sb.spellcasting?.spellNames ?? [],
+                })
+              }
+            />
+          </label>
+          <label>
+            Spell attack bonus
+            <input
+              type="number"
+              value={sb.spellcasting?.spellAttackBonus ?? ''}
+              onChange={(e) =>
+                set('spellcasting', {
+                  spellSaveDc: sb.spellcasting?.spellSaveDc ?? 0,
+                  spellAttackBonus: Number(e.target.value) || 0,
+                  casterLevel: sb.spellcasting?.casterLevel,
+                  spellNames: sb.spellcasting?.spellNames ?? [],
+                })
+              }
+            />
+          </label>
+          <label title="Dùng để scale sát thương cantrip (như cấp nhân vật) — để trống = viên xúc xắc gốc">
+            Caster level (tùy chọn)
+            <input
+              type="number"
+              value={sb.spellcasting?.casterLevel ?? ''}
+              onChange={(e) =>
+                set('spellcasting', {
+                  spellSaveDc: sb.spellcasting?.spellSaveDc ?? 0,
+                  spellAttackBonus: sb.spellcasting?.spellAttackBonus ?? 0,
+                  casterLevel: e.target.value ? Number(e.target.value) : undefined,
+                  spellNames: sb.spellcasting?.spellNames ?? [],
+                })
+              }
+            />
+          </label>
+        </div>
+        <label>
+          Tên phép (phẩy) — khớp tên trong database SRD
+          <input
+            value={(sb.spellcasting?.spellNames ?? []).join(', ')}
+            onChange={(e) =>
+              set('spellcasting', {
+                spellSaveDc: sb.spellcasting?.spellSaveDc ?? 0,
+                spellAttackBonus: sb.spellcasting?.spellAttackBonus ?? 0,
+                casterLevel: sb.spellcasting?.casterLevel,
+                spellNames: e.target.value
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
+        {(sb.spellcasting?.spellNames.length ?? 0) > 0 && (
+          <p className="hint">
+            {sb.spellcasting!.spellNames
+              .map((n) => `${n}${findCantrip(n) ? '' : ' (⚠ không tìm thấy)'}`)
+              .join(' · ')}
+          </p>
+        )}
+      </details>
 
       <details className="sb-def-details">
         <summary>Phòng thủ (kháng / miễn / DR / crit immune)</summary>
