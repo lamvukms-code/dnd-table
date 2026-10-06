@@ -1,1 +1,2810 @@
-[]
+[
+  {
+    "id": "srd-club",
+    "name": "Club",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "1 sp",
+    "weaponAbility": "str",
+    "damage": "1d4",
+    "damageType": "bludgeoning",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-dagger",
+    "name": "Dagger",
+    "type": "weapon",
+    "weight": 1,
+    "cost": "2 gp",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "rangeText": "20/60 ft (ném)",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-greatclub",
+    "name": "Greatclub",
+    "type": "weapon",
+    "weight": 10,
+    "cost": "2 sp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-handaxe",
+    "name": "Handaxe",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "5 gp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "slashing",
+    "rangeText": "20/60 ft (ném)",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-javelin",
+    "name": "Javelin",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "5 sp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "rangeText": "30/120 ft (ném)",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-light-hammer",
+    "name": "Light hammer",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "2 gp",
+    "weaponAbility": "str",
+    "damage": "1d4",
+    "damageType": "bludgeoning",
+    "rangeText": "20/60 ft (ném)",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-mace",
+    "name": "Mace",
+    "type": "weapon",
+    "weight": 4,
+    "cost": "5 gp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-quarterstaff",
+    "name": "Quarterstaff",
+    "type": "weapon",
+    "weight": 4,
+    "cost": "2 sp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "notes": "Versatile: 1d8 hai tay · Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-sickle",
+    "name": "Sickle",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "1 gp",
+    "weaponAbility": "str",
+    "damage": "1d4",
+    "damageType": "slashing",
+    "notes": "Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-spear",
+    "name": "Spear",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "1 gp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "rangeText": "20/60 ft (ném)",
+    "notes": "Versatile: 1d8 hai tay · Vũ khí cận chiến thường"
+  },
+  {
+    "id": "srd-light-crossbow",
+    "name": "Light crossbow",
+    "type": "weapon",
+    "weight": 5,
+    "cost": "25 gp",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "rangeText": "80/320 ft",
+    "notes": "Nạp đạn: 1 lần/lượt · hai tay · Vũ khí tầm xa thường"
+  },
+  {
+    "id": "srd-dart",
+    "name": "Dart",
+    "type": "weapon",
+    "weight": 0.25,
+    "cost": "5 cp",
+    "weaponAbility": "dex",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "rangeText": "20/60 ft",
+    "notes": "Vũ khí tầm xa thường"
+  },
+  {
+    "id": "srd-shortbow",
+    "name": "Shortbow",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "25 gp",
+    "weaponAbility": "dex",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "rangeText": "80/320 ft",
+    "notes": "Hai tay · Vũ khí tầm xa thường"
+  },
+  {
+    "id": "srd-sling",
+    "name": "Sling",
+    "type": "weapon",
+    "weight": 0,
+    "cost": "1 sp",
+    "weaponAbility": "dex",
+    "damage": "1d4",
+    "damageType": "bludgeoning",
+    "rangeText": "30/120 ft",
+    "notes": "Vũ khí tầm xa thường"
+  },
+  {
+    "id": "srd-battleaxe",
+    "name": "Battleaxe",
+    "type": "weapon",
+    "weight": 4,
+    "cost": "10 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "notes": "Versatile: 1d10 hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-flail",
+    "name": "Flail",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "10 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-glaive",
+    "name": "Glaive",
+    "type": "weapon",
+    "weight": 6,
+    "cost": "20 gp",
+    "weaponAbility": "str",
+    "damage": "1d10",
+    "damageType": "slashing",
+    "notes": "Heavy, Reach, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-greataxe",
+    "name": "Greataxe",
+    "type": "weapon",
+    "weight": 7,
+    "cost": "30 gp",
+    "weaponAbility": "str",
+    "damage": "1d12",
+    "damageType": "slashing",
+    "notes": "Heavy, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-greatsword",
+    "name": "Greatsword",
+    "type": "weapon",
+    "weight": 6,
+    "cost": "50 gp",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "slashing",
+    "notes": "Heavy, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-halberd",
+    "name": "Halberd",
+    "type": "weapon",
+    "weight": 6,
+    "cost": "20 gp",
+    "weaponAbility": "str",
+    "damage": "1d10",
+    "damageType": "slashing",
+    "notes": "Heavy, Reach, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-lance",
+    "name": "Lance",
+    "type": "weapon",
+    "weight": 6,
+    "cost": "10 gp",
+    "weaponAbility": "str",
+    "damage": "1d12",
+    "damageType": "piercing",
+    "notes": "Reach · Bất lợi khi đánh mục tiêu trong 5ft nếu không cưỡi · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-longsword",
+    "name": "Longsword",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "15 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "notes": "Versatile: 1d10 hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-maul",
+    "name": "Maul",
+    "type": "weapon",
+    "weight": 10,
+    "cost": "10 gp",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "bludgeoning",
+    "notes": "Heavy, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-morningstar",
+    "name": "Morningstar",
+    "type": "weapon",
+    "weight": 4,
+    "cost": "15 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-pike",
+    "name": "Pike",
+    "type": "weapon",
+    "weight": 18,
+    "cost": "5 gp",
+    "weaponAbility": "str",
+    "damage": "1d10",
+    "damageType": "piercing",
+    "notes": "Heavy, Reach, hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-rapier",
+    "name": "Rapier",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "25 gp",
+    "weaponAbility": "finesse",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-scimitar",
+    "name": "Scimitar",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "25 gp",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "slashing",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-shortsword",
+    "name": "Shortsword",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "10 gp",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-trident",
+    "name": "Trident",
+    "type": "weapon",
+    "weight": 4,
+    "cost": "5 gp",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "rangeText": "20/60 ft (ném)",
+    "notes": "Versatile: 1d8 hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-war-pick",
+    "name": "War pick",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "5 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "notes": "Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-warhammer",
+    "name": "Warhammer",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "15 gp",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "notes": "Versatile: 1d10 hai tay · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-whip",
+    "name": "Whip",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "2 gp",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "slashing",
+    "notes": "Reach · Vũ khí cận chiến chiến đấu"
+  },
+  {
+    "id": "srd-blowgun",
+    "name": "Blowgun",
+    "type": "weapon",
+    "weight": 1,
+    "cost": "10 gp",
+    "weaponAbility": "dex",
+    "damage": "1",
+    "damageType": "piercing",
+    "notes": "Nạp đạn: 1 lần/lượt · Vũ khí tầm xa chiến đấu"
+  },
+  {
+    "id": "srd-hand-crossbow",
+    "name": "Hand crossbow",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "75 gp",
+    "weaponAbility": "dex",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "rangeText": "30/120 ft",
+    "notes": "Nạp đạn: 1 lần/lượt · Light · Vũ khí tầm xa chiến đấu"
+  },
+  {
+    "id": "srd-heavy-crossbow",
+    "name": "Heavy crossbow",
+    "type": "weapon",
+    "weight": 18,
+    "cost": "50 gp",
+    "weaponAbility": "dex",
+    "damage": "1d10",
+    "damageType": "piercing",
+    "rangeText": "100/400 ft",
+    "notes": "Nạp đạn: 1 lần/lượt · Heavy, hai tay · Vũ khí tầm xa chiến đấu"
+  },
+  {
+    "id": "srd-longbow",
+    "name": "Longbow",
+    "type": "weapon",
+    "weight": 2,
+    "cost": "50 gp",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "rangeText": "150/600 ft",
+    "notes": "Heavy, hai tay · Vũ khí tầm xa chiến đấu"
+  },
+  {
+    "id": "srd-net",
+    "name": "Net",
+    "type": "weapon",
+    "weight": 3,
+    "cost": "1 gp",
+    "weaponAbility": "str",
+    "rangeText": "5/15 ft (ném)",
+    "notes": "Không gây sát thương — mục tiêu trúng bị Restrained (DC 10 Str thoát); vô dụng với mục tiêu Huge+. Vũ khí tầm xa chiến đấu"
+  },
+  {
+    "id": "srd-padded",
+    "name": "Padded",
+    "type": "armor",
+    "armorBase": 11,
+    "armorCategory": "light",
+    "weight": 5,
+    "cost": "5 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp nhẹ: AC = cơ bản + DEX"
+  },
+  {
+    "id": "srd-leather",
+    "name": "Leather",
+    "type": "armor",
+    "armorBase": 11,
+    "armorCategory": "light",
+    "weight": 10,
+    "cost": "10 gp",
+    "stealthDisadvantage": false,
+    "notes": "Giáp nhẹ: AC = cơ bản + DEX"
+  },
+  {
+    "id": "srd-studded-leather",
+    "name": "Studded leather",
+    "type": "armor",
+    "armorBase": 12,
+    "armorCategory": "light",
+    "weight": 13,
+    "cost": "45 gp",
+    "stealthDisadvantage": false,
+    "notes": "Giáp nhẹ: AC = cơ bản + DEX"
+  },
+  {
+    "id": "srd-hide",
+    "name": "Hide",
+    "type": "armor",
+    "armorBase": 12,
+    "armorCategory": "medium",
+    "weight": 12,
+    "cost": "10 gp",
+    "stealthDisadvantage": false,
+    "notes": "Giáp vừa: AC = cơ bản + DEX (tối đa +2)"
+  },
+  {
+    "id": "srd-chain-shirt",
+    "name": "Chain shirt",
+    "type": "armor",
+    "armorBase": 13,
+    "armorCategory": "medium",
+    "weight": 20,
+    "cost": "50 gp",
+    "stealthDisadvantage": false,
+    "notes": "Giáp vừa: AC = cơ bản + DEX (tối đa +2)"
+  },
+  {
+    "id": "srd-scale-mail",
+    "name": "Scale mail",
+    "type": "armor",
+    "armorBase": 14,
+    "armorCategory": "medium",
+    "weight": 45,
+    "cost": "50 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp vừa: AC = cơ bản + DEX (tối đa +2)"
+  },
+  {
+    "id": "srd-breastplate",
+    "name": "Breastplate",
+    "type": "armor",
+    "armorBase": 14,
+    "armorCategory": "medium",
+    "weight": 20,
+    "cost": "400 gp",
+    "stealthDisadvantage": false,
+    "notes": "Giáp vừa: AC = cơ bản + DEX (tối đa +2)"
+  },
+  {
+    "id": "srd-half-plate",
+    "name": "Half plate",
+    "type": "armor",
+    "armorBase": 15,
+    "armorCategory": "medium",
+    "weight": 40,
+    "cost": "750 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp vừa: AC = cơ bản + DEX (tối đa +2)"
+  },
+  {
+    "id": "srd-ring-mail",
+    "name": "Ring mail",
+    "type": "armor",
+    "armorBase": 14,
+    "armorCategory": "heavy",
+    "weight": 40,
+    "cost": "30 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp nặng: AC cố định, không cộng DEX"
+  },
+  {
+    "id": "srd-chain-mail",
+    "name": "Chain mail",
+    "type": "armor",
+    "armorBase": 16,
+    "armorCategory": "heavy",
+    "weight": 55,
+    "cost": "75 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp nặng: AC cố định, không cộng DEX"
+  },
+  {
+    "id": "srd-splint",
+    "name": "Splint",
+    "type": "armor",
+    "armorBase": 17,
+    "armorCategory": "heavy",
+    "weight": 60,
+    "cost": "200 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp nặng: AC cố định, không cộng DEX"
+  },
+  {
+    "id": "srd-plate",
+    "name": "Plate",
+    "type": "armor",
+    "armorBase": 18,
+    "armorCategory": "heavy",
+    "weight": 65,
+    "cost": "1500 gp",
+    "stealthDisadvantage": true,
+    "notes": "Giáp nặng: AC cố định, không cộng DEX"
+  },
+  {
+    "id": "srd-shield",
+    "name": "Shield",
+    "type": "shield",
+    "armorBase": 2,
+    "weight": 6,
+    "cost": "10 gp",
+    "notes": "+2 AC khi trang bị"
+  },
+  {
+    "id": "srd-abacus",
+    "name": "Abacus",
+    "type": "gear",
+    "weight": 2,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-acid-vial",
+    "name": "Acid (vial)",
+    "type": "gear",
+    "weight": 1,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-alchemist-s-fire-flask",
+    "name": "Alchemist's fire (flask)",
+    "type": "gear",
+    "weight": 1,
+    "cost": "50 gp"
+  },
+  {
+    "id": "srd-antitoxin-vial",
+    "name": "Antitoxin (vial)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "50 gp"
+  },
+  {
+    "id": "srd-backpack",
+    "name": "Backpack",
+    "type": "gear",
+    "weight": 5,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-ball-bearings-bag-of-1-000",
+    "name": "Ball bearings (bag of 1,000)",
+    "type": "gear",
+    "weight": 2,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-bedroll",
+    "name": "Bedroll",
+    "type": "gear",
+    "weight": 7,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-bell",
+    "name": "Bell",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-blanket",
+    "name": "Blanket",
+    "type": "gear",
+    "weight": 3,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-block-and-tackle",
+    "name": "Block and tackle",
+    "type": "gear",
+    "weight": 5,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-book",
+    "name": "Book",
+    "type": "gear",
+    "weight": 5,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-bottle-glass",
+    "name": "Bottle, glass",
+    "type": "gear",
+    "weight": 2,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-bucket",
+    "name": "Bucket",
+    "type": "gear",
+    "weight": 2,
+    "cost": "5 cp"
+  },
+  {
+    "id": "srd-burglar-s-pack",
+    "name": "Burglar's Pack",
+    "type": "gear",
+    "weight": 44.5,
+    "cost": "16 gp"
+  },
+  {
+    "id": "srd-caltrops-bag-of-20",
+    "name": "Caltrops (bag of 20)",
+    "type": "gear",
+    "weight": 2,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-candle",
+    "name": "Candle",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 cp"
+  },
+  {
+    "id": "srd-case-crossbow-bolt",
+    "name": "Case, crossbow bolt",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-case-map-or-scroll",
+    "name": "Case, map or scroll",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-chain-10-feet",
+    "name": "Chain (10 feet)",
+    "type": "gear",
+    "weight": 10,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-chalk-1-piece",
+    "name": "Chalk (1 piece)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 cp"
+  },
+  {
+    "id": "srd-climber-s-kit",
+    "name": "Climber's kit",
+    "type": "gear",
+    "weight": 12,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-component-pouch",
+    "name": "Component pouch",
+    "type": "gear",
+    "weight": 2,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-crowbar",
+    "name": "Crowbar",
+    "type": "gear",
+    "weight": 5,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-diplomat-s-pack",
+    "name": "Diplomat's Pack",
+    "type": "gear",
+    "weight": 39,
+    "cost": "39 gp"
+  },
+  {
+    "id": "srd-entertainer-s-pack",
+    "name": "Entertainer's Pack",
+    "type": "gear",
+    "weight": 38,
+    "cost": "40 gp"
+  },
+  {
+    "id": "srd-explorer-s-pack",
+    "name": "Explorer's Pack",
+    "type": "gear",
+    "weight": 59,
+    "cost": "10 gp"
+  },
+  {
+    "id": "srd-fishing-tackle",
+    "name": "Fishing tackle",
+    "type": "gear",
+    "weight": 4,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-flask-or-tankard",
+    "name": "Flask or tankard",
+    "type": "gear",
+    "weight": 1,
+    "cost": "2 cp"
+  },
+  {
+    "id": "srd-grappling-hook",
+    "name": "Grappling hook",
+    "type": "gear",
+    "weight": 4,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-hammer",
+    "name": "Hammer",
+    "type": "gear",
+    "weight": 3,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-hammer-sledge",
+    "name": "Hammer, sledge",
+    "type": "gear",
+    "weight": 10,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-healer-s-kit",
+    "name": "Healer's kit",
+    "type": "gear",
+    "weight": 3,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-holy-symbol",
+    "name": "Holy symbol",
+    "type": "gear",
+    "weight": 1,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-holy-water-flask",
+    "name": "Holy water (flask)",
+    "type": "gear",
+    "weight": 1,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-hourglass",
+    "name": "Hourglass",
+    "type": "gear",
+    "weight": 1,
+    "cost": "25 gp"
+  },
+  {
+    "id": "srd-hunting-trap",
+    "name": "Hunting trap",
+    "type": "gear",
+    "weight": 25,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-ink-1-ounce-bottle",
+    "name": "Ink (1 ounce bottle)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "10 gp"
+  },
+  {
+    "id": "srd-ink-pen",
+    "name": "Ink pen",
+    "type": "gear",
+    "weight": 0,
+    "cost": "2 cp"
+  },
+  {
+    "id": "srd-jug-or-pitcher",
+    "name": "Jug or pitcher",
+    "type": "gear",
+    "weight": 4,
+    "cost": "2 cp"
+  },
+  {
+    "id": "srd-ladder-10-foot",
+    "name": "Ladder (10-foot)",
+    "type": "gear",
+    "weight": 25,
+    "cost": "1 sp"
+  },
+  {
+    "id": "srd-lamp",
+    "name": "Lamp",
+    "type": "gear",
+    "weight": 1,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-lantern-bullseye",
+    "name": "Lantern, bullseye",
+    "type": "gear",
+    "weight": 2,
+    "cost": "10 gp"
+  },
+  {
+    "id": "srd-lantern-hooded",
+    "name": "Lantern, hooded",
+    "type": "gear",
+    "weight": 2,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-lock",
+    "name": "Lock",
+    "type": "gear",
+    "weight": 1,
+    "cost": "10 gp"
+  },
+  {
+    "id": "srd-magnifying-glass",
+    "name": "Magnifying glass",
+    "type": "gear",
+    "weight": 0,
+    "cost": "100 gp"
+  },
+  {
+    "id": "srd-manacles",
+    "name": "Manacles",
+    "type": "gear",
+    "weight": 6,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-mess-kit",
+    "name": "Mess kit",
+    "type": "gear",
+    "weight": 1,
+    "cost": "2 sp"
+  },
+  {
+    "id": "srd-mirror-steel",
+    "name": "Mirror, steel",
+    "type": "gear",
+    "weight": 0.5,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-oil-flask",
+    "name": "Oil (flask)",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 sp"
+  },
+  {
+    "id": "srd-paper-one-sheet",
+    "name": "Paper (one sheet)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "2 sp"
+  },
+  {
+    "id": "srd-parchment-one-sheet",
+    "name": "Parchment (one sheet)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 sp"
+  },
+  {
+    "id": "srd-perfume-vial",
+    "name": "Perfume (vial)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-pick-miner-s",
+    "name": "Pick, miner's",
+    "type": "gear",
+    "weight": 10,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-piton",
+    "name": "Piton",
+    "type": "gear",
+    "weight": 0.25,
+    "cost": "5 cp"
+  },
+  {
+    "id": "srd-poison-basic-vial",
+    "name": "Poison, basic (vial)",
+    "type": "gear",
+    "weight": 0,
+    "cost": "100 gp"
+  },
+  {
+    "id": "srd-pole-10-foot",
+    "name": "Pole (10-foot)",
+    "type": "gear",
+    "weight": 7,
+    "cost": "5 cp"
+  },
+  {
+    "id": "srd-pot-iron",
+    "name": "Pot, iron",
+    "type": "gear",
+    "weight": 10,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-pouch",
+    "name": "Pouch",
+    "type": "gear",
+    "weight": 1,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-priest-s-pack",
+    "name": "Priest's Pack",
+    "type": "gear",
+    "weight": 24,
+    "cost": "19 gp"
+  },
+  {
+    "id": "srd-quiver",
+    "name": "Quiver",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-ram-portable",
+    "name": "Ram, portable",
+    "type": "gear",
+    "weight": 35,
+    "cost": "4 gp"
+  },
+  {
+    "id": "srd-rations-1-day",
+    "name": "Rations (1 day)",
+    "type": "gear",
+    "weight": 2,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-robe",
+    "name": "Robe",
+    "type": "gear",
+    "weight": 4,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-rope-hempen-50-feet",
+    "name": "Rope, hempen (50 feet)",
+    "type": "gear",
+    "weight": 10,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-rope-silk-50-feet",
+    "name": "Rope, silk (50 feet)",
+    "type": "gear",
+    "weight": 5,
+    "cost": "10 gp"
+  },
+  {
+    "id": "srd-sack",
+    "name": "Sack",
+    "type": "gear",
+    "weight": 0.5,
+    "cost": "1 cp"
+  },
+  {
+    "id": "srd-scale-merchant-s",
+    "name": "Scale, merchant's",
+    "type": "gear",
+    "weight": 3,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-scholar-s-pack",
+    "name": "Scholar's Pack",
+    "type": "gear",
+    "weight": 11,
+    "cost": "40 gp"
+  },
+  {
+    "id": "srd-sealing-wax",
+    "name": "Sealing wax",
+    "type": "gear",
+    "weight": 0,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-shovel",
+    "name": "Shovel",
+    "type": "gear",
+    "weight": 5,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-signal-whistle",
+    "name": "Signal whistle",
+    "type": "gear",
+    "weight": 0,
+    "cost": "5 cp"
+  },
+  {
+    "id": "srd-signet-ring",
+    "name": "Signet ring",
+    "type": "gear",
+    "weight": 0,
+    "cost": "5 gp"
+  },
+  {
+    "id": "srd-soap",
+    "name": "Soap",
+    "type": "gear",
+    "weight": 0,
+    "cost": "2 cp"
+  },
+  {
+    "id": "srd-spellbook",
+    "name": "Spellbook",
+    "type": "gear",
+    "weight": 3,
+    "cost": "50 gp"
+  },
+  {
+    "id": "srd-spike-iron",
+    "name": "Spike, iron",
+    "type": "gear",
+    "weight": 5,
+    "cost": "1 sp"
+  },
+  {
+    "id": "srd-spyglass",
+    "name": "Spyglass",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1000 gp"
+  },
+  {
+    "id": "srd-tent-two-person",
+    "name": "Tent, two-person",
+    "type": "gear",
+    "weight": 20,
+    "cost": "2 gp"
+  },
+  {
+    "id": "srd-tinderbox",
+    "name": "Tinderbox",
+    "type": "gear",
+    "weight": 1,
+    "cost": "5 sp"
+  },
+  {
+    "id": "srd-torch",
+    "name": "Torch",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 cp"
+  },
+  {
+    "id": "srd-vial",
+    "name": "Vial",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 gp"
+  },
+  {
+    "id": "srd-waterskin",
+    "name": "Waterskin",
+    "type": "gear",
+    "weight": 5,
+    "cost": "2 sp"
+  },
+  {
+    "id": "srd-whetstone",
+    "name": "Whetstone",
+    "type": "gear",
+    "weight": 1,
+    "cost": "1 cp"
+  },
+  {
+    "id": "srd-alchemist-s-supplies",
+    "name": "Alchemist's supplies",
+    "type": "gear",
+    "weight": 8,
+    "cost": "50 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-brewer-s-supplies",
+    "name": "Brewer's supplies",
+    "type": "gear",
+    "weight": 9,
+    "cost": "20 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-calligrapher-s-supplies",
+    "name": "Calligrapher's supplies",
+    "type": "gear",
+    "weight": 5,
+    "cost": "10 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-carpenter-s-tools",
+    "name": "Carpenter's tools",
+    "type": "gear",
+    "weight": 6,
+    "cost": "8 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-cartographer-s-tools",
+    "name": "Cartographer's tools",
+    "type": "gear",
+    "weight": 6,
+    "cost": "15 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-cobbler-s-tools",
+    "name": "Cobbler's tools",
+    "type": "gear",
+    "weight": 5,
+    "cost": "5 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-cook-s-utensils",
+    "name": "Cook's utensils",
+    "type": "gear",
+    "weight": 8,
+    "cost": "1 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-glassblower-s-tools",
+    "name": "Glassblower's tools",
+    "type": "gear",
+    "weight": 5,
+    "cost": "30 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-jeweler-s-tools",
+    "name": "Jeweler's tools",
+    "type": "gear",
+    "weight": 2,
+    "cost": "25 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-leatherworker-s-tools",
+    "name": "Leatherworker's tools",
+    "type": "gear",
+    "weight": 5,
+    "cost": "5 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-mason-s-tools",
+    "name": "Mason's tools",
+    "type": "gear",
+    "weight": 8,
+    "cost": "10 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-painter-s-supplies",
+    "name": "Painter's supplies",
+    "type": "gear",
+    "weight": 5,
+    "cost": "10 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-potter-s-tools",
+    "name": "Potter's tools",
+    "type": "gear",
+    "weight": 3,
+    "cost": "10 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-smith-s-tools",
+    "name": "Smith's tools",
+    "type": "gear",
+    "weight": 8,
+    "cost": "20 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-tinker-s-tools",
+    "name": "Tinker's tools",
+    "type": "gear",
+    "weight": 10,
+    "cost": "50 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-weaver-s-tools",
+    "name": "Weaver's tools",
+    "type": "gear",
+    "weight": 5,
+    "cost": "1 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-woodcarver-s-tools",
+    "name": "Woodcarver's tools",
+    "type": "gear",
+    "weight": 5,
+    "cost": "1 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-disguise-kit",
+    "name": "Disguise kit",
+    "type": "gear",
+    "weight": 3,
+    "cost": "25 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-forgery-kit",
+    "name": "Forgery kit",
+    "type": "gear",
+    "weight": 5,
+    "cost": "15 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-dice-set",
+    "name": "Dice set",
+    "type": "gear",
+    "weight": 0,
+    "cost": "1 sp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-playing-card-set",
+    "name": "Playing card set",
+    "type": "gear",
+    "weight": 0,
+    "cost": "5 sp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-bagpipes",
+    "name": "Bagpipes",
+    "type": "gear",
+    "weight": 6,
+    "cost": "30 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-drum",
+    "name": "Drum",
+    "type": "gear",
+    "weight": 3,
+    "cost": "6 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-dulcimer",
+    "name": "Dulcimer",
+    "type": "gear",
+    "weight": 10,
+    "cost": "25 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-flute",
+    "name": "Flute",
+    "type": "gear",
+    "weight": 1,
+    "cost": "2 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-lute",
+    "name": "Lute",
+    "type": "gear",
+    "weight": 2,
+    "cost": "35 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-lyre",
+    "name": "Lyre",
+    "type": "gear",
+    "weight": 2,
+    "cost": "30 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-horn",
+    "name": "Horn",
+    "type": "gear",
+    "weight": 2,
+    "cost": "3 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-pan-flute",
+    "name": "Pan flute",
+    "type": "gear",
+    "weight": 2,
+    "cost": "12 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-shawm",
+    "name": "Shawm",
+    "type": "gear",
+    "weight": 1,
+    "cost": "2 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-viol",
+    "name": "Viol",
+    "type": "gear",
+    "weight": 1,
+    "cost": "30 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-navigator-s-tools",
+    "name": "Navigator's tools",
+    "type": "gear",
+    "weight": 2,
+    "cost": "25 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-poisoner-s-kit",
+    "name": "Poisoner's kit",
+    "type": "gear",
+    "weight": 2,
+    "cost": "50 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-thieves-tools",
+    "name": "Thieves' tools",
+    "type": "gear",
+    "weight": 1,
+    "cost": "25 gp",
+    "notes": "Bộ dụng cụ/nhạc cụ — cần thành thạo để dùng hiệu quả"
+  },
+  {
+    "id": "srd-magic-belt-of-hill-giant-strength",
+    "name": "Belt of Hill Giant Strength",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 21 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-belt-of-fire-giant-strength",
+    "name": "Belt of Fire Giant Strength",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 25 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-belt-of-frost-stone-giant-strength",
+    "name": "Belt of Frost/Stone Giant Strength",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 23 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-belt-of-cloud-giant-strength",
+    "name": "Belt of Cloud Giant Strength",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 27 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-belt-of-storm-giant-strength",
+    "name": "Belt of Storm Giant Strength",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 29 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-gauntlets-of-ogre-power",
+    "name": "Gauntlets of Ogre Power",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Strength = 19 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-headband-of-intellect",
+    "name": "Headband of Intellect",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Đội vào: Intelligence = 19 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-amulet-of-health",
+    "name": "Amulet of Health",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Đeo vào: Constitution = 19 (không đổi nếu đã cao hơn)."
+  },
+  {
+    "id": "srd-magic-manual-tome-chi-so-2",
+    "name": "Manual/Tome (chỉ số +2)",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Đọc/luyện tập 48 giờ trong 6 ngày: tăng vĩnh viễn 1 chỉ số +2 (tối đa 30). Sách mất phép, hồi lại sau 1 thế kỷ. (Có bản riêng cho từng chỉ số: Clear Thought=INT, Bodily Health=CON, Gainful Exercise=STR, Quickness of Action=DEX, Leadership and Influence=CHA, Understanding=WIS.)"
+  },
+  {
+    "id": "srd-magic-ring-of-protection",
+    "name": "Ring of Protection",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "+1 AC và +1 mọi cứu nguy khi đeo."
+  },
+  {
+    "id": "srd-magic-cloak-of-protection",
+    "name": "Cloak of Protection",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "+1 AC và +1 mọi cứu nguy khi mặc."
+  },
+  {
+    "id": "srd-magic-bracers-of-defense",
+    "name": "Bracers of Defense",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "+2 AC khi không mặc giáp và không dùng khiên."
+  },
+  {
+    "id": "srd-magic-ioun-stone-of-protection",
+    "name": "Ioun Stone of Protection",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Viên đá lơ lửng quanh đầu: +1 AC."
+  },
+  {
+    "id": "srd-magic-robe-of-the-archmagi",
+    "name": "Robe of the Archmagi",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "AC cơ bản 15+DEX nếu không mặc giáp; lợi thế cứu nguy chống phép; +2 spell attack và spell save DC. Chỉ Sorcerer/Warlock/Wizard dùng được."
+  },
+  {
+    "id": "srd-magic-scarab-of-protection",
+    "name": "Scarab of Protection",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "+1 AC, lợi thế cứu nguy chống phép, và 12 lần đổi 1 cứu nguy thất bại (chống Necromancy/Undead) thành thành công."
+  },
+  {
+    "id": "srd-magic-boots-of-elvenkind",
+    "name": "Boots of Elvenkind",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Đi không tiếng động; lợi thế Stealth (DEX)."
+  },
+  {
+    "id": "srd-magic-boots-of-striding-and-springing",
+    "name": "Boots of Striding and Springing",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Tốc độ tối thiểu 30ft, không giảm vì nặng/giáp nặng; nhảy xa 30ft chỉ tốn 10ft di chuyển."
+  },
+  {
+    "id": "srd-magic-boots-of-speed",
+    "name": "Boots of Speed",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Bonus Action: x2 tốc độ + bất lợi cho đòn cơ hội nhắm vào bạn, tổng 10 phút/ngày."
+  },
+  {
+    "id": "srd-magic-cloak-of-elvenkind",
+    "name": "Cloak of Elvenkind",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Bất lợi cho Perception nhắm vào bạn; lợi thế Stealth (DEX) khi mặc."
+  },
+  {
+    "id": "srd-magic-cloak-of-displacement",
+    "name": "Cloak of Displacement",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Kẻ thù có bất lợi khi tấn công bạn (ảo ảnh lệch vị trí) — mất hiệu lực 1 lượt sau khi bạn trúng đòn."
+  },
+  {
+    "id": "srd-magic-cloak-of-invisibility",
+    "name": "Cloak of Invisibility",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "3 lần nạp: Magic action để tàng hình 1 giờ, hồi 1d3 lần/ngày."
+  },
+  {
+    "id": "srd-magic-gloves-of-missile-snaring",
+    "name": "Gloves of Missile Snaring",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Reaction: giảm 1d10+DEX sát thương từ vũ khí tầm xa/ném; giảm về 0 thì bắt được vũ khí/đạn."
+  },
+  {
+    "id": "srd-magic-gloves-of-swimming-and-climbing",
+    "name": "Gloves of Swimming and Climbing",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Bơi/leo trèo không tốn thêm di chuyển; +5 Athletics khi bơi/leo."
+  },
+  {
+    "id": "srd-magic-goggles-of-night",
+    "name": "Goggles of Night",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Darkvision 60ft (hoặc +60ft nếu đã có Darkvision)."
+  },
+  {
+    "id": "srd-magic-winged-boots",
+    "name": "Winged Boots",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "4 lần nạp/ngày: Magic action để bay tốc độ 30ft trong 1 giờ."
+  },
+  {
+    "id": "srd-magic-wings-of-flying",
+    "name": "Wings of Flying",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Biến thành đôi cánh: bay tốc độ 60ft trong 1 giờ, hồi lại sau 1d12 giờ."
+  },
+  {
+    "id": "srd-magic-ring-of-feather-falling",
+    "name": "Ring of Feather Falling",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Rơi chậm 60ft/lượt, không sát thương rơi."
+  },
+  {
+    "id": "srd-magic-ring-of-swimming",
+    "name": "Ring of Swimming",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Tốc độ bơi 40ft khi đeo."
+  },
+  {
+    "id": "srd-magic-ring-of-water-walking",
+    "name": "Ring of Water Walking",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Đi trên mặt nước như Water Walk (chỉ bản thân)."
+  },
+  {
+    "id": "srd-magic-ring-of-jumping",
+    "name": "Ring of Jumping",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Cast Jump vào bản thân bất kỳ lúc nào."
+  },
+  {
+    "id": "srd-magic-ring-of-warmth",
+    "name": "Ring of Warmth",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Giảm 2d8 sát thương lạnh phải chịu; không bị ảnh hưởng bởi lạnh 0°F trở lên."
+  },
+  {
+    "id": "srd-magic-slippers-of-spider-climbing",
+    "name": "Slippers of Spider Climbing",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Tốc độ leo = tốc độ đi, leo tường/trần (trừ bề mặt trơn)."
+  },
+  {
+    "id": "srd-magic-cloak-of-the-bat",
+    "name": "Cloak of the Bat",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Lợi thế Stealth; trong tối có tốc độ bay 40ft; 1 lần/ngày biến thành dơi (giữ INT/WIS/CHA)."
+  },
+  {
+    "id": "srd-magic-hat-of-disguise",
+    "name": "Hat of Disguise",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Cast Disguise Self liên tục khi đội."
+  },
+  {
+    "id": "srd-magic-necklace-of-adaptation",
+    "name": "Necklace of Adaptation",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Thở bình thường ở mọi môi trường; lợi thế cứu nguy chống độc."
+  },
+  {
+    "id": "srd-magic-bag-of-holding",
+    "name": "Bag of Holding",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Không gian nội thất ~2×2×4ft, chứa tới 500lb (tối đa 64ft³), luôn nặng 5lb. Quá tải/thủng/lộn ngược sẽ phá hủy và làm mất đồ."
+  },
+  {
+    "id": "srd-magic-heward-s-handy-haversack",
+    "name": "Heward's Handy Haversack",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Balo 3 ngăn không gian riêng (2×200lb + 1×500lb), luôn nặng 5lb, lấy đồ nhanh (Bonus Action)."
+  },
+  {
+    "id": "srd-magic-portable-hole",
+    "name": "Portable Hole",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Khăn đen mở ra thành hố ngoại chiều sâu 10ft, gấp lại giữ nguyên nội dung bên trong."
+  },
+  {
+    "id": "srd-magic-rope-of-climbing",
+    "name": "Rope of Climbing",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Dây 60ft tự di chuyển/buộc/gỡ/cuộn theo lệnh, chịu tới 3000lb, AC 20 HP 20."
+  },
+  {
+    "id": "srd-magic-immovable-rod",
+    "name": "Immovable Rod",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Bấm nút: que sắt cố định tại chỗ (chịu 8000lb), bấm lại để thả."
+  },
+  {
+    "id": "srd-magic-decanter-of-endless-water",
+    "name": "Decanter of Endless Water",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Đổ ra nước ngọt/mặn theo 3 mức: tia nhỏ / vòi / cột nước mạnh."
+  },
+  {
+    "id": "srd-magic-alchemy-jug",
+    "name": "Alchemy Jug",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Rót ra một trong nhiều loại chất lỏng thông dụng (nước, dầu, rượu, axit...) theo lệnh, giới hạn lượng/ngày."
+  },
+  {
+    "id": "srd-magic-chime-of-opening",
+    "name": "Chime of Opening",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Gõ chuông: cast Knock (tối đa 10 lần rồi vỡ)."
+  },
+  {
+    "id": "srd-magic-deck-of-illusions",
+    "name": "Deck of Illusions",
+    "type": "gear",
+    "rarity": 34,
+    "attunementRequired": false,
+    "notes": "Bộ 34 lá bài, rút ngẫu nhiên tạo ảo ảnh 1 quái vật (vô hại thực sự) tại vị trí chọn."
+  },
+  {
+    "id": "srd-magic-deck-of-many-things",
+    "name": "Deck of Many Things",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": false,
+    "notes": "Bộ bài định mệnh — mỗi lá rút ra kích hoạt 1 hiệu ứng may/rủi mạnh (tăng chỉ số, của cải, kẻ thù mới, bị giam cầm...). Rất rủi ro, DM nên tự tra bảng đầy đủ khi dùng."
+  },
+  {
+    "id": "srd-magic-figurine-of-wondrous-power",
+    "name": "Figurine of Wondrous Power",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Tượng nhỏ ném ra biến thành 1 sinh vật cụ thể (tùy loại tượng) phục vụ bạn trong thời gian giới hạn rồi hồi lại tượng."
+  },
+  {
+    "id": "srd-magic-efficient-quiver-quiver-of-ehlonna",
+    "name": "Efficient Quiver (Quiver of Ehlonna)",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Ống tên 3 ngăn ngoại chiều: chứa 60 tên/nỏ, 18 vật dài trung, 6 vật dài (cung, giáo...) mà không nặng thêm."
+  },
+  {
+    "id": "srd-magic-folding-boat",
+    "name": "Folding Boat",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Hộp gỗ mở ra thành xuồng chèo hoặc thuyền buồm cỡ vừa theo lệnh."
+  },
+  {
+    "id": "srd-magic-1-dagger",
+    "name": "+1 Dagger",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-dagger",
+    "name": "+2 Dagger",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-dagger",
+    "name": "+3 Dagger",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-shortsword",
+    "name": "+1 Shortsword",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-shortsword",
+    "name": "+2 Shortsword",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-shortsword",
+    "name": "+3 Shortsword",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-longsword",
+    "name": "+1 Longsword",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-longsword",
+    "name": "+2 Longsword",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-longsword",
+    "name": "+3 Longsword",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-greatsword",
+    "name": "+1 Greatsword",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "slashing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-greatsword",
+    "name": "+2 Greatsword",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "slashing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-greatsword",
+    "name": "+3 Greatsword",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "slashing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-rapier",
+    "name": "+1 Rapier",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-rapier",
+    "name": "+2 Rapier",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-rapier",
+    "name": "+3 Rapier",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "finesse",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-battleaxe",
+    "name": "+1 Battleaxe",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-battleaxe",
+    "name": "+2 Battleaxe",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-battleaxe",
+    "name": "+3 Battleaxe",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-warhammer",
+    "name": "+1 Warhammer",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-warhammer",
+    "name": "+2 Warhammer",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-warhammer",
+    "name": "+3 Warhammer",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-mace",
+    "name": "+1 Mace",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-mace",
+    "name": "+2 Mace",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-mace",
+    "name": "+3 Mace",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-longbow",
+    "name": "+1 Longbow",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-longbow",
+    "name": "+2 Longbow",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-longbow",
+    "name": "+3 Longbow",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-shortbow",
+    "name": "+1 Shortbow",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +1 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-2-shortbow",
+    "name": "+2 Shortbow",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +2 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-3-shortbow",
+    "name": "+3 Shortbow",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Vũ khí phép: +3 đánh và sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d6",
+    "damageType": "piercing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-2-3-ammunition",
+    "name": "+1/+2/+3 Ammunition",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Bó tên/nỏ/đạn ná phép: cộng bonus tương ứng vào đánh và sát thương khi bắn (dùng hết là mất)."
+  },
+  {
+    "id": "srd-magic-dagger-of-venom",
+    "name": "Dagger of Venom",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "+1 đánh/sát thương. Bonus Action tẩm độc lưỡi dao: đòn trúng tiếp theo gây thêm 2d10 Poison, DC 15 Con hoặc bị Poisoned 1 phút. Dùng lại được sau khi nghỉ qua đêm.",
+    "weaponAbility": "finesse",
+    "damage": "1d4",
+    "damageType": "piercing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-flame-tongue",
+    "name": "Flame Tongue",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Bonus Action bật/tắt lưỡi lửa: khi bật, thêm 2d6 Fire mỗi đòn trúng, tỏa sáng 40ft.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing"
+  },
+  {
+    "id": "srd-magic-frost-brand",
+    "name": "Frost Brand",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+1 đánh/sát thương; thêm 1d6 Cold mỗi đòn trúng; kháng Fire khi cầm; dập tắt lửa thường gần đó.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-sun-blade",
+    "name": "Sun Blade",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Kiếm ánh sáng: +2 đánh/sát thương (Radiant thay vì Slashing), thêm 1d8 Radiant vào Undead; tỏa sáng 15-30ft điều chỉnh được.",
+    "weaponAbility": "finesse",
+    "damage": "1d8",
+    "damageType": "radiant",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-vorpal-sword",
+    "name": "Vorpal Sword",
+    "type": "weapon",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "+3 đánh/sát thương. Tung 20 tự nhiên khi chém: mục tiêu (không phải construct/ooze/miễn crit) DC 17 Con hoặc bị chặt đầu, chết ngay.",
+    "weaponAbility": "str",
+    "damage": "2d6",
+    "damageType": "slashing",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-holy-avenger",
+    "name": "Holy Avenger",
+    "type": "weapon",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Chỉ Paladin. +3 đánh/sát thương, thêm 2d10 Radiant vào Fiend/Undead. Lợi thế cứu nguy cho bạn + đồng minh gần trong 10ft; DC cứu nguy phép của Fiend/Undead trong vùng -2.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "radiant",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-sword-mace-of-sharpness-wounding",
+    "name": "Sword/Mace of Sharpness (Wounding)",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Đòn trúng gây thêm 1d6 sát thương cùng loại tiếp tục chảy máu (mất 1d6/lượt cho tới khi được chữa hoặc DC 15 chữa trị).",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing"
+  },
+  {
+    "id": "srd-magic-javelin-of-lightning",
+    "name": "Javelin of Lightning",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Đòn trúng gây Lightning thay Piercing; ném xa biến thành tia sét 5ft-wide line, 4d6 Lightning (DC 13 Dex nửa sát thương), rồi bay về tay. 1 lần/ngày.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "piercing"
+  },
+  {
+    "id": "srd-magic-trident-of-fish-command",
+    "name": "Trident of Fish Command",
+    "type": "weapon",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "3 lần nạp/ngày: cast Dominate Beast (chỉ sinh vật có tốc độ bơi).",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "piercing"
+  },
+  {
+    "id": "srd-magic-mace-of-disruption",
+    "name": "Mace of Disruption",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Thêm 2d6 Radiant vào Fiend/Undead; nếu còn ≤25 HP sau đó, DC 15 Wis hoặc bị hủy diệt. Tỏa sáng 20-40ft khi cầm.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning"
+  },
+  {
+    "id": "srd-magic-mace-of-smiting",
+    "name": "Mace of Smiting",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "+1 đánh/sát thương (+3 vào Construct). Tung 20: thêm 7 (14 vào Construct) sát thương Bludgeoning; Construct ≤25 HP bị phá hủy.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 1,
+    "damageBonusMisc": 1
+  },
+  {
+    "id": "srd-magic-nine-lives-stealer",
+    "name": "Nine Lives Stealer",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+2 đánh/sát thương. Khi đưa sinh vật (không phải construct/undead) về 0 HP, có cơ hội hút hồn hủy diệt nó luôn thay vì chỉ hạ gục; kiếm có 9 lần dùng rồi mất phép.",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "slashing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-oathbow",
+    "name": "Oathbow",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Khi bắn trúng lần đầu, tuyên bố kẻ thù thề — các lần bắn sau vào đúng mục tiêu đó có lợi thế và +3d6 sát thương.",
+    "weaponAbility": "dex",
+    "damage": "1d8",
+    "damageType": "piercing"
+  },
+  {
+    "id": "srd-magic-scimitar-of-speed",
+    "name": "Scimitar of Speed",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+2 đánh/sát thương; có thể tấn công thêm 1 lần bằng Bonus Action mỗi lượt.",
+    "weaponAbility": "finesse",
+    "damage": "1d6",
+    "damageType": "slashing",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-dwarven-thrower",
+    "name": "Dwarven Thrower",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Chỉ Dwarf (hoặc điều hợp Belt of Dwarvenkind). +3 đánh/sát thương, ném xa 20/60ft rồi tự bay về tay; thêm 1d8 Force (2d8 vào Giant).",
+    "weaponAbility": "str",
+    "damage": "1d8",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-1-studded-leather-armor",
+    "name": "+1 Studded Leather Armor",
+    "type": "armor",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Giáp nhẹ phép: AC cơ bản 13 (thay vì 12) + DEX.",
+    "armorBase": 13,
+    "armorCategory": "light"
+  },
+  {
+    "id": "srd-magic-1-chain-shirt",
+    "name": "+1 Chain Shirt",
+    "type": "armor",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Giáp vừa phép: AC cơ bản 14 (thay vì 13) + DEX (tối đa +2).",
+    "armorBase": 14,
+    "armorCategory": "medium"
+  },
+  {
+    "id": "srd-magic-1-breastplate",
+    "name": "+1 Breastplate",
+    "type": "armor",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Giáp vừa phép: AC cơ bản 15 (thay vì 14) + DEX (tối đa +2).",
+    "armorBase": 15,
+    "armorCategory": "medium"
+  },
+  {
+    "id": "srd-magic-1-chain-mail",
+    "name": "+1 Chain Mail",
+    "type": "armor",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Giáp nặng phép: AC 17 (thay vì 16), không cộng DEX.",
+    "armorBase": 17,
+    "armorCategory": "heavy"
+  },
+  {
+    "id": "srd-magic-1-plate-armor",
+    "name": "+1 Plate Armor",
+    "type": "armor",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Giáp nặng phép: AC 19 (thay vì 18), không cộng DEX.",
+    "armorBase": 19,
+    "armorCategory": "heavy"
+  },
+  {
+    "id": "srd-magic-glamoured-studded-leather",
+    "name": "Glamoured Studded Leather",
+    "type": "armor",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "AC cơ bản 12+1=13 + DEX. Bonus Action đổi hình dạng thành trang phục thường hoặc giáp khác (chỉ ngoại hình).",
+    "armorBase": 13,
+    "armorCategory": "light"
+  },
+  {
+    "id": "srd-magic-armor-of-invulnerability",
+    "name": "Armor of Invulnerability",
+    "type": "armor",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "AC 18 (plate). Kháng Bludgeoning/Piercing/Slashing khi mặc; 1 lần/ngày Magic action miễn nhiễm 3 loại đó 10 phút.",
+    "armorBase": 18,
+    "armorCategory": "heavy"
+  },
+  {
+    "id": "srd-magic-dragon-scale-mail-bat-ky-mau",
+    "name": "Dragon Scale Mail (bất kỳ màu)",
+    "type": "armor",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "AC cơ bản 14 (scale mail +1) + DEX (tối đa +2); kháng loại sát thương ứng với màu rồng (Acid/Cold/Fire/Lightning/Poison...).",
+    "armorBase": 14,
+    "armorCategory": "medium"
+  },
+  {
+    "id": "srd-magic-adamantine-armor",
+    "name": "Adamantine Armor",
+    "type": "armor",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Giáp thường (bất kỳ loại nặng nào) gắn adamantine: mọi đòn crit nhắm vào bạn tự động thành đòn thường.",
+    "grantsCritImmune": true
+  },
+  {
+    "id": "srd-magic-animated-shield",
+    "name": "Animated Shield",
+    "type": "shield",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Bonus Action: khiên tự bay lơ lửng bảo vệ bạn (như đang cầm) trong 1 phút, rảnh tay.",
+    "armorBase": 2
+  },
+  {
+    "id": "srd-magic-shield-of-the-cavalier",
+    "name": "Shield of the Cavalier",
+    "type": "shield",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+2 AC (cộng thêm bonus thường của khiên). Có thể húc gây sát thương/đẩy lùi, hoặc dựng lá chắn lực bảo vệ đồng minh gần.",
+    "armorBase": 2
+  },
+  {
+    "id": "srd-magic-spellguard-shield",
+    "name": "Spellguard Shield",
+    "type": "shield",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Lợi thế cứu nguy chống phép; kẻ tấn công bằng phép nhắm vào bạn có bất lợi.",
+    "armorBase": 2
+  },
+  {
+    "id": "srd-magic-sentinel-shield",
+    "name": "Sentinel Shield",
+    "type": "shield",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Lợi thế Initiative và Perception khi cầm.",
+    "armorBase": 2
+  },
+  {
+    "id": "srd-magic-ring-of-spell-storing",
+    "name": "Ring of Spell Storing",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Lưu trữ tới 5 cấp phép do bất kỳ ai nạp vào; người đeo có thể tung phép đã lưu bất kỳ lúc nào."
+  },
+  {
+    "id": "srd-magic-ring-of-regeneration",
+    "name": "Ring of Regeneration",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Hồi 1d6 HP mỗi 10 phút (nếu còn ≥1 HP); bộ phận cơ thể mất mọc lại sau 1d6+1 ngày."
+  },
+  {
+    "id": "srd-magic-ring-of-invisibility",
+    "name": "Ring of Invisibility",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Magic action: tàng hình liên tục cho tới khi tháo nhẫn hoặc chủ động hiện hình."
+  },
+  {
+    "id": "srd-magic-ring-of-spell-turning",
+    "name": "Ring of Spell Turning",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Lợi thế cứu nguy chống phép; nếu đỡ thành công phép cấp ≤7 nhắm riêng bạn, có thể phản lại chính người tung."
+  },
+  {
+    "id": "srd-magic-ring-of-free-action",
+    "name": "Ring of Free Action",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Địa hình khó không tốn thêm di chuyển; miễn nhiễm hiệu ứng phép làm giảm tốc độ, Paralyzed, Restrained."
+  },
+  {
+    "id": "srd-magic-ring-of-mind-shielding",
+    "name": "Ring of Mind Shielding",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "Miễn nhiễm đọc suy nghĩ/dò dối/biết loại sinh vật; giữ linh hồn nếu chết khi đang đeo."
+  },
+  {
+    "id": "srd-magic-ring-of-elemental-command",
+    "name": "Ring of Elemental Command",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Gắn với 1 mặt phẳng nguyên tố (Air/Earth/Fire/Water): trợ lực chống nguyên tố cùng loại, có thể tung các phép nguyên tố mạnh từ nhẫn."
+  },
+  {
+    "id": "srd-magic-ring-of-djinni-summoning",
+    "name": "Ring of Djinni Summoning",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Magic action: triệu hồi 1 Djinni phục vụ tới 1 giờ, dùng lại được sau 24 giờ."
+  },
+  {
+    "id": "srd-magic-ring-of-three-wishes",
+    "name": "Ring of Three Wishes",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": false,
+    "notes": "3 lần nạp: mỗi lần dùng để cast Wish. Hết phép sau lần cuối."
+  },
+  {
+    "id": "srd-magic-rod-of-absorption",
+    "name": "Rod of Absorption",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Reaction hủy 1 phép nhắm riêng bạn, lưu năng lượng (tối đa 50 cấp) — người biết phép có thể đổi thành ô phép (tối đa cấp 5) để dùng lại."
+  },
+  {
+    "id": "srd-magic-rod-of-lordly-might",
+    "name": "Rod of Lordly Might",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "Chùy phép +3 đánh/sát thương với nhiều nút bấm biến hình thành vũ khí khác (kiếm, rìu...) + 3 khả năng đặc biệt: hút máu, làm tê liệt, gieo sợ hãi.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-rod-of-rulership",
+    "name": "Rod of Rulership",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Magic action: mọi sinh vật chọn trong 120ft phải DC 15 Wis hoặc bị Charmed 8 giờ, coi bạn là lãnh đạo đáng tin."
+  },
+  {
+    "id": "srd-magic-rod-of-security",
+    "name": "Rod of Security",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Magic action: đưa tới 199 người tới 1 không gian ngoại chiều an toàn, nghỉ ngơi và hồi phục, tối đa 200 ngày chia cho số người."
+  },
+  {
+    "id": "srd-magic-rod-of-alertness",
+    "name": "Rod of Alertness",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Lợi thế Perception + Initiative khi cầm; có thể cast vài phép trinh sát; cắm xuống đất tạo vùng bảo vệ +1 AC/cứu nguy cho đồng minh."
+  },
+  {
+    "id": "srd-magic-rod-of-resurrection",
+    "name": "Rod of Resurrection",
+    "type": "gear",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "5 lần nạp: cast Heal (1 nạp) hoặc Resurrection (5 nạp). Hồi 1 nạp/ngày; nguy cơ nhỏ que biến mất khi hết phép."
+  },
+  {
+    "id": "srd-magic-staff-of-healing",
+    "name": "Staff of Healing",
+    "type": "weapon",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "Gậy phép (dùng như Quarterstaff), 10 nạp: tung các phép chữa trị (Cure Wounds, Lesser/Greater Restoration, Mass Cure Wounds) từ gậy.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning"
+  },
+  {
+    "id": "srd-magic-staff-of-fire-frost",
+    "name": "Staff of Fire/Frost",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "Kháng Fire hoặc Cold khi cầm; 10 nạp để tung các phép lửa/băng tương ứng từ gậy.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning"
+  },
+  {
+    "id": "srd-magic-staff-of-power",
+    "name": "Staff of Power",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+2 đánh/sát thương (Quarterstaff); +2 AC, cứu nguy, spell attack khi cầm. 20 nạp để tung nhiều phép tấn công/phòng thủ mạnh; có thể đập vỡ để nổ lớn.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-staff-of-striking",
+    "name": "Staff of Striking",
+    "type": "weapon",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "+3 đánh/sát thương (Quarterstaff); 10 nạp, tiêu tới 3 nạp/đòn trúng để thêm 1d6 Force mỗi nạp.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 3,
+    "damageBonusMisc": 3
+  },
+  {
+    "id": "srd-magic-staff-of-the-magi",
+    "name": "Staff of the Magi",
+    "type": "weapon",
+    "rarity": "huyền thoại",
+    "attunementRequired": true,
+    "notes": "+2 đánh/sát thương, +2 spell attack; lợi thế cứu nguy chống phép; hấp thụ phép nhắm vào bạn thành nạp phép; 50 nạp để tung nhiều phép mạnh.",
+    "weaponAbility": "str",
+    "damage": "1d6",
+    "damageType": "bludgeoning",
+    "attackBonusMisc": 2,
+    "damageBonusMisc": 2
+  },
+  {
+    "id": "srd-magic-wand-of-magic-missiles",
+    "name": "Wand of Magic Missiles",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "7 nạp: tung Magic Missile (tăng cấp theo số nạp dùng, tối đa 3 nạp/lần)."
+  },
+  {
+    "id": "srd-magic-wand-of-fireballs",
+    "name": "Wand of Fireballs",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "7 nạp: tung Fireball (tăng cấp theo số nạp, tối đa 3/lần)."
+  },
+  {
+    "id": "srd-magic-wand-of-lightning-bolts",
+    "name": "Wand of Lightning Bolts",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "7 nạp: tung Lightning Bolt (tăng cấp theo số nạp, tối đa 3/lần)."
+  },
+  {
+    "id": "srd-magic-wand-of-polymorph",
+    "name": "Wand of Polymorph",
+    "type": "gear",
+    "rarity": "rất hiếm",
+    "attunementRequired": true,
+    "notes": "7 nạp: tung Polymorph (1 nạp/lần)."
+  },
+  {
+    "id": "srd-magic-wand-of-paralysis",
+    "name": "Wand of Paralysis",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "7 nạp: tia làm mục tiêu DC 15 Con hoặc bị Paralyzed 1 phút."
+  },
+  {
+    "id": "srd-magic-wand-of-web",
+    "name": "Wand of Web",
+    "type": "gear",
+    "rarity": "không phổ biến",
+    "attunementRequired": true,
+    "notes": "7 nạp: tung Web (1 nạp/lần)."
+  },
+  {
+    "id": "srd-magic-wand-of-wonder",
+    "name": "Wand of Wonder",
+    "type": "gear",
+    "rarity": "hiếm",
+    "attunementRequired": true,
+    "notes": "7 nạp: tạo hiệu ứng phép ngẫu nhiên tại điểm chọn trong 120ft — hài hước và khó lường, tra bảng khi dùng."
+  },
+  {
+    "id": "srd-magic-potion-of-healing-greater-superior-supreme",
+    "name": "Potion of Healing (Greater/Superior/Supreme)",
+    "type": "consumable",
+    "rarity": "uncommon–legendary",
+    "attunementRequired": false,
+    "notes": "Uống hồi máu ngay: Thường 2d4+2, Cao cấp 4d4+4, Siêu cấp 8d4+8, Tối thượng 10d4+20.",
+    "consumableKind": "heal",
+    "healFormula": "2d4+2"
+  },
+  {
+    "id": "srd-magic-potion-of-giant-strength-loai-bat-ky",
+    "name": "Potion of Giant Strength (loại bất kỳ)",
+    "type": "consumable",
+    "rarity": "uncommon–legendary",
+    "attunementRequired": false,
+    "notes": "Uống vào: Strength đổi thành mức tương ứng loại giant trong 1 giờ (không đổi nếu đã cao hơn).",
+    "consumableKind": "custom",
+    "consumableNote": "Strength tạm thời theo loại giant, 1 giờ."
+  },
+  {
+    "id": "srd-magic-potion-of-invisibility",
+    "name": "Potion of Invisibility",
+    "type": "consumable",
+    "rarity": "hiếm",
+    "attunementRequired": false,
+    "notes": "Uống vào: tàng hình 1 giờ, mất hiệu lực nếu tấn công/gây sát thương/tung phép.",
+    "consumableKind": "custom",
+    "consumableNote": "Tàng hình 1 giờ."
+  },
+  {
+    "id": "srd-magic-potion-of-speed",
+    "name": "Potion of Speed",
+    "type": "consumable",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Uống vào: hiệu ứng như Haste 1 phút, không bị mệt mỏi khi hết hạn.",
+    "consumableKind": "custom",
+    "consumableNote": "Như Haste, 1 phút."
+  },
+  {
+    "id": "srd-magic-potion-of-flying",
+    "name": "Potion of Flying",
+    "type": "consumable",
+    "rarity": "rất hiếm",
+    "attunementRequired": false,
+    "notes": "Uống vào: tốc độ bay = tốc độ đi trong 1 giờ, có thể lượn tại chỗ.",
+    "consumableKind": "custom",
+    "consumableNote": "Bay 1 giờ."
+  },
+  {
+    "id": "srd-magic-potion-of-resistance-loai-bat-ky",
+    "name": "Potion of Resistance (loại bất kỳ)",
+    "type": "consumable",
+    "rarity": "không phổ biến",
+    "attunementRequired": false,
+    "notes": "Uống vào: kháng 1 loại sát thương chọn trước trong 1 giờ.",
+    "consumableKind": "custom",
+    "consumableNote": "Kháng 1 loại sát thương, 1 giờ."
+  },
+  {
+    "id": "srd-magic-spell-scroll-cap-1-9",
+    "name": "Spell Scroll (cấp 1-9)",
+    "type": "consumable",
+    "rarity": "common–legendary",
+    "attunementRequired": false,
+    "notes": "Đọc để tung 1 phép có sẵn trên cuộn — cấp càng cao càng hiếm; nếu phép không thuộc lớp mình, cần check Arcana để đọc thành công.",
+    "consumableKind": "spell",
+    "scrollSpellName": ""
+  }
+]
