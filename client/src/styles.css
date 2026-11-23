@@ -120,6 +120,8 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   border-radius: 8px;
   padding: 3px;
 }
+/* the token inspector (300px, right edge) would cover the zoom buttons — sit beside it */
+.zoom-controls.beside-inspector { right: 318px; }
 .zoom-controls button {
   min-width: 32px;
   font-size: 13px;
@@ -251,7 +253,16 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .map-toolbar, .init-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 6px; }
 .map-toolbar label { flex-direction: column; }
 .map-toolbar input[type="number"] { width: 60px; }
-.board-scroll { flex: 1; overflow: auto; background: #0c0d12; min-height: 0; }
+.board-scroll {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #0c0d12;
+  min-height: 0;
+  cursor: grab;
+  touch-action: none; /* touch drag pans the map instead of scrolling the page */
+}
+.board-scroll:active { cursor: grabbing; }
 .dddice-canvas {
   position: absolute;
   inset: 0;
@@ -313,7 +324,15 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .ib-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 8px 6px; align-items: center; }
 .ib-tools input { width: 90px; }
 .ib-tools input[type="number"] { width: 56px; }
-.board { position: relative; background-size: cover; background-position: center; cursor: grab; }
+.board {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background-size: cover;
+  background-position: center;
+  cursor: grab;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 8px 40px rgba(0,0,0,0.6);
+}
 .board:active { cursor: grabbing; }
 .grid-overlay {
   position: absolute;

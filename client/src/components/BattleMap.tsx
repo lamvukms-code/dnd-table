@@ -96,6 +96,7 @@ function BattleMapImpl() {
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());
   const meId = useStore((s) => s.participantId);
+  const activeSceneId = useStore((s) => s.room?.activeSceneId);
   const me = useStore((s) => s.me());
   const castingSpell = useStore((s) => s.castingSpell);
   const castingMonsterSpell = useStore((s) => s.castingMonsterSpell);
@@ -189,13 +190,20 @@ function BattleMapImpl() {
   // move via the throttled `send` in `onPointerMove` below — unaffected by this local state.
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const lastDragSendRef = useRef(0);
-  // Free camera pan: click-drag empty board space to scroll the view, like most VTTs — previously
-  // the only way to move the view was the browser's own scrollbars / mouse wheel, which read as
-  // "the map is stuck" since there was no drag-to-pan at all. `moved` distinguishes an actual pan
-  // (suppresses the board's own click-to-deselect below) from a plain click.
-  const panDrag = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number; moved: boolean } | null>(
-    null,
-  );
+  // --- Free camera (Owlbear-style) -------------------------------------------------------------
+  // The board is NOT inside a native scroll area any more. The viewport (`.board-scroll`) is a
+  // fixed, overflow-hidden window and the board floats inside it under a
+  // `translate(pan) scale(zoom)` transform. The old scroll-based version could never place the
+  // board anywhere but flush with the scroll origin — zoomed out below the viewport size it was
+  // stuck in the top-left corner, and panning stopped at the edge of a fixed 600px padding.
+  // Now the map can be dragged anywhere (only clamped so a sliver always stays on screen), zooms
+  // around the cursor, and is fitted + centred whenever a scene/map size loads.
+  //
+  // Pan lives in a ref and is written straight to the board's style while dragging, so a pan
+  // doesn't re-render this (large) component on every pointer move. Zoom is React state because
+  // the UI shows it and pointer→cell maths reads it; all such maths goes through
+  // `boardRef.getBoundingClientRect()`, which already includes the transform.
+  const panDrag = useRef<{ x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
   const suppressBoardClick = useRef(false);
   // --- DM zone tool: click-drag on empty board to draw a room/area rectangle, click an
   //     existing one to view its read-aloud/DM text (see ZonePopup). ---
@@ -204,78 +212,107 @@ function BattleMapImpl() {
   const zoneDragStart = useRef<{ x: number; y: number } | null>(null);
   const [zonePopup, setZonePopup] = useState<ZonePopupState>(null);
   const [zoom, setZoom] = useState(1);
-  const ZOOM_MIN = 0.3;
-  const ZOOM_MAX = 2.5;
-  /** Empty scrollable margin (px, constant regardless of zoom) around the board so it isn't
-   *  pinned to the top-left corner — lets the DM drag it away from the edge to re-centre it. */
-  const PAN_PAD = 600;
+  const zoomRef = useRef(1);
+  const pan = useRef({ x: 0, y: 0 });
+  const ZOOM_MIN = 0.1;
+  const ZOOM_MAX = 4;
+  /** How much of the board (px on screen) must stay inside the viewport, so it can't be lost. */
+  const PAN_KEEP = 80;
   const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
-  /** Zoom by `factor`, keeping the point under (clientX, clientY) — or the viewport centre
-   *  if omitted — visually fixed, by adjusting the scroll container's scroll offset to match. */
+
+  function clampPan(x: number, y: number, z: number) {
+    const vp = boardScrollRef.current;
+    if (!vp) return { x, y };
+    const bw = map.cols * CELL * z;
+    const bh = map.rows * CELL * z;
+    const keepX = Math.min(PAN_KEEP, bw);
+    const keepY = Math.min(PAN_KEEP, bh);
+    return {
+      x: Math.min(vp.clientWidth - keepX, Math.max(keepX - bw, x)),
+      y: Math.min(vp.clientHeight - keepY, Math.max(keepY - bh, y)),
+    };
+  }
+  function cameraTransform() {
+    return `translate(${pan.current.x}px, ${pan.current.y}px) scale(${zoomRef.current})`;
+  }
+  function applyCamera(x: number, y: number, z: number) {
+    pan.current = clampPan(x, y, z);
+    zoomRef.current = z;
+    if (boardRef.current) boardRef.current.style.transform = cameraTransform();
+    setZoom(z);
+  }
+  /** Zoom to `next`, keeping the point under (clientX, clientY) — or the viewport centre if
+   *  omitted — visually fixed. */
+  function zoomTo(next: number, clientX?: number, clientY?: number) {
+    const vp = boardScrollRef.current;
+    if (!vp) return;
+    const rect = vp.getBoundingClientRect();
+    const sx = (clientX ?? rect.left + rect.width / 2) - rect.left;
+    const sy = (clientY ?? rect.top + rect.height / 2) - rect.top;
+    const prev = zoomRef.current;
+    const z = clampZoom(next);
+    // the board-space point under the anchor stays under the anchor
+    const wx = (sx - pan.current.x) / prev;
+    const wy = (sy - pan.current.y) / prev;
+    applyCamera(sx - wx * z, sy - wy * z, z);
+  }
   function zoomBy(factor: number, clientX?: number, clientY?: number) {
-    const scroller = boardScrollRef.current;
-    if (!scroller) return;
-    const rect = scroller.getBoundingClientRect();
-    const cx = clientX ?? rect.left + rect.width / 2;
-    const cy = clientY ?? rect.top + rect.height / 2;
-    const offsetX = cx - rect.left + scroller.scrollLeft;
-    const offsetY = cy - rect.top + scroller.scrollTop;
-    setZoom((prev) => {
-      const next = clampZoom(prev * factor);
-      const ratio = next / prev;
-      requestAnimationFrame(() => {
-        if (!boardScrollRef.current) return;
-        boardScrollRef.current.scrollLeft = offsetX * ratio - (cx - rect.left);
-        boardScrollRef.current.scrollTop = offsetY * ratio - (cy - rect.top);
-      });
-      return next;
-    });
+    zoomTo(zoomRef.current * factor, clientX, clientY);
+  }
+  /** Fit the whole map in the viewport (never above 100% for small maps) and centre it. */
+  function fitToView() {
+    const vp = boardScrollRef.current;
+    if (!vp || vp.clientWidth === 0 || vp.clientHeight === 0) return;
+    const bw = map.cols * CELL;
+    const bh = map.rows * CELL;
+    const margin = 24;
+    const z = clampZoom(Math.min(1, (vp.clientWidth - margin * 2) / bw, (vp.clientHeight - margin * 2) / bh));
+    applyCamera((vp.clientWidth - bw * z) / 2, (vp.clientHeight - bh * z) / 2, z);
+  }
+  function startPan(e: React.PointerEvent) {
+    panDrag.current = { x: e.clientX, y: e.clientY, panX: pan.current.x, panY: pan.current.y, moved: false };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   const selectedToken = tokens.find((t) => t.id === selected) ?? null;
 
-  // Start scrolled past the pan padding so the board still opens flush top-left, same as before
-  // PAN_PAD was added — but now there's room to scroll further to re-centre it. Deferred a frame
-  // and keyed on the map's own size: right after mount the `.board-scroll` flex container hasn't
-  // been laid out yet (height reads 0/wrong), so setting scrollTop synchronously here got clamped
-  // to whatever tiny scroll range existed at that instant — visually pinning the board near the
-  // BOTTOM of the viewport instead of flush top-left. Re-running once real dimensions land (and
-  // once layout has actually settled, via rAF) fixes that.
+  // Fit + centre when a scene's map (size) loads. Deferred a frame: right after mount the
+  // viewport flex item may not have its real size yet.
   useEffect(() => {
-    const el = boardScrollRef.current;
-    if (!el) return;
-    const raf = requestAnimationFrame(() => {
-      const el2 = boardScrollRef.current;
-      if (!el2) return;
-      el2.scrollLeft = PAN_PAD;
-      el2.scrollTop = PAN_PAD;
-    });
+    const raf = requestAnimationFrame(fitToView);
     return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map.cols, map.rows, activeSceneId]);
+
+  // Viewport resized (window, sheet dock dragged taller/shorter): keep the board reachable.
+  useEffect(() => {
+    const vp = boardScrollRef.current;
+    if (!vp || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => applyCamera(pan.current.x, pan.current.y, zoomRef.current));
+    ro.observe(vp);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map.cols, map.rows]);
 
-  // Native (non-passive) wheel listener: React's onWheel is registered passive, so
-  // e.preventDefault() inside it silently does nothing and Ctrl+wheel still triggers the
-  // BROWSER's own page zoom underneath our map zoom — the two stack, feel overly sensitive,
-  // drift the whole page's zoom (affecting UI like the bestiary panel), and can't be reset from
-  // our +/-/% controls since those only touch our own zoom state.
+  // Wheel = zoom around the cursor (Owlbear-style). Native non-passive listener: React's onWheel
+  // is passive, so preventDefault() there can't stop the BROWSER's own Ctrl+wheel page zoom from
+  // stacking under ours. Ctrl+wheel (= trackpad pinch) is scaled differently since a pinch fires
+  // many small events; the cap stops a fast wheel spin from overshooting.
   useEffect(() => {
     const el = boardScrollRef.current;
     if (!el) return;
     function onWheel(e: WheelEvent) {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      // Scale the step to how hard the gesture was rather than a fixed multiplier per event —
-      // a trackpad fires many more (and smaller) wheel events per physical gesture than a mouse
-      // wheel notch, so a flat step compounded across those events zoomed far too fast. Capped so
-      // one big jump (fast mouse-wheel spin) can't overshoot either.
-      const raw = Math.exp(-e.deltaY * 0.0012);
-      const factor = Math.min(1.05, Math.max(1 / 1.05, raw));
-      zoomBy(factor, e.clientX, e.clientY);
+      const pinch = e.ctrlKey || e.metaKey;
+      const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY; // line-mode wheels (Firefox)
+      const raw = Math.exp(-dy * (pinch ? 0.01 : 0.0015));
+      const cap = pinch ? 1.08 : 1.15;
+      zoomBy(Math.min(cap, Math.max(1 / cap, raw)), e.clientX, e.clientY);
     }
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [map.cols, map.rows]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -342,26 +379,18 @@ function BattleMapImpl() {
     }
     // Free camera pan (see `panDrag` above) — only when clicking truly empty board (not a token,
     // not while casting/AoE, where a click means something else).
-    if (e.target !== e.currentTarget || !boardScrollRef.current) return;
+    if (e.target !== e.currentTarget || e.button !== 0) return;
     if (castingSpell || castingMonsterSpell || aoe) return;
-    const scroller = boardScrollRef.current;
-    panDrag.current = {
-      x: e.clientX,
-      y: e.clientY,
-      scrollLeft: scroller.scrollLeft,
-      scrollTop: scroller.scrollTop,
-      moved: false,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    startPan(e);
   }
 
   function onPointerMove(e: React.PointerEvent) {
-    if (panDrag.current && boardScrollRef.current) {
+    if (panDrag.current) {
       const dx = e.clientX - panDrag.current.x;
       const dy = e.clientY - panDrag.current.y;
       if (Math.abs(dx) > 3 || Math.abs(dy) > 3) panDrag.current.moved = true;
-      boardScrollRef.current.scrollLeft = panDrag.current.scrollLeft - dx;
-      boardScrollRef.current.scrollTop = panDrag.current.scrollTop - dy;
+      pan.current = clampPan(panDrag.current.panX + dx, panDrag.current.panY + dy, zoomRef.current);
+      if (boardRef.current) boardRef.current.style.transform = cameraTransform();
       return;
     }
     if (zoneDragStart.current && boardRef.current) {
@@ -607,17 +636,32 @@ function BattleMapImpl() {
         </details>
       )}
 
-      <div className="board-scroll" ref={boardScrollRef}>
-        {/* Sized to the SCALED board so the native scrollbars cover the zoomed-out/in extent.
-            Padded on all sides so the board isn't pinned to the top-left corner — scroll into
-            the padding to drag the map away from the edge and re-centre it. */}
-        <div
-          style={{
-            width: map.cols * CELL * zoom,
-            height: map.rows * CELL * zoom,
-            padding: PAN_PAD,
-          }}
-        >
+      <div
+        className="board-scroll"
+        ref={boardScrollRef}
+        // Move/up live on the viewport (not the board) so a pan started on the empty dark area
+        // around the map works too; board + token pointer events bubble up here.
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onPointerDownCapture={(e) => {
+          // Middle mouse button pans from anywhere — even over a token or zone.
+          if (e.button !== 1) return;
+          e.preventDefault();
+          e.stopPropagation();
+          startPan(e);
+        }}
+        onPointerDown={(e) => {
+          // Left-drag on the empty area outside the board pans as well.
+          if (e.target !== e.currentTarget || e.button !== 0) return;
+          startPan(e);
+        }}
+        onClick={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (suppressBoardClick.current) suppressBoardClick.current = false;
+          else setSelected(null);
+        }}
+      >
         <div
           ref={boardRef}
           className="board"
@@ -626,12 +670,10 @@ function BattleMapImpl() {
             height: map.rows * CELL,
             backgroundImage: map.backgroundUrl ? `url(${map.backgroundUrl})` : undefined,
             backgroundSize: '100% 100%',
-            transform: `scale(${zoom})`,
+            transform: cameraTransform(),
             transformOrigin: '0 0',
           }}
           onPointerDown={onBoardPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
           onPointerDownCapture={(e) => {
             if (!aoe || !aoeView) return;
             e.stopPropagation();
@@ -750,17 +792,9 @@ function BattleMapImpl() {
                 // A zone sits on top of the board and would otherwise swallow the drag-to-pan
                 // gesture whenever it starts over one — let it pan too, same as empty board (see
                 // `panDrag`); `onClick` below only opens the popup when it wasn't actually a drag.
-                if (zoneDraw || castingSpell || castingMonsterSpell || aoe || !boardScrollRef.current) return;
+                if (zoneDraw || castingSpell || castingMonsterSpell || aoe || e.button !== 0) return;
                 e.stopPropagation();
-                const scroller = boardScrollRef.current;
-                panDrag.current = {
-                  x: e.clientX,
-                  y: e.clientY,
-                  scrollLeft: scroller.scrollLeft,
-                  scrollTop: scroller.scrollTop,
-                  moved: false,
-                };
-                (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+                startPan(e);
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -887,17 +921,19 @@ function BattleMapImpl() {
             </div>
           )}
         </div>
-        </div>
       </div>
-      <div className="zoom-controls">
-        <button title="Thu nhỏ (Ctrl+cuộn chuột để zoom quanh con trỏ)" onClick={() => zoomBy(1 / 1.1)}>
+      <div className={selectedToken ? "zoom-controls beside-inspector" : "zoom-controls"}>
+        <button title="Thu nhỏ (cuộn chuột để zoom quanh con trỏ; kéo chỗ trống hoặc giữ chuột giữa để di chuyển bản đồ)" onClick={() => zoomBy(1 / 1.1)}>
           −
         </button>
-        <button title="Đặt lại 100%" onClick={() => setZoom(1)}>
+        <button title="Đặt lại 100% (giữ chỗ đang xem ở giữa)" onClick={() => zoomTo(1)}>
           {Math.round(zoom * 100)}%
         </button>
-        <button title="Phóng to (Ctrl+cuộn chuột để zoom quanh con trỏ)" onClick={() => zoomBy(1.1)}>
+        <button title="Phóng to (cuộn chuột để zoom quanh con trỏ; kéo chỗ trống hoặc giữ chuột giữa để di chuyển bản đồ)" onClick={() => zoomBy(1.1)}>
           +
+        </button>
+        <button title="Vừa khung: thấy cả bản đồ và căn giữa" onClick={fitToView}>
+          ⛶
         </button>
       </div>
       <DddiceCanvas />
