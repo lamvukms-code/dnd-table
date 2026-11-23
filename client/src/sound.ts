@@ -1,8 +1,11 @@
-import manifest from './data/soundManifest.json';
 import type { RollLogEntry } from '@dnd-table/shared';
 
 type Pool = 'combat' | 'magic' | 'monster' | 'ui' | 'ambience';
-const pools = manifest as Record<Pool, string[]>;
+// Optional + git-ignored (like client/public/sounds/ it indexes): a fresh clone has neither, so a
+// static import broke typecheck/build there (e.g. the VPS Docker build). Missing = no sounds.
+const manifestMods = import.meta.glob('./data/soundManifest.json', { eager: true });
+const manifest = (Object.values(manifestMods)[0] as { default?: unknown } | undefined)?.default;
+const pools = (manifest && typeof manifest === 'object' ? manifest : {}) as Partial<Record<Pool, string[]>>;
 
 const PHYSICAL_TYPES = new Set(['bludgeoning', 'piercing', 'slashing', 'đập', 'xuyên', 'chém']);
 
