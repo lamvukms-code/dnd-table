@@ -23,6 +23,7 @@ export default defineConfig({
       '/upload': { target },
       '/uploads': { target },
       '/lorebook': { target },
+      '/maps': { target },
     },
   },
 });

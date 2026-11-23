@@ -3,23 +3,10 @@ import type { Statblock } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { normalizeStatblock } from '../statblock.js';
 import { StatblockEditor } from './BestiaryPanel.js';
-import crookedMoonNpcsRaw from '../data/crookedMoonNpcs.json';
+import { NPC_CATALOG, NPC_CHAPTER_LABELS as CHAPTER_LABELS } from '../campaignData.js';
 
-/** Bundled reference roster — ships with the app, independent of any one room's save file. */
-const NPC_CATALOG = crookedMoonNpcsRaw as unknown as Statblock[];
-
-const CHAPTER_LABELS: Record<string, string> = {
-  'ch11-wickermoor-village': 'Ch.11 Wickermoor Village',
-  'ch12-crooked-house': 'Ch.12 The Crooked House',
-  'ch13-fields-of-the-crow': 'Ch.13 Fields of the Crow',
-  'ch14-crimson-monastery': 'Ch.14 The Crimson Monastery',
-  'ch15-drowned-crossroads': 'Ch.15 The Drowned Crossroads',
-  'ch17-memorys-rest': "Ch.17 Memory's Rest",
-  'ch25-26-epilogue-moonfall': 'Ch.25–26 Epilogue / Moonfall',
-};
-
-/** DM-only NPC roster for *The Crooked Moon* — mirrors BestiaryPanel's layout/interactions,
- *  but is sourced from the bundled campaign roster instead of the room's live bestiary.
+/** DM-only NPC roster for the current campaign (`npcs.local.json`, see campaignData.ts) — mirrors BestiaryPanel's layout/interactions,
+ *  but is sourced from the local campaign roster instead of the room's live bestiary.
  *  Selecting/spawning an entry copies it into `room.bestiary` (tagged "npc") on first use, so
  *  from then on it behaves exactly like any other bestiary statblock (editable, draggable from
  *  the map's NPC palette, persisted with the room). */
@@ -93,7 +80,7 @@ export function NpcPanel({ onClose }: { onClose: () => void }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal bestiary" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>NPC — The Crooked Moon</h2>
+          <h2>NPC</h2>
           <button className="link" onClick={onClose}>
             ✕
           </button>

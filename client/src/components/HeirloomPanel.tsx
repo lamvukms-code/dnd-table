@@ -2,9 +2,7 @@ import { useMemo, useState } from 'react';
 import type { HeirloomDef } from '@dnd-table/shared';
 import { lockedHeirloomFeatureCount, nextHeirloomUnlockLevel, unlockedHeirloomFeatures } from '@dnd-table/shared';
 import { useStore } from '../store.js';
-import heirloomsRaw from '../data/crookedMoonHeirlooms.json';
-
-const HEIRLOOMS = heirloomsRaw as HeirloomDef[];
+import { HEIRLOOMS } from '../campaignData.js';
 
 const TIER_LABEL: Record<string, string> = {
   rare: 'Hiếm',
@@ -13,9 +11,9 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 /**
- * Browsable catalog of the Crooked Moon's 26 Fabled Heirlooms — DM always sees every property in
+ * Browsable catalog of level-gated heirloom items (`heirlooms.local.json`, see campaignData.ts) — DM always sees every property in
  * full (own reference), but a player only sees the properties their own character's level has
- * unlocked (Lv1 = Rare, Lv7 = Very Rare, Lv13 = Legendary, per the book's Heirloom Rarity table).
+ * unlocked (Lv1 = Rare, Lv7 = Very Rare, Lv13 = Legendary, per the source's heirloom rarity table).
  * Locked properties are hidden name-and-all — not just their text — so nothing spoils what the
  * item can eventually do.
  */

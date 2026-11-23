@@ -23,3 +23,6 @@ client/src/data/species.local.json
 server/data/maps/
 client/public/sounds/
 client/src/data/soundManifest.json
+
+# campaign reference data (see client/src/campaignData.ts) — never commit setting content
+client/src/data/*.local.json

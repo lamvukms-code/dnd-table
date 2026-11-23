@@ -30,7 +30,10 @@ export function MapLibrary({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     fetch('/maps/index.json')
       .then((r) => {
-        if (!r.ok) throw new Error('Chưa có thư viện bản đồ — chạy scripts/import-maps.mjs trên máy chủ.');
+        // No maps dir on the server → the request falls through to the SPA's index.html (200,
+        // text/html), so check the content type too, not just `ok`.
+        if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json'))
+          throw new Error('Chưa có thư viện bản đồ — chạy scripts/import-maps.mjs trên máy chủ.');
         return r.json();
       })
       .then((j: { maps: MapEntry[] }) => setMaps(j.maps))

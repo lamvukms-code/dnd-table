@@ -49,22 +49,9 @@ import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
-import zoneLayoutsRaw from '../data/crookedMoonZoneLayouts.json';
+import { ZONE_LAYOUTS } from '../campaignData.js';
 
-interface ZoneLayoutRoom {
-  code: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-interface ZoneLayout {
-  chapter: string;
-  rooms: ZoneLayoutRoom[];
-}
-const ZONE_LAYOUTS = zoneLayoutsRaw as Record<string, ZoneLayout>;
-
-/** The imported map pack's own file id, e.g. "gl_12_1_the_crooked_house_1_21x24" — derived from
+/** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
  *  `backgroundUrl` (`/maps/battlemaps/<id>.webp`, see MapLibrary.tsx) so a known zone layout can
  *  be looked up for whatever map is currently the scene's background. */
 function mapIdFromBackgroundUrl(url: string | undefined): string | null {
@@ -979,7 +966,7 @@ function MapToolbar() {
   const missingRooms = layout ? layout.rooms.filter((r) => !zones.some((z) => z.code === r.code)) : [];
 
   /** One-click fill-in for a map we already have a book-keyed layout for (see
-   *  `crookedMoonZoneLayouts.json`) — pulls each room's code/coords from the layout and its
+   *  `zoneLayouts.local.json`, see campaignData.ts) — pulls each room's code/coords from the layout and its
    *  name/read-aloud/DM notes from the zone library (`ZONE_LIBRARY`), same source `ZonePopup`'s
    *  own search box uses. Coordinates are hand-estimated off the book's own numbered map, so
    *  they're close but not pixel-perfect — nudge a zone's X/Y/Rộng/Cao in its popup if needed. */

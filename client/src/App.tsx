@@ -13,6 +13,7 @@ import { ReferencePanel } from './components/ReferencePanel.js';
 import { MapLibrary } from './components/MapLibrary.js';
 import { HomebrewPanel } from './components/HomebrewPanel.js';
 import { HeirloomPanel } from './components/HeirloomPanel.js';
+import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
 
@@ -128,17 +129,19 @@ export function App() {
             Bestiary
           </button>
         )}
-        {isDm && (
-          <button title="NPC — The Crooked Moon" onClick={() => setNpcOpen(true)}>
+        {isDm && NPC_CATALOG.length > 0 && (
+          <button title="NPC của campaign" onClick={() => setNpcOpen(true)}>
             NPC
           </button>
         )}
         <button title="Vật phẩm / luật nhà tự chế" onClick={() => setHomebrewOpen(true)}>
           🧪 Homebrew
         </button>
-        <button title="Fabled Heirloom — Crooked Moon" onClick={() => setHeirloomOpen(true)}>
-          🏺 Bảo vật
-        </button>
+        {HEIRLOOMS.length > 0 && (
+          <button title="Bảo vật mở khóa theo cấp" onClick={() => setHeirloomOpen(true)}>
+            🏺 Bảo vật
+          </button>
+        )}
         <button title="Trang bị SRD — gửi thẳng vào túi đồ nhân vật" onClick={() => setEqSrdOpen(true)}>
           🎒 Trang bị
         </button>

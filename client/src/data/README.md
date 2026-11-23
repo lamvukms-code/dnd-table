@@ -53,3 +53,19 @@ An array of `SpeciesDef`: `{ id, name, blurb?, creatureType?, size?, speed, move
 Pick a species on the character sheet: it sets the base speed, adds the granted spells (cantrip, and
 "always prepared" ones from their level), and lists the traits — with pip trackers for limited-use
 ones that reset on a short / long rest. Changing species swaps everything cleanly.
+
+---
+
+# Campaign reference data  (all git-ignored, all optional — see `client/src/campaignData.ts`)
+
+The repo ships no campaign content. Drop any of these in this folder and restart Vite;
+a missing file = empty list, and its topbar button hides itself.
+
+| File | Shape | Used by |
+|---|---|---|
+| `backgrounds.local.json` | `BackgroundDef[]` | sheet background picker |
+| `npcs.local.json` | `Statblock[]` (`tags` like `"ch3-..."` group by chapter) | DM **NPC** panel |
+| `npcChapters.local.json` | `{ "<chapter tag>": "Pretty name" }` | NPC panel chapter filter |
+| `heirlooms.local.json` | `HeirloomDef[]` | **🏺 Bảo vật** panel (level-gated properties) |
+| `zones.local.json` | `{ code, name, readAloud?, dmNotes?, chapter? }[]` | zone tool search/auto-fill |
+| `zoneLayouts.local.json` | `{ "<map file id>": { chapter, rooms: [{code,x,y,w,h}] } }` | auto-zones for a known map |

@@ -1,19 +1,9 @@
 import { useState } from 'react';
 import type { MapZone } from '@dnd-table/shared';
 import { nanoIdish } from '../util.js';
-import zoneLibraryRaw from '../data/crookedMoonZones.json';
+import { ZONE_LIBRARY, type ZoneLibraryEntry } from '../campaignData.js';
 
-export interface ZoneLibraryEntry {
-  code: string;
-  name: string;
-  /** Verbatim/faithful boxed read-aloud text — may be missing for entries not yet re-extracted. */
-  readAloud?: string;
-  /** DM-only mechanics/notes (was the library's original single `description` field). */
-  dmNotes?: string;
-  chapter?: string;
-  source?: string;
-}
-export const ZONE_LIBRARY = zoneLibraryRaw as ZoneLibraryEntry[];
+export { ZONE_LIBRARY, type ZoneLibraryEntry };
 
 const DEFAULT_COLOR = '#3a6ea5';
 
@@ -23,7 +13,7 @@ export type ZonePopupState =
   | null;
 
 /** DM-only popup for a map zone: view its read-aloud/DM text, or draw-and-fill a new one —
- *  search `crookedMoonZones.json` by area code/name to auto-fill instead of typing it out. */
+ *  search the zone library (`zones.local.json`, see campaignData.ts) by area code/name to auto-fill instead of typing it out. */
 export function ZonePopup({
   state,
   onClose,

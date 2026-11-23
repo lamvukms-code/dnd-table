@@ -2,8 +2,8 @@ import type { CharacterSheet, Feat } from './types.js';
 
 /**
  * Background data (2024 rules — Background is where the Origin Feat and starting ability score
- * increases come from, not Species). The repo ships none of its own; Crooked Moon's 13 setting
- * backgrounds live in the tracked `client/src/data/crookedMoonBackgrounds.json` (this campaign's
+ * increases come from, not Species). The repo ships none of its own; a campaign's
+ * backgrounds live in the git-ignored `client/src/data/backgrounds.local.json` (this campaign's
  * own content, paraphrased from the book — not verbatim PHB/setting-book text).
  *
  * Each background is also thematically paired 1:1 with one of the book's "Threads of Fate"
