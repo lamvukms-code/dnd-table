@@ -104,12 +104,26 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
 - Semantic versioning. Bump the `version` field in the root and every workspace
   `package.json` together, update `CHANGELOG.md`, commit as
   `chore(release): vX.Y.Z`, then `git tag vX.Y.Z`.
-- Work on short-lived branches off `main`; open a PR with `gh pr create` when the
-  user asks to publish. End commit messages with the Co-Authored-By trailer and
-  PR descriptions with the Claude Code generation line, per the session's
-  attribution rules.
-- **Do not** push, force-push, create releases, or change repo settings unless
-  the user explicitly asks.
+- **Commit and push straight to `main`** once a change is done, typechecks and its
+  tests pass (the user approved this for code and automation logic). End commit
+  messages with the Co-Authored-By trailer per the session's attribution rules.
+- **The repo is PUBLIC; campaign books are bought for personal use.** Before every
+  commit, run `git diff --cached` and confirm it holds no setting content: no book
+  text, statblocks, NPC/place names or campaign data (Steinhardt, Crooked Moon or
+  any other). Those live only in git-ignored `*.local.json`, `server/data/`, and
+  OneDrive. Tests and examples use made-up data. If anything is in doubt, unstage
+  it and ask.
+- Never stage files you did not write in this task. There is uncommitted Hex
+  Slinger WIP from an earlier agent (`shared/src/hexSlinger*.ts`, hunks in
+  `room.ts`, `rules.ts`, `types.ts`, `index.ts`, `SheetDock.tsx`,
+  `docs/player-join-guide.html`). It is Crooked Moon content: stage around it
+  (`git add -p`, or stage a cleaned copy via `git update-index --cacheinfo`) and
+  run typecheck/tests on the staged tree (`git checkout-index -a --prefix=<tmp>/`).
+- Never touch `.github/workflows/` (the push token lacks that scope).
+- **Do not** force-push, rewrite pushed history, create releases, or change repo
+  settings unless the user explicitly asks.
+- Restarting the live server (port 8787) is the `dnd-campaign` agent's job (see
+  its file). For runtime checks use an isolated copy on 8899/5199, never 8787.
 
 ## Guardrails
 
