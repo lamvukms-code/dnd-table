@@ -1546,3 +1546,8 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .cf-jaeger-choices[open] { display: flex; flex-direction: column; gap: 4px; }
 .cf-choice-list { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .cf-choice-list label { display: inline-flex; align-items: center; gap: 2px; }
+
+/* Weapon traits (magical / silvered / moongilded) in the equipment editor */
+.weapon-traits { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+.def-conditional ul { margin: 0; padding-left: 16px; font-size: 12px; }
+.def-conditional li { margin: 2px 0; }

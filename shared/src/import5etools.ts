@@ -1,5 +1,5 @@
 import { DAMAGE_TYPES, SKILLS, emptyDefenses } from './types.js';
-import type { Ability, Defenses, SheetAction, Statblock, TokenSize } from './types.js';
+import type { Ability, ConditionalDefense, DamagePart, Defenses, SheetAction, Statblock, TokenSize, WeaponTrait } from './types.js';
 
 /**
  * Convert a 5etools-format creature (or a list, or a `{ monster: [...] }` file)
@@ -115,6 +115,26 @@ function keepDamageTypes(list: string[]): string[] {
   return [...new Set(list.filter((t) => KNOWN_DMG.has(t)))];
 }
 
+// "N (XdY + Z) type damage"; also "… bludgeoning and 9 (2d8) poison damage" (word "damage" once) and a
+// choice of types ("acid, cold, or poison damage" → the first one; the description keeps the rest).
+const DMG_RE = /(\d+)\s*\(\s*(\d+d\d+(?:\s*[+\-−]\s*\d+)?)\s*\)\s*([a-z]+)(?:(?:,\s*(?:or\s+)?[a-z]+)*\s+damage)?/gi;
+
+/** Every "N (XdY + Z) type damage" in `text`, skipping alternatives ("… or 8 (1d10 + 3) slashing damage if
+ *  used with two hands"). */
+function damageParts(text: string): DamagePart[] {
+  const parts: DamagePart[] = [];
+  let prevEnd = 0;
+  for (const m of text.matchAll(DMG_RE)) {
+    const between = text.slice(prevEnd, m.index);
+    prevEnd = m.index! + m[0].length;
+    if (parts.length && /\bor\b/i.test(between)) continue;
+    const type = m[3].toLowerCase();
+    if (!KNOWN_DMG.has(type)) continue;
+    parts.push({ dice: m[2].replace(/\s+/g, '').replace('−', '-'), type });
+  }
+  return parts;
+}
+
 function parseAction(raw: J): SheetAction {
   const name = String(raw.name ?? 'Action');
   const text = flattenEntries(raw.entries);
@@ -123,17 +143,35 @@ function parseAction(raw: J): SheetAction {
   const hit = /Attack Roll:\**\s*([+-]?\d+)|([+-]\d+)\s+to hit/i.exec(text);
   if (hit) action.attackBonus = Number(hit[1] ?? hit[2]);
 
-  const dmg = /Hit:?\**\s*\d+\s*\(([^)]+)\)\s*(\w+)\s+damage/i.exec(text);
-  if (dmg) {
-    action.damage = dmg[1].replace(/\s+/g, '');
-    action.damageType = dmg[2].toLowerCase();
-  }
+  // 2024 "Strength Saving Throw: DC 13" or 2014 "DC 13 Strength saving throw".
+  let save: { at: number; ability: string; dc: number } | null = null;
+  const s24 = /(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+Saving Throw:?\*?\s*DC\s*(\d+)/i.exec(text);
+  const s14 = /DC\s*(\d+)\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+saving throw/i.exec(text);
+  if (s24) save = { at: s24.index, ability: s24[1], dc: Number(s24[2]) };
+  else if (s14) save = { at: s14.index, ability: s14[2], dc: Number(s14[1]) };
+  const saveAt = save?.at ?? -1;
+  if (save) action.save = { ability: save.ability.slice(0, 3).toLowerCase() as Ability, dc: save.dc };
 
-  const save = /(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+Saving Throw:?\*?\s*DC\s*(\d+)/i.exec(
-    text,
-  );
-  if (save) {
-    action.save = { ability: save[1].slice(0, 3).toLowerCase() as Ability, dc: Number(save[2]) };
+  // Damage: on an attack, the parts of the "Hit:" clause (before any rider save); on a pure save
+  // action, the damage the save is against.
+  const hitAt = text.search(/Hit:?\**\s|On a hit,/i);
+  let main: DamagePart[] = [];
+  if (hitAt >= 0) {
+    let clause = text.slice(hitAt);
+    const cut = clause.search(/\.\s|,?\s+and the target must|,?\s+(?:it|the target) must make|\bIf the target\b/i);
+    if (cut > 0) clause = clause.slice(0, cut);
+    main = damageParts(clause);
+    if (save && saveAt > hitAt) {
+      const onFail = damageParts(text.slice(saveAt));
+      if (onFail.length) action.saveDamage = onFail;
+    }
+  } else if (save) {
+    main = damageParts(text.slice(Math.max(0, text.lastIndexOf('.', saveAt) + 1)));
+  }
+  if (main.length) {
+    action.damage = main[0].dice;
+    action.damageType = main[0].type;
+    if (main.length > 1) action.extraDamage = main.slice(1);
   }
   return action;
 }
@@ -231,8 +269,9 @@ export function convert5eToolsMonster(raw: J): Statblock {
   }
 
   const mkActions = (key: string, actionType: SheetAction['actionType']) =>
-    (Array.isArray(raw[key]) ? (raw[key] as J[]) : []).map((a) => ({
+    (Array.isArray(raw[key]) ? (raw[key] as J[]) : []).map((a, i) => ({
       ...parseAction(a),
+      id: `${key}-${i}`,
       actionType,
     }));
   const actions: SheetAction[] = [
@@ -315,4 +354,26 @@ export function parse5eToolsBestiary(input: unknown): Import5eResult {
     }
   }
   return { statblocks, errors };
+}
+
+/**
+ * A stat block's conditional damage defence ("bludgeoning, piercing, and slashing from nonmagical attacks
+ * that aren't silvered") as data the server can apply. null if no damage type is named.
+ */
+export function parseConditionalDefense(kind: ConditionalDefense['kind'], text: string): ConditionalDefense | null {
+  const types = DAMAGE_TYPES.filter((d) => new RegExp(`\\b${d}\\b`, 'i').test(text));
+  if (!types.length) return null;
+  const lower = text.toLowerCase();
+  const bypassedBy = new Set<WeaponTrait>();
+  let onlyIf: WeaponTrait[] | undefined;
+  if (/\bnon-?magical\b/.test(lower)) bypassedBy.add('magical');
+  else {
+    // "from magical attacks", "from moongilded attacks", "from silvered or magical weapons" → only those.
+    const only = /\bfrom ((?:magical|silvered|moongilded)(?:\s*(?:,|or|and)\s*(?:magical|silvered|moongilded))*)/.exec(lower)?.[1];
+    if (only) onlyIf = (['magical', 'silvered', 'moongilded'] as WeaponTrait[]).filter((t) => only.includes(t));
+  }
+  const unless = /\b(?:aren['’]t|are not|not)\b(.*)$/.exec(lower)?.[1] ?? '';
+  if (/silver/.test(unless)) bypassedBy.add('silvered');
+  if (/moongild/.test(unless)) bypassedBy.add('moongilded');
+  return { kind, types: [...types], bypassedBy: [...bypassedBy], ...(onlyIf ? { onlyIf } : {}), text: text.trim() };
 }

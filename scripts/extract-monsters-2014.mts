@@ -23,7 +23,8 @@
 import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { convert5eToolsMonster } from '../shared/src/import5etools.ts';
+import { convert5eToolsMonster, parseConditionalDefense } from '../shared/src/import5etools.ts';
+import { emptyDefenses } from '../shared/src/types.ts';
 import type { Statblock } from '../shared/src/types.ts';
 
 type J = Record<string, unknown>;
@@ -80,6 +81,41 @@ const SECTIONS: Record<string, string> = {
 const SIZE_CODE: Record<string, string> = { Tiny: 'T', Small: 'S', Medium: 'M', Large: 'L', Huge: 'H', Gargantuan: 'G' };
 const RULES_TEXT =
   /saving throw|damage|hit points?|\bDC \d|attack roll|weapon attack|advantage|\bturns?\b|\d+ (feet|ft)|bonus action|reaction|^Hit:|\bspells?\b|\(\d+d\d+|condition|Recharge|legendary action|\d+\/day|truesight|this trait|Alternatively|replaced with|instead|^\d+(-\d+)?: /i;
+const INLINE_ENTRY_RE =
+  /(?<=[.!?)"a-z]) ((?:[A-Z][a-z'’-]+)(?: (?:[A-Z][a-z'’-]+|of|the|and|to|in|on))*( \((?:Recharge|Costs|\d+\/Day)[^)]*\))?)\. (?=[A-Z])/g;
+const NOT_A_NAME = /^(It|Its|The|This|That|These|Those|He|She|They|Then|Each|If|When|While|On|In|A|An)$/;
+function splitInlineEntries(e: { name: string; text: string }): { name: string; text: string }[] {
+  const out = [{ name: e.name, text: '' }];
+  let last = 0;
+  for (const m of e.text.matchAll(INLINE_ENTRY_RE)) {
+    const nm = m[1];
+    if (NOT_A_NAME.test(nm) || nm.split(' ').length > 5) continue;
+    // After a lowercase letter (OCR dropped the full stop) only a "(Recharge …)"-style name counts.
+    if (!m[2] && /[a-z]/.test(e.text[m.index! - 1] ?? '')) continue;
+    out[out.length - 1].text = e.text.slice(last, m.index).trim();
+    out.push({ name: nm, text: '' });
+    last = m.index! + m[0].length;
+  }
+  out[out.length - 1].text = e.text.slice(last).trim();
+  return out.filter((x) => x.text);
+}
+/** A "name" longer than six words is really a sentence: a wrapped rules sentence belongs to the entry
+ *  before it; a lore paragraph or a magic-item sidebar ("Requires attunement…") is dropped. */
+function tidyEntries(list: { name: string; text: string }[]): { name: string; text: string }[] {
+  const out: { name: string; text: string }[] = [];
+  for (const e of list) {
+    if (/^(Requires attunement|Wondrous item)/i.test(e.text)) continue;
+    const words = e.name.replace(/\s*\([^)]*\)$/, '').split(/\s+/).length;
+    if (words <= 6) {
+      out.push(e);
+      continue;
+    }
+    const sentence = `${e.name}. ${e.text}`;
+    if (out.length && RULES_TEXT.test(sentence)) out[out.length - 1].text += ` ${sentence}`;
+    else if (process.env.DEBUG_STOP) console.error(`[lore] ${e.name}`);
+  }
+  return out;
+}
 const ENTRY_RE =/^([A-Z][A-Za-z0-9'’,()/ &+-]{1,60}?(?: \([^)]*\))?)\. (.*)$/;
 
 /** Split "Damage Resistances x; y Damage Immunities z …" into keyed fields. */
@@ -203,13 +239,23 @@ for (let s = 0; s < starts.length; s++) {
       prevEnded = /[.:)"]$/.test(l);
     }
 
+    // OCR loses the blank line between entries, so "…two snapjaw attacks. Snapjaw. Melee Weapon
+    // Attack…" lands in one entry. Split at a Title-Case name (plus an optional "(Recharge …)" /
+    // "(Costs 2 Actions)") that sits between two sentences.
+    for (const key of Object.keys(groups)) groups[key] = tidyEntries(groups[key].flatMap(splitInlineEntries));
+
     const res = dmgList(meta['Damage Resistances']);
     const imm = dmgList(meta['Damage Immunities']);
     const vul = dmgList(meta['Damage Vulnerabilities']);
     const toEntries = (g?: { name: string; text: string }[]) => (g ?? []).map((e) => ({ name: e.name, entries: [e.text] }));
     const trait = toEntries(groups.trait);
     const cond = [...res.conditional.map((c) => `kháng ${c}`), ...imm.conditional.map((c) => `miễn nhiễm ${c}`), ...vul.conditional.map((c) => `dễ tổn thương ${c}`)];
-    if (cond.length) trait.unshift({ name: '⚠ Kháng có điều kiện (DM tự áp dụng)', entries: [cond.join('; ')] });
+    if (cond.length) trait.unshift({ name: '⚠ Kháng có điều kiện (tự áp theo cờ phép/bạc/moongilded của vũ khí)', entries: [cond.join('; ')] });
+    const conditional = [
+      ...res.conditional.map((c) => parseConditionalDefense('resist', c)),
+      ...imm.conditional.map((c) => parseConditionalDefense('immune', c)),
+      ...vul.conditional.map((c) => parseConditionalDefense('vulnerable', c)),
+    ].filter((c): c is NonNullable<typeof c> => !!c);
     if (ac[2]) trait.unshift({ name: 'AC', entries: [`${ac[1]} (${ac[2]})`] });
 
     const fiveE: J = {
@@ -244,6 +290,7 @@ for (let s = 0; s < starts.length; s++) {
       lairAction: toEntries(groups.lairAction),
     };
     const sb = convert5eToolsMonster(fiveE);
+    if (conditional.length) sb.defenses = { ...(sb.defenses ?? emptyDefenses()), conditional };
     sb.meta = `${sz[1]} ${sz[2]}, ${sz[3]}`;
     sb.source = `${tag} (local, extracted)`;
     sb.tags = [tag];

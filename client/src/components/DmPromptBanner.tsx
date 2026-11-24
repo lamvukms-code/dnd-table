@@ -1,3 +1,4 @@
+import { legendaryActionCost } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 
 /**
@@ -23,11 +24,20 @@ export function DmPromptBanner() {
         {prompt.options.length === 0 && (
           <button onClick={() => send({ t: 'dmPromptUse' })}>Dùng (chưa có danh sách cụ thể)</button>
         )}
-        {prompt.options.map((o) => (
-          <button key={o.id} title={o.description} onClick={() => send({ t: 'dmPromptUse', actionId: o.id })}>
-            {o.name}
-          </button>
-        ))}
+        {prompt.options.map((o) => {
+          const cost = prompt.kind === 'legendaryAction' ? legendaryActionCost(o) : 1;
+          const short = prompt.kind === 'legendaryAction' && cost > prompt.remaining;
+          return (
+            <button
+              key={o.id}
+              disabled={short}
+              title={short ? `Cần ${cost} legendary action, chỉ còn ${prompt.remaining}` : o.description}
+              onClick={() => send({ t: 'dmPromptUse', actionId: o.id })}
+            >
+              {o.name}
+            </button>
+          );
+        })}
         <button className="link" onClick={() => send({ t: 'dmPromptDismiss' })}>
           Bỏ qua
         </button>

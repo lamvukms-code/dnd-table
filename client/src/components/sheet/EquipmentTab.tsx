@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
+  WEAPON_TRAITS,
+  WEAPON_TRAIT_VI,
   ATTUNEMENT_SLOTS,
   COIN_TYPES,
   attunementCount,
@@ -300,6 +302,26 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                       onChange={(e) => setItem(it.id, { damageBonusMisc: Number(e.target.value) })}
                     />
                   </label>
+                  <span
+                    className="weapon-traits"
+                    title="Vượt qua kháng/miễn nhiễm có điều kiện của quái (vd. kháng vũ khí không phép, không bạc)"
+                  >
+                    {WEAPON_TRAITS.map((tr) => (
+                      <label key={tr} className="check">
+                        <input
+                          type="checkbox"
+                          checked={it.weaponTraits?.includes(tr) ?? false}
+                          onChange={(e) => {
+                            const next = new Set(it.weaponTraits ?? []);
+                            if (e.target.checked) next.add(tr);
+                            else next.delete(tr);
+                            setItem(it.id, { weaponTraits: next.size ? [...next] : undefined });
+                          }}
+                        />
+                        {tr === 'magical' ? 'Vũ khí phép' : tr === 'silvered' ? 'Mạ bạc' : WEAPON_TRAIT_VI[tr]}
+                      </label>
+                    ))}
+                  </span>
                   <label className="grow">
                     Sát thương phụ (flame tongue…)
                     <ExtraDamageEditor

@@ -42,10 +42,35 @@ export const ACTION_TYPES: ActionType[] = ['action', 'bonus', 'reaction', 'free'
 export type Recharge = 'short' | 'long' | 'other';
 
 /** One damage component of an attack (its own dice + damage type). */
+/** What an attack is made of / with — checked against "resistant to non-magical attacks that aren't
+ *  silvered"-style defences. */
+export type WeaponTrait = 'magical' | 'silvered' | 'moongilded';
+export const WEAPON_TRAITS: WeaponTrait[] = ['magical', 'silvered', 'moongilded'];
+export const WEAPON_TRAIT_VI: Record<WeaponTrait, string> = { magical: 'phép', silvered: 'bạc', moongilded: 'moongilded' };
+
 export interface DamagePart {
   dice: string; // "2d6" or "1d4+2"
   type: string; // a DamageType key, or free text
   label?: string; // "Ring of fire", "Flame Tongue"
+  /** The attack's traits (magical / silvered / moongilded). Unset = an ordinary, non-magical attack. */
+  traits?: WeaponTrait[];
+}
+
+/**
+ * A defence that only holds for some attacks, e.g. "resistance to bludgeoning, piercing and slashing from
+ * nonmagical attacks that aren't silvered" = { kind: 'resist', types: [b, p, s], bypassedBy: ['magical',
+ * 'silvered'] }; "immunity … from magical attacks" = { kind: 'immune', types, bypassedBy: [], onlyIf:
+ * ['magical'] }.
+ */
+export interface ConditionalDefense {
+  kind: 'resist' | 'immune' | 'vulnerable';
+  types: string[];
+  /** The defence does NOT apply when the attack has any of these traits. */
+  bypassedBy: WeaponTrait[];
+  /** If set, the defence applies ONLY when the attack has one of these traits. */
+  onlyIf?: WeaponTrait[];
+  /** The book's wording, shown in the log. */
+  text?: string;
 }
 
 /**
@@ -75,6 +100,10 @@ export interface SheetAction {
   damageType?: string;
   extraDamage?: DamagePart[]; // additional damage sources on this action
   save?: { ability: Ability; dc: number }; // present -> it forces a saving throw
+  /** Damage on a failed save when the action is an attack with a rider save ("Hit: … and the target must
+   *  succeed on a DC 13 Constitution saving throw or take 7 (2d6) poison damage"). A pure save action
+   *  keeps its damage in `damage` / `extraDamage`. */
+  saveDamage?: DamagePart[];
   notation?: string; // a generic roll (healing / utility), e.g. "2d4+2"
   /** Reach / range text for display, e.g. "5 ft", "20/60 ft", "120 ft". */
   range?: string;
@@ -85,6 +114,8 @@ export interface SheetAction {
   attackKind?: 'weapon' | 'spell';
   /** Melee / ranged tag. Unset = inferred from `range` (see `attackRangeOf`). */
   attackRange?: AttackRange;
+  /** Magical / silvered / moongilded weapon (spell attacks always count as magical). */
+  weaponTraits?: WeaponTrait[];
 }
 
 /** Limited-use class resource: Ki, Rage, Bardic Inspiration, Sorcery Points… */
@@ -204,6 +235,8 @@ export interface InventoryItem {
   damage?: string; // base damage dice only, e.g. "1d8"
   damageType?: string;
   weaponExtraDamage?: DamagePart[]; // e.g. Flame Tongue's +2d6 fire
+  /** Magical / silvered / moongilded weapon — bypasses matching conditional resistances. */
+  weaponTraits?: WeaponTrait[];
   /** Reach / range text for the attack, e.g. "5 ft" (melee), "20/60 ft" (thrown). */
   rangeText?: string;
   /** Melee / ranged tag for this weapon (a thrown dagger: flip it to melee when stabbing). */
@@ -369,6 +402,8 @@ export interface Defenses {
   vulnerabilities: string[]; // double damage
   damageReduction: number; // flat, subtracted after res/vuln
   critImmune: boolean; // e.g. adamantine armour — a crit hits as a normal hit
+  /** Defences that depend on the attack (non-magical / non-silvered…). */
+  conditional?: ConditionalDefense[];
 }
 
 export function emptyDefenses(): Defenses {

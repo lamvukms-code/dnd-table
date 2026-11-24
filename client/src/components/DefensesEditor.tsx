@@ -6,6 +6,7 @@ import {
   type DamageRider,
   type DamageType,
   type Defenses,
+  WEAPON_TRAIT_VI,
 } from '@dnd-table/shared';
 import { nanoIdish } from '../util.js';
 import { FormulaHint } from './FormulaHint.js';
@@ -211,6 +212,31 @@ export function DefensesEditor({
           </div>
         </div>
       ))}
+      {(d.conditional ?? []).length > 0 && (
+        <div className="def-row def-conditional">
+          <span className="def-label">Có điều kiện</span>
+          <ul>
+            {d.conditional!.map((c, i) => (
+              <li key={i}>
+                {c.kind === 'resist' ? 'Kháng' : c.kind === 'immune' ? 'Miễn' : 'Yếu'}{' '}
+                {c.types.map((t) => DAMAGE_TYPE_VI[t as DamageType] ?? t).join(', ')}
+                {c.onlyIf?.length
+                  ? ` — chỉ khi đòn ${c.onlyIf.map((x) => WEAPON_TRAIT_VI[x]).join('/')}`
+                  : c.bypassedBy.length
+                    ? ` — trừ khi đòn ${c.bypassedBy.map((x) => WEAPON_TRAIT_VI[x]).join(' / ')}`
+                    : ''}
+                <button
+                  className="link"
+                  title="Bỏ dòng này"
+                  onClick={() => onChange({ ...d, conditional: d.conditional!.filter((_, j) => j !== i) })}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

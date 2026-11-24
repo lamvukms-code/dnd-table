@@ -45,6 +45,7 @@ import {
   abilityMod as abilityModOf,
   diceFacesOf,
   expendJaegerMomentum,
+  legendaryActionCost,
   initiativeBonus,
   mergeSheetEdit,
   rollNotation,
@@ -66,6 +67,11 @@ import {
   type Statblock,
   type Token,
 } from '@dnd-table/shared';
+
+/** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
+function withOptionIds<T extends { id: string }>(list: T[], prefix: string): T[] {
+  return list.map((a, i) => (a.id ? a : { ...a, id: `${prefix}-${i}` }));
+}
 
 /** Token fields a non-DM may change with `updateToken` (on a token they control). */
 const PLAYER_TOKEN_FIELDS = new Set([
@@ -381,6 +387,18 @@ export class Room {
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
   /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
+  /** Imported stat blocks keep "resistant to non-magical / non-silvered weapons" as a trait the server can't
+   *  apply (it doesn't know what the weapon is made of). When physical damage hits such a creature, say so
+   *  in the log so the DM can halve / zero it by hand. */
+  private conditionalDefenseNote(target: Token, parts: DamagePart[]): string[] {
+    const trait = target.statblock?.traits?.find((t) => t.name.startsWith('⚠ Kháng có điều kiện'));
+    // Stat blocks imported with structured conditional defences are applied automatically.
+    if (!trait || this.effectiveDefenses(target)?.conditional?.length) return [];
+    const text = (trait.description ?? '').toLowerCase();
+    const physical = parts.some((p) => ['bludgeoning', 'piercing', 'slashing'].includes(p.type) && text.includes(p.type));
+    return physical ? [`⚠ Mục tiêu ${text} — DM tự trừ nếu vũ khí không đủ điều kiện`] : [];
+  }
+
   /** A hit landed: disarm the one-shot riders whose damage parts it carried (Sneak Attack,
    *  Booming Blade, an armed Jaeger Finisher — which expends all held Momentum). Done here, after the hit
    *  is known, so a miss keeps them armed for the next swing (Extra Attack) instead of wasting them. */
@@ -727,7 +745,7 @@ export class Room {
           kind: 'lairAction',
           tokenId: lairToken.id,
           tokenName: lairToken.label,
-          options: lairToken.statblock?.lairActions ?? [],
+          options: withOptionIds(lairToken.statblock?.lairActions ?? [], 'lair'),
           round: init.round,
         };
         return;
@@ -751,7 +769,7 @@ export class Room {
         tokenId: legendaryToken.id,
         tokenName: legendaryToken.label,
         remaining: legendaryToken.legendaryActionsRemaining ?? 0,
-        options: legendaryToken.statblock?.legendaryActions ?? [],
+        options: withOptionIds(legendaryToken.statblock?.legendaryActions ?? [], 'leg'),
         round: init.round,
       };
     }
@@ -881,7 +899,11 @@ export class Room {
             amount,
             raw: out.totalRaw,
             damageType: damagePartsSummary(dmgParts),
-            notes: [...(damageBreakdownNotes(out) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
+            notes: [
+              ...(damageBreakdownNotes(out) ?? []),
+              ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : []),
+              ...this.conditionalDefenseNote(target, dmgParts),
+            ],
           },
         });
         this.touch();
@@ -1207,7 +1229,11 @@ export class Room {
               amount: applied,
               raw: outcome.totalRaw,
               damageType: damagePartsSummary(dmgParts),
-              notes: [...(damageBreakdownNotes(outcome) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
+              notes: [
+                ...(damageBreakdownNotes(outcome) ?? []),
+                ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : []),
+                ...this.conditionalDefenseNote(target, dmgParts),
+              ],
             },
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
@@ -1687,7 +1713,13 @@ export class Room {
           let rd = action.aoeId ? this.aoeRolls.get(action.aoeId) : undefined;
           if (!rd) {
             try {
-              rd = this.rollDamageParts(action.damageOnFail!, false, undefined);
+              // A save effect (spell, breath) is never a mundane weapon attack: count it as magical
+              // so "non-magical attacks" resistances don't apply.
+              rd = this.rollDamageParts(
+                action.damageOnFail!.map((p) => (p.traits ? p : { ...p, traits: ['magical' as const] })),
+                false,
+                undefined,
+              );
             } catch (err) {
               return (err as Error).message;
             }
@@ -1897,9 +1929,12 @@ export class Room {
         const prompt = this.state.dmPrompt;
         if (!prompt) break;
         const chosen = action.actionId ? prompt.options.find((o) => o.id === action.actionId) : undefined;
+        const cost = prompt.kind === 'legendaryAction' && chosen ? legendaryActionCost(chosen) : 1;
         if (prompt.kind === 'legendaryAction') {
           const token = this.state.tokens.find((t) => t.id === prompt.tokenId);
-          if (token && token.legendaryActionsRemaining) token.legendaryActionsRemaining -= 1;
+          const left = token?.legendaryActionsRemaining ?? 0;
+          if (cost > left) return `Không đủ legendary action: cần ${cost}, còn ${left}`;
+          if (token) token.legendaryActionsRemaining = left - cost;
         }
         this.pushRoll({
           id: nanoid(8),
@@ -1908,7 +1943,7 @@ export class Room {
           actorName: actor.name,
           label:
             prompt.kind === 'legendaryAction'
-              ? `${prompt.tokenName} · Legendary Action${chosen ? ` — ${chosen.name}` : ''}`
+              ? `${prompt.tokenName} · Legendary Action${chosen ? ` — ${chosen.name}` : ''}${cost > 1 ? ` (−${cost})` : ''}`
               : `${prompt.tokenName} · Lair Action${chosen ? ` — ${chosen.name}` : ''}`,
           result: { notation: '', terms: [], total: 0 },
         });

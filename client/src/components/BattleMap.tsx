@@ -33,6 +33,8 @@ import {
   tokenStatblockFrom,
   walkSpeed,
   type ActiveEffect,
+  type DamagePart,
+  type SheetAction,
   type CharacterSheet,
   type ConditionType,
   type CoverLevel,
@@ -62,6 +64,13 @@ function mapIdFromBackgroundUrl(url: string | undefined): string | null {
 }
 
 const CELL = 56; // display px per grid cell
+
+/** Damage a failed save deals: an attack's rider save has its own (`saveDamage`, never the hit damage);
+ *  a pure save action uses the action's damage parts. */
+function saveFailParts(a: SheetAction, parts: DamagePart[]): DamagePart[] | undefined {
+  if (typeof a.attackBonus === 'number') return a.saveDamage?.length ? a.saveDamage : undefined;
+  return parts.length ? parts : undefined;
+}
 const NO_ZONES: MapZone[] = [];
 
 /** A token's walking speed for the client move tracker. */
@@ -1408,7 +1417,7 @@ function TokenInspector({
     if (!spec || !a.save) return;
     const point = /point (?:you|it) choose|point within|within \d+ feet of (?:you|it)/i.test(desc);
     const rangeFeet = Number(/within (\d+) feet/i.exec(desc)?.[1] ?? 0);
-    const half = /half damage/i.test(desc);
+    const half = /half (?:as much )?damage/i.test(desc);
     const save = a.save;
     beginAoe({
       label: base,
@@ -1427,7 +1436,7 @@ function TokenInspector({
             ability: save.ability,
             dc: save.dc,
             label: base,
-            damageOnFail: parts.length ? parts : undefined,
+            damageOnFail: saveFailParts(a, parts),
             damageHalfOnSave: half,
             aoeId,
             sourceTokenId: token.id,
@@ -1806,7 +1815,7 @@ function TokenInspector({
             </select>
           </label>
           {sb.actions.map((a) => {
-            const parts = statblockDamageParts(a);
+            const parts = statblockDamageParts(a, sb);
             const isAttack = typeof a.attackBonus === 'number' && parts.length > 0;
             const base = `${sb.name} · ${a.name}`;
             const combined = parts.map((p) => p.dice).join(' + ');
@@ -1873,8 +1882,8 @@ function TokenInspector({
                         ability: a.save!.ability,
                         dc: a.save!.dc,
                         label: `${base} → ${sbTargetName}`,
-                        damageOnFail: parts.length ? parts : undefined,
-                        damageHalfOnSave: /half damage/i.test(a.description ?? ''),
+                        damageOnFail: saveFailParts(a, parts),
+                        damageHalfOnSave: /half (?:as much )?damage/i.test(a.description ?? ''),
                         sourceTokenId: token.id,
                       })
                     }

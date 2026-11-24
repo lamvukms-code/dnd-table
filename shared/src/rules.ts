@@ -20,8 +20,10 @@ import type {
   Token,
   TokenStatblock,
   WeaponImbue,
+  ConditionalDefense,
+  WeaponTrait,
 } from './types.js';
-import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from './types.js';
+import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS, WEAPON_TRAIT_VI } from './types.js';
 
 import { regainHitDice } from './derived.js';
 import { magicItemActive } from './magicItems.js';
@@ -287,6 +289,7 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         damage,
         damageType: it.damageType || '',
         extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
+        weaponTraits: it.weaponTraits?.length ? [...it.weaponTraits] : undefined,
         range: it.rangeText || '5 ft',
         source: 'weapon' as const,
         attackKind: 'weapon' as const,
@@ -389,7 +392,7 @@ export function actionDamageParts(
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
 
   const isAttack = typeof action.attackBonus === 'number';
-  if (!isAttack) return parts;
+  if (!isAttack) return withAttackTraits(parts, action);
 
   const kind = attackKindOf(action);
   const primaryType = action.damageType || parts[0]?.type || '';
@@ -426,7 +429,21 @@ export function actionDamageParts(
     // Jaeger: an armed Finisher adds the held Momentum dice (the server expends them on a hit).
     parts.push(...jaegerDamageParts(sheet, primaryType));
   }
-  return parts;
+  return withAttackTraits(parts, action);
+}
+
+/** The traits an attack carries: a spell attack is magical; a weapon has what its item / row says. */
+export function attackTraitsOf(action: Pick<SheetAction, 'attackKind' | 'weaponTraits' | 'description'>): WeaponTrait[] {
+  const t = new Set<WeaponTrait>(action.weaponTraits ?? []);
+  if (action.attackKind === 'spell' || /Spell Attack/i.test(action.description ?? '')) t.add('magical');
+  return [...t];
+}
+
+/** Stamp the attack's traits on every part that doesn't carry its own. */
+function withAttackTraits(parts: DamagePart[], action: SheetAction): DamagePart[] {
+  const traits = attackTraitsOf(action);
+  if (!traits.length) return parts;
+  return parts.map((p) => (p.traits ? p : { ...p, traits }));
 }
 
 /**
@@ -456,7 +473,15 @@ export function mergeDefenses(a: Defenses | undefined, b: Defenses | undefined):
     vulnerabilities: [...new Set([...a.vulnerabilities, ...b.vulnerabilities])],
     damageReduction: Math.max(a.damageReduction, b.damageReduction),
     critImmune: a.critImmune || b.critImmune,
+    conditional: [...(a.conditional ?? []), ...(b.conditional ?? [])],
   };
+}
+
+/** Does a conditional defence hold against an attack with these traits? */
+export function conditionalDefenseApplies(c: ConditionalDefense, traits: WeaponTrait[] | undefined): boolean {
+  const t = traits ?? [];
+  if (c.onlyIf?.length && !c.onlyIf.some((x) => t.includes(x))) return false;
+  return !c.bypassedBy.some((x) => t.includes(x));
 }
 
 /** Standing riders that ride a SPELL attack (scope 'spell' or 'any'). */
@@ -1071,12 +1096,23 @@ export const RIDER_PRESETS: { name: string; rider: { dice: string; type: string 
   { name: 'Hex', rider: { dice: '1d6', type: 'necrotic' }, concentration: true },
 ];
 
+/** How many legendary actions an option costs: "(Costs 2 Actions)" in its name, else 1. */
+export function legendaryActionCost(a: Pick<SheetAction, 'name'>): number {
+  const m = /\(\s*Costs?\s+(\d+)\s+Actions?\s*\)/i.exec(a.name ?? '');
+  return m ? Math.max(1, Number(m[1])) : 1;
+}
+
 /** Damage parts for a bare stat-block action (no sheet riders). */
-export function statblockDamageParts(action: SheetAction): DamagePart[] {
+export function statblockDamageParts(action: SheetAction, sb?: Pick<Statblock, 'traits'>): DamagePart[] {
   const parts: DamagePart[] = [];
   if (action.damage) parts.push({ dice: action.damage, type: action.damageType || '' });
   for (const e of action.extraDamage ?? []) parts.push({ ...e });
-  return parts;
+  // "Magic Weapons" trait: the creature's weapon attacks are magical.
+  const magicWeapons = sb?.traits?.some((t) => /^Magic(al)? Weapons?\b/i.test(t.name));
+  const act = magicWeapons && typeof action.attackBonus === 'number'
+    ? { ...action, weaponTraits: [...new Set([...(action.weaponTraits ?? []), 'magical' as const])] }
+    : action;
+  return withAttackTraits(parts, act);
 }
 
 export interface PartOutcome {
@@ -1102,7 +1138,7 @@ export function resolveDamageParts(
   let totalFinal = 0;
   const parts: PartOutcome[] = [];
   for (const { part, raw } of rolled) {
-    const o = applyDamageDefenses(raw, part.type, def);
+    const o = applyDamageDefenses(raw, part.type, def, part.traits);
     totalRaw += o.raw;
     totalFinal += o.final;
     parts.push({
@@ -1230,23 +1266,36 @@ export function applyDamageDefenses(
   raw: number,
   damageType: string | undefined,
   def: Defenses | undefined,
+  traits?: WeaponTrait[],
 ): DamageOutcome {
   const notes: string[] = [];
   let dmg = Math.max(0, Math.round(raw));
   const t = (damageType ?? '').toLowerCase();
 
   if (def && t) {
-    if (def.immunities.includes(t)) {
-      notes.push(`miễn nhiễm ${typeName(t)} (×0)`);
+    // Conditional defences that hold against this attack (by its magical / silvered / moongilded traits).
+    const cond = (def.conditional ?? []).filter((c) => c.types.includes(t) && conditionalDefenseApplies(c, traits));
+    const tag = (kind: ConditionalDefense['kind']) => {
+      const c = cond.find((x) => x.kind === kind);
+      if (!c) return '';
+      return c.onlyIf?.length
+        ? ` (đòn ${c.onlyIf.map((x) => WEAPON_TRAIT_VI[x]).join('/')})`
+        : c.bypassedBy.length
+          ? ` (đòn không ${c.bypassedBy.map((x) => WEAPON_TRAIT_VI[x]).join('/')})`
+          : '';
+    };
+    const has = (kind: ConditionalDefense['kind']) => cond.some((c) => c.kind === kind);
+    if (def.immunities.includes(t) || has('immune')) {
+      notes.push(`miễn nhiễm ${typeName(t)}${tag('immune')} (×0)`);
       return { raw, final: 0, notes };
     }
-    if (def.vulnerabilities.includes(t)) {
+    if (def.vulnerabilities.includes(t) || has('vulnerable')) {
       dmg *= 2;
-      notes.push(`yếu điểm ${typeName(t)} (×2)`);
+      notes.push(`yếu điểm ${typeName(t)}${tag('vulnerable')} (×2)`);
     }
-    if (def.resistances.includes(t)) {
+    if (def.resistances.includes(t) || has('resist')) {
       dmg = Math.floor(dmg / 2);
-      notes.push(`kháng ${typeName(t)} (÷2)`);
+      notes.push(`kháng ${typeName(t)}${tag('resist')} (÷2)`);
     }
   }
   if (def && def.damageReduction > 0) {

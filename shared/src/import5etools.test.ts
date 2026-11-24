@@ -111,3 +111,28 @@ describe('5etools import', () => {
     expect(r.errors[0]).toContain('_copy');
   });
 });
+
+describe('parseAction (via convert5eToolsMonster): 2014 wording', () => {
+  const mon = (action: unknown[]) =>
+    convert5eToolsMonster({ name: 'X', size: ['M'], type: 'beast', ac: [12], hp: { average: 10 }, str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10, cr: '1', action });
+
+  it('splits "plus" / "and" extra damage, skips the two-handed alternative', () => {
+    const [a, b] = mon([
+      { name: 'Greatsword', entries: ['Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 11 (2d6 + 4) slashing damage plus 4 (1d8) radiant damage.'] },
+      { name: 'Spear', entries: ['Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 6 (1d6 + 3) piercing damage, or 7 (1d8 + 3) piercing damage if used with two hands, and 3 (1d6) cold damage.'] },
+    ]).actions;
+    expect(a).toMatchObject({ attackBonus: 7, damage: '2d6+4', damageType: 'slashing', extraDamage: [{ dice: '1d8', type: 'radiant' }] });
+    expect(b).toMatchObject({ damage: '1d6+3', extraDamage: [{ dice: '1d6', type: 'cold' }] });
+  });
+
+  it('parses "DC N Ability saving throw": pure save keeps its damage, a rider save gets saveDamage', () => {
+    const [breath, bite] = mon([
+      { name: 'Frost Breath (Recharge 5-6)', entries: ['The dragon exhales. Each creature in a 30-foot cone must make a DC 15 Dexterity saving throw, taking 22 (4d10) cold damage on a failed save, or half as much damage on a successful one.'] },
+      { name: 'Bite', entries: ['Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 8 (1d10 + 3) piercing damage, and the target must succeed on a DC 13 Constitution saving throw or take 7 (2d6) poison damage.'] },
+    ]).actions;
+    expect(breath).toMatchObject({ save: { ability: 'dex', dc: 15 }, damage: '4d10', damageType: 'cold' });
+    expect(breath.attackBonus).toBeUndefined();
+    expect(bite).toMatchObject({ attackBonus: 6, damage: '1d10+3', save: { ability: 'con', dc: 13 }, saveDamage: [{ dice: '2d6', type: 'poison' }] });
+    expect(bite.extraDamage).toBeUndefined();
+  });
+});
