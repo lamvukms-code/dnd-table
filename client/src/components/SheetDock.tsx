@@ -101,6 +101,10 @@ import { FormulaHint } from './FormulaHint.js';
 import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
 import { ClassSetup } from './sheet/ClassSetup.js';
+import { JaegerFeatures } from './sheet/JaegerFeatures.js';
+import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
+import { mapViewCenterCell } from '../mapView.js';
+import { expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'STR',
@@ -373,8 +377,19 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
   const [draft, setDraft] = useState<CharacterSheet>(sheet);
 
   useEffect(() => {
+    // Only hold back server updates while the player is actually typing in a field. Focus sitting on a
+    // button (the last thing they clicked) must NOT freeze the draft: server-side changes such as a
+    // level-up or a rider the server disarmed on a hit would otherwise stay invisible and then be overwritten by
+    // the next edit, which commits the whole stale draft.
     const active = document.activeElement as HTMLElement | null;
-    if (!active || !active.closest('.sheet-dock')) setDraft(sheet);
+    const typing =
+      !!active &&
+      !!active.closest('.sheet-dock') &&
+      ((active.tagName === 'INPUT' &&
+        !['checkbox', 'radio', 'button', 'range', 'color', 'file'].includes((active as HTMLInputElement).type)) ||
+        active.tagName === 'TEXTAREA' ||
+        active.isContentEditable);
+    if (!typing) setDraft(sheet);
   }, [sheet]);
 
   function commit(next: CharacterSheet) {
@@ -686,6 +701,18 @@ function BasicTab({ draft, commit }: EditorCtx) {
               <ClassSetup draft={draft} commit={commit} onClose={() => setShowSetup(false)} />
             )}
           </div>
+          {!linkedToken && (
+            <button
+              className="bt-place"
+              title="Đặt token nhân vật vào giữa khung bản đồ đang xem"
+              onClick={() => {
+                const c = mapViewCenterCell() ?? { x: 0, y: 0 };
+                send({ t: 'placeSheetToken', sheetId: draft.id, x: c.x, y: c.y });
+              }}
+            >
+              📍 Đặt lên bản đồ
+            </button>
+          )}
           <label className="bt-tokenlink">
             Token đại diện
             <select
@@ -1007,8 +1034,15 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   attackRoll={attackRoll}
                   damageRoll={damageRoll}
                   onFired={() => {
-                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed) return;
-                    commit({ ...draft, sneakAttackArmed: false, boomingBladeArmed: false });
+                    const jaegerArmed = !!draft.jaeger?.armedFinisher;
+                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed && !jaegerArmed) return;
+                    commit({
+                      ...draft,
+                      sneakAttackArmed: false,
+                      boomingBladeArmed: false,
+                      // an armed Jaeger Finisher expends all Momentum dice once its damage is rolled
+                      ...(jaegerArmed ? { jaeger: expendJaegerMomentum(draft) } : {}),
+                    });
                   }}
                   grapple={
                     (a.id === 'unarmed' || a.id === 'monk-unarmed') && targetId
@@ -1114,6 +1148,11 @@ function BasicTab({ draft, commit }: EditorCtx) {
       {/* reference text — class/species/background/subclass; collapsed by default below the
           quick-action toggles and the action list, so they don't push actual gameplay out of view */}
       <div className="cf-reference">
+        {jaegerLevel(draft) > 0 && (
+          <div className="cf-quick">
+            <JaegerFeatures draft={draft} commit={commit} />
+          </div>
+        )}
         <ClassFeatures draft={draft} commit={commit} />
         <SpeciesFeatures draft={draft} commit={commit} />
         <BackgroundFeatures draft={draft} />
@@ -1235,7 +1274,7 @@ function ActionRow({
               attackerTokenId: attacker.tokenId,
               attackRange: attackRangeOf(action),
             });
-            onFired?.();
+            // Armed riders (Sneak Attack, Booming Blade, Finishers…) are disarmed by the server on a hit.
           }}
         >
           ⚔ {targetName}
@@ -1258,8 +1297,11 @@ function ActionRow({
           onClick={() => {
             if (!isAttack && onSpend && !onSpend(false)) return; // damage-only rows spend on their roll
             if (targetId) void damageRoll(`${base} → ${targetName}`, parts, targetId, attacker);
-            else void rollDice(`${base} (sát thương)`, combinedDamage);
-            onFired?.();
+            else {
+              // No target: the server can't see the hit, so disarm the riders here.
+              void rollDice(`${base} (sát thương)`, combinedDamage);
+              onFired?.();
+            }
           }}
         >
           {targetId ? 'sát thương' : 'dmg'}
@@ -3230,7 +3272,7 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
         </div>
       ))}
       <datalist id="mc-class-names">
-        {CLASS_NAMES.map((n) => (
+        {[...CLASS_NAMES, ...CUSTOM_CLASS_NAMES].map((n) => (
           <option key={n} value={n} />
         ))}
       </datalist>

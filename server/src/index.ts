@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import express from 'express';
 import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -19,6 +19,8 @@ import {
   statsHiddenFromPlayers,
   tokenForPlayers,
   type ServerEvent,
+  type CustomClassDef,
+  registerCustomClass,
 } from '@dnd-table/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -35,6 +37,19 @@ const LOREBOOK_FILE =
   join(__dirname, '..', '..', 'client', 'src', 'data', 'lorebook.local.json');
 // Imported map pack (scripts/import-maps.mjs): images + index.json, read-only, never bundled.
 const MAPS_DIR = process.env.MAPS_DIR ?? join(__dirname, '..', 'data', 'maps');
+// Local, git-ignored third-party classes (same file the client bundles). The server needs them for
+// Hit Dice / level-up / Extra Attack, so register them before the Room starts handling messages.
+const CLASSES_FILE =
+  process.env.CLASSES_FILE ??
+  join(__dirname, '..', '..', 'client', 'src', 'data', 'classes.local.json');
+if (existsSync(CLASSES_FILE)) {
+  try {
+    const file = JSON.parse(readFileSync(CLASSES_FILE, 'utf8')) as { classes?: CustomClassDef[] };
+    for (const c of Array.isArray(file.classes) ? file.classes : []) registerCustomClass(c);
+  } catch (e) {
+    console.warn(`Không đọc được ${CLASSES_FILE}:`, (e as Error).message);
+  }
+}
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);

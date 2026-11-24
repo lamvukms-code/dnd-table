@@ -1,5 +1,6 @@
 import type { Ability, CharacterSheet } from './types.js';
 import { abilityMod, sheetClasses } from './rules.js';
+import { registerCustomClassFeatures, type ClassFeatureDef } from './classFeatures.js';
 
 /**
  * Class rules a sheet can be filled in from (SRD 5.2.1, CC BY 4.0): hit die, saving-throw
@@ -39,7 +40,39 @@ export const CLASS_DEFAULTS: Record<string, ClassDefaults> = {
 
 export function classDefaults(className: string | undefined): ClassDefaults | null {
   const key = (className ?? '').trim().toLowerCase();
-  return CLASS_DEFAULTS[key] ?? null;
+  return CLASS_DEFAULTS[key] ?? CUSTOM_DEFAULTS[key] ?? null;
+}
+
+/**
+ * A class that isn't in this repo (third-party content the DM owns), described by the DM's
+ * git-ignored local data (client/src/data/classes.local.json). Registering it makes the sheet
+ * treat it like a built-in class: hit die / HP, saving throws, skill picks, multiclass
+ * proficiencies and the "Class features" list. Class-specific mechanics, if any, are separate
+ * code keyed on `key` (e.g. jaeger.ts).
+ */
+export interface CustomClassDef extends ClassDefaults {
+  /** Lowercase key matched against the sheet's class name. */
+  key: string;
+  /** Display name, e.g. "Jaeger". */
+  name: string;
+  multiclass?: MulticlassProficiencies;
+  features?: Omit<ClassFeatureDef, 'class'>[];
+  /** Extra Attack table: [class level, attacks per Attack action], e.g. [[5, 2]]. */
+  extraAttack?: [number, number][];
+}
+const CUSTOM_DEFAULTS: Record<string, ClassDefaults> = {};
+const CUSTOM_EXTRA_ATTACK: Record<string, [number, number][]> = {};
+/** A registered custom class' Extra Attack table (empty when it has none). */
+export function customExtraAttack(className: string | undefined): [number, number][] {
+  return CUSTOM_EXTRA_ATTACK[(className ?? '').trim().toLowerCase()] ?? [];
+}
+const CUSTOM_MULTICLASS: Record<string, MulticlassProficiencies> = {};
+export function registerCustomClass(def: CustomClassDef): void {
+  const key = def.key.trim().toLowerCase();
+  CUSTOM_DEFAULTS[key] = { hitDie: def.hitDie, saves: def.saves, skillPick: def.skillPick, skillOptions: def.skillOptions };
+  if (def.multiclass) CUSTOM_MULTICLASS[key] = def.multiclass;
+  if (Array.isArray(def.extraAttack)) CUSTOM_EXTRA_ATTACK[key] = def.extraAttack;
+  registerCustomClassFeatures(key, def.features ?? []);
 }
 
 /** The character's first class' defaults (saving throws come from the starting class only). */
@@ -92,7 +125,7 @@ export const MULTICLASS_PROFICIENCIES: Record<string, MulticlassProficiencies> =
 
 export function multiclassProficiencies(className: string | undefined): MulticlassProficiencies | null {
   const key = (className ?? '').trim().toLowerCase();
-  return MULTICLASS_PROFICIENCIES[key] ?? null;
+  return MULTICLASS_PROFICIENCIES[key] ?? CUSTOM_MULTICLASS[key] ?? null;
 }
 
 /** HP by the fixed-average method: max die at level 1, then die/2 + 1 per level, + CON mod each. */

@@ -1,5 +1,5 @@
 import type { CharacterSheet } from './types.js';
-import { barbarianLevel, druidLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
+import { barbarianLevel, classLevelOf, druidLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
 
 /**
  * Base-class feature progression (D&D 5e 2024). Descriptions are short
@@ -536,9 +536,21 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
     warlock: warlockLevel(sheet),
     druid: druidLevel(sheet),
   };
-  return CLASS_FEATURES.filter((f) => f.level <= (levels[f.class] ?? 0)).sort(
-    (a, b) => a.level - b.level,
-  );
+  for (const f of CUSTOM_CLASS_FEATURES) levels[f.class] ??= classLevelOf(sheet, f.class);
+  return [...CLASS_FEATURES, ...CUSTOM_CLASS_FEATURES]
+    .filter((f) => f.level <= (levels[f.class] ?? 0))
+    .sort((a, b) => a.level - b.level);
+}
+
+/**
+ * Feature lists of classes that aren't in this repo (a third-party class the DM owns), loaded
+ * at runtime from the DM's local data — see `registerCustomClass` in classDefaults.ts.
+ */
+const CUSTOM_CLASS_FEATURES: ClassFeatureDef[] = [];
+export function registerCustomClassFeatures(classKey: string, features: Omit<ClassFeatureDef, 'class'>[]): void {
+  const key = classKey.toLowerCase();
+  for (let i = CUSTOM_CLASS_FEATURES.length - 1; i >= 0; i--) if (CUSTOM_CLASS_FEATURES[i].class === key) CUSTOM_CLASS_FEATURES.splice(i, 1);
+  CUSTOM_CLASS_FEATURES.push(...features.map((f) => ({ ...f, class: key })));
 }
 
 function norm(s: string | undefined): string {

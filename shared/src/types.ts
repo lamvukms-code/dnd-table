@@ -1,4 +1,5 @@
 import type { RollResult } from './dice.js';
+import type { JaegerState } from './jaeger.js';
 
 export type Ability = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -293,6 +294,8 @@ export interface CharacterSheet {
   boomingBladeArmed?: boolean;
   /** Monk: Focus Points spent (max is derived from Monk level). */
   focusUsed?: number;
+  /** Jaeger class state: Focus Points, Momentum dice, armed Finisher, chosen Arts/Finishers. */
+  jaeger?: JaegerState;
   /** Druid: Wild Shape uses spent (max is derived from Druid level). */
   wildShapeUsed?: number;
   /** Subclass-feature limited-use pools spent, keyed by feature id. */

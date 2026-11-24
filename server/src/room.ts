@@ -43,6 +43,7 @@ import {
   FEET_PER_CELL,
   abilityMod as abilityModOf,
   diceFacesOf,
+  expendJaegerMomentum,
   rollNotation,
   targetRiderParts,
   tokenConditions,
@@ -372,6 +373,21 @@ export class Room {
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
   /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
+  /** A hit landed: disarm the one-shot riders whose damage parts it carried (Sneak Attack,
+   *  Booming Blade, an armed Jaeger Finisher — which expends all held Momentum). Done here, after the hit
+   *  is known, so a miss keeps them armed for the next swing (Extra Attack) instead of wasting them. */
+  private consumeHitRiders(sheetId: string | undefined, parts: DamagePart[], actorId: string, isDm: boolean): void {
+    if (!sheetId) return;
+    const sheet = this.state.sheets.find((x) => x.id === sheetId);
+    if (!sheet || (sheet.ownerId !== actorId && !isDm)) return;
+    const has = (label: string) => parts.some((p) => p.label === label);
+    if (sheet.sneakAttackArmed && has('Sneak Attack')) sheet.sneakAttackArmed = false;
+    if (sheet.boomingBladeArmed && has('Booming Blade')) sheet.boomingBladeArmed = false;
+    if (sheet.jaeger?.armedFinisher && (has('Brutal Finisher') || has('Chasing Finisher') || has('Opportunistic Shot'))) {
+      sheet.jaeger = expendJaegerMomentum(sheet);
+    }
+  }
+
   private aoeRolls = new Map<string, ReturnType<Room['rollDamageParts']>>();
 
   private rollDamageParts(
@@ -834,6 +850,8 @@ export class Room {
           return (err as Error).message;
         }
         const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
+        // A plain damage roll against a target is a hit the player resolved themselves.
+        this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
         const took = this.applyDamage(target, out.totalFinal);
         const amount = took.applied;
         if (amount > 0) this.markDealtDamage(action.attackerTokenId);
@@ -1097,6 +1115,7 @@ export class Room {
           }
           damageResult = rd.combined;
           outcome = resolveDamageParts(rd.rolled, def);
+          this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
         }
 
         const coverNote =

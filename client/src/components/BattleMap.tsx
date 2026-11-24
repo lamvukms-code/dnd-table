@@ -48,6 +48,7 @@ import { nanoIdish } from '../util.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
+import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
 import { ZONE_LAYOUTS } from '../campaignData.js';
 
@@ -222,6 +223,21 @@ function BattleMapImpl() {
   function cameraTransform() {
     return `translate(${pan.current.x}px, ${pan.current.y}px) scale(${zoomRef.current})`;
   }
+  useEffect(() => {
+    setMapViewCenterGetter(() => {
+      const vp = boardScrollRef.current;
+      const z = zoomRef.current;
+      const w = vp?.clientWidth ?? 0;
+      const h = vp?.clientHeight ?? 0;
+      const cx = Math.floor((w / 2 - pan.current.x) / (CELL * z));
+      const cy = Math.floor((h / 2 - pan.current.y) / (CELL * z));
+      return {
+        x: Math.max(0, Math.min(map.cols - 1, cx)),
+        y: Math.max(0, Math.min(map.rows - 1, cy)),
+      };
+    });
+    return () => setMapViewCenterGetter(null);
+  });
   function applyCamera(x: number, y: number, z: number) {
     pan.current = clampPan(x, y, z);
     zoomRef.current = z;
@@ -517,9 +533,11 @@ function BattleMapImpl() {
         )}
       </div>
 
+      {/* One flowing row of drag trays (they used to be absolutely placed on top of each other). */}
+      <div className="map-trays">
+      <CharacterPalette />
       {isDm && <BestiaryPalette />}
       {isDm && <NpcPalette />}
-      <CharacterPalette />
 
       {tokens.length > 0 && (
         <details className="token-palette">
@@ -552,6 +570,7 @@ function BattleMapImpl() {
           </div>
         </details>
       )}
+      </div>
 
       {aoe && aoeView && (
         <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
@@ -669,7 +688,7 @@ function BattleMapImpl() {
           }}
           onDragOver={(e) => {
             const types = e.dataTransfer.types;
-            if (types.includes('text/token-id') || types.includes('text/statblock-id')) {
+            if (types.includes('text/token-id') || types.includes('text/statblock-id') || types.includes('text/sheet-id')) {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';
             }

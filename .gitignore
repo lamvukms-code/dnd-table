@@ -26,3 +26,6 @@ client/src/data/soundManifest.json
 
 # campaign reference data (see client/src/campaignData.ts) — never commit setting content
 client/src/data/*.local.json
+
+# dnd-verifier reports (local only)
+.reviews/

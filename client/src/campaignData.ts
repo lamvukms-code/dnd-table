@@ -1,4 +1,5 @@
-import type { BackgroundDef, HeirloomDef, Statblock } from '@dnd-table/shared';
+import type { BackgroundDef, CustomClassDef, HeirloomDef, Statblock } from '@dnd-table/shared';
+import { registerCustomClass } from '@dnd-table/shared';
 
 /**
  * Campaign reference data — all OPTIONAL, all git-ignored `client/src/data/*.local.json`.
@@ -68,3 +69,35 @@ export interface ZoneLayout {
 export const ZONE_LAYOUTS: Record<string, ZoneLayout> = objectFrom(
   import.meta.glob('./data/zoneLayouts.local.json', { eager: true }),
 );
+
+/** One pickable option of a custom class (a Focus Art, a Finisher, a Fighting Style…). */
+export interface ClassOptionDef {
+  id: string;
+  name: string;
+  /** What using it costs on your turn. */
+  action?: 'action' | 'bonus' | 'reaction' | 'special';
+  description: string;
+}
+export interface ClassOptions {
+  focusArts?: ClassOptionDef[];
+  finishers?: ClassOptionDef[];
+  fightingStyles?: ClassOptionDef[];
+}
+interface ClassesFile {
+  classes?: CustomClassDef[];
+  /** Per-class option lists, keyed by class key (e.g. "jaeger"). */
+  options?: Record<string, ClassOptions>;
+}
+const classesFile: ClassesFile =
+  ((Object.values(import.meta.glob('./data/classes.local.json', { eager: true }))[0] as { default?: unknown } | undefined)
+    ?.default as ClassesFile | undefined) ?? {};
+
+/**
+ * Classes that aren't in the repo (third-party classes the DM owns), from `classes.local.json`.
+ * Registered on load so hit die / saves / skills / multiclass profs / feature list work like a
+ * built-in class. Class-specific mechanics (e.g. Jaeger's Focus/Momentum) are separate code.
+ */
+export const CUSTOM_CLASSES: CustomClassDef[] = Array.isArray(classesFile.classes) ? classesFile.classes : [];
+for (const c of CUSTOM_CLASSES) registerCustomClass(c);
+export const CUSTOM_CLASS_NAMES: string[] = CUSTOM_CLASSES.map((c) => c.name);
+export const CLASS_OPTIONS: Record<string, ClassOptions> = classesFile.options ?? {};

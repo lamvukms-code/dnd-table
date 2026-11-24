@@ -25,6 +25,8 @@ import { COIN_TYPES, CONDITION_VI, DAMAGE_TYPE_VI, emptyDefenses, SKILLS } from 
 
 import { regainHitDice } from './derived.js';
 import { magicItemActive } from './magicItems.js';
+import { jaegerAfterRest, jaegerDamageParts } from './jaeger.js';
+import { customExtraAttack } from './classDefaults.js';
 
 /** Guess melee vs ranged from a range text: "5 ft", "Chạm", "reach 10 ft" → melee; "80/320 ft", "60ft" → ranged. */
 export function inferAttackRange(range: string | undefined): AttackRange {
@@ -402,7 +404,7 @@ export function actionDamageParts(
       const bonus = rageDamageBonus(sheet);
       if (bonus > 0) parts.push({ dice: String(bonus), type: primaryType, label: 'Rage' });
     }
-    // Rogue: Sneak Attack armed for this attack (the sheet disarms it after the roll).
+    // Rogue: Sneak Attack armed for this attack (the server disarms it on a hit).
     if (sheet.sneakAttackArmed) {
       const dice = sneakAttackDice(sheet);
       if (dice > 0) parts.push({ dice: `${dice}d6`, type: primaryType, label: 'Sneak Attack' });
@@ -415,12 +417,14 @@ export function actionDamageParts(
       const die = martialArtsDie(sheet);
       if (die) parts.push({ dice: die, type: 'necrotic', label: 'Claws of Pestilence' });
     }
-    // Booming Blade armed for this melee weapon attack (the sheet disarms it after the roll,
+    // Booming Blade armed for this melee weapon attack (the server disarms it on a hit,
     // same as Sneak Attack). The die count matches every other cantrip's 5/11/17 scaling.
     if (sheet.boomingBladeArmed) {
       const tier = totalLevelOf(sheet) >= 17 ? 4 : totalLevelOf(sheet) >= 11 ? 3 : totalLevelOf(sheet) >= 5 ? 2 : 1;
       parts.push({ dice: `${tier}d8`, type: 'thunder', label: 'Booming Blade' });
     }
+    // Jaeger: an armed Finisher adds the held Momentum dice (the server expends them on a hit).
+    parts.push(...jaegerDamageParts(sheet, primaryType));
   }
   return parts;
 }
@@ -805,7 +809,11 @@ export function multiclassIssues(sheet: CharacterSheet): string[] {
 const EXTRA_ATTACK_CLASSES = ['barbarian', 'fighter', 'monk', 'paladin', 'ranger'];
 export function extraAttackClasses(sheet: CharacterSheet): string[] {
   return sheetClasses(sheet)
-    .filter((c) => c.level >= 5 && EXTRA_ATTACK_CLASSES.includes((c.name ?? '').trim().toLowerCase()))
+    .filter((c) => {
+      const key = (c.name ?? '').trim().toLowerCase();
+      if (c.level >= 5 && EXTRA_ATTACK_CLASSES.includes(key)) return true;
+      return customExtraAttack(key).some(([lvl, n]) => n >= 2 && c.level >= lvl);
+    })
     .map((c) => c.name);
 }
 
@@ -1246,6 +1254,7 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
     rageUsed: typeof sheet.rageUsed === 'number' ? Math.max(0, sheet.rageUsed - 1) : sheet.rageUsed,
     // 2024 Monk: all Focus Points return on a short (or long) rest.
     focusUsed: 0,
+    jaeger: jaegerAfterRest(sheet, 'short'),
     // 2024 Druid: regain one expended Wild Shape on a short rest.
     wildShapeUsed:
       typeof sheet.wildShapeUsed === 'number'
@@ -1309,6 +1318,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     rageUsed: 0,
     raging: false,
     focusUsed: 0,
+    jaeger: jaegerAfterRest(sheet, 'long'),
     wildShapeUsed: 0,
     subclassUses: {},
     speciesUses: {},

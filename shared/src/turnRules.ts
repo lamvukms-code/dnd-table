@@ -1,5 +1,7 @@
 import type { ActiveEffect, CharacterSheet, ClassEntry, SheetAction, Spell, TurnUsed } from './types.js';
 import { abilityMod, casterTypeOf, castingClassesOf, classLevelOf, sheetClasses } from './rules.js';
+import { customExtraAttack } from './classDefaults.js';
+import { jaegerBloodFrenzy } from './jaeger.js';
 
 // ---------------------------------------------------------------------------
 // Action economy (Action / Bonus Action / Reaction) + Extra Attack
@@ -33,7 +35,10 @@ export function attacksPerAction(sheet: CharacterSheet): number {
       if (!grp.classes.includes(name)) continue;
       for (const [lvl, n] of grp.table) if (c.level >= lvl && n > best) best = n;
     }
+    for (const [lvl, n] of customExtraAttack(name)) if (c.level >= lvl && n > best) best = n;
   }
+  // Sanguine Chapter 17 (Blood Frenzy): three attacks while bloodied.
+  if (jaegerBloodFrenzy(sheet) && best < 3) best = 3;
   return best;
 }
 

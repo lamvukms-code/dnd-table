@@ -278,7 +278,7 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   top: 0;
   left: 0;
   right: 0;
-  z-index: 7;
+  z-index: 9; /* above the drag trays: its expanded tools (Bắt đầu, Reset…) must stay clickable */
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(2px);
@@ -772,16 +772,27 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .skill-table input[type='checkbox'] { margin: 0; }
 
 /* token duplicate palette */
-.token-palette {
+/* Drag trays (characters, bestiary, NPCs, clone) flow in one row under the initiative bar. The
+   container ignores the pointer so the map stays pannable between trays. */
+.map-trays {
   position: absolute;
   top: 34px;
   left: 8px;
-  z-index: 7;
+  right: 120px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+}
+.token-palette {
+  pointer-events: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 4px 8px;
-  max-width: 46%;
+  max-width: 340px;
 }
 .token-palette > summary { font-size: 11px; margin: 0; list-style: none; }
 .token-palette > summary::-webkit-details-marker { display: none; }
@@ -1398,8 +1409,6 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .bestiary-palette small { opacity: 0.65; }
 .insp-sb-link { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
 .insp-sb-link button { font-size: 11px; padding: 2px 6px; }
-.bestiary-palette { left: 215px; }
-.npc-palette { left: 430px; }
 
 .aoe-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 6; }
 .aoe-shape { fill: rgba(231, 76, 60, 0.28); stroke: #e74c3c; stroke-width: 2; }
@@ -1526,3 +1535,14 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 }
 .levelup-btn { font-size: 16px; font-weight: 800; padding: 8px 18px; background: var(--accent); color: #201a08; border-color: var(--accent); }
 @keyframes levelup-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 50% { box-shadow: 0 0 12px 3px color-mix(in srgb, var(--accent) 55%, transparent); } }
+
+/* Jaeger sheet controls (components/sheet/JaegerFeatures.tsx) */
+.cf-jaeger { row-gap: 4px; }
+.cf-jaeger .cf-break { flex-basis: 100%; height: 0; }
+.cf-jaeger .cf-inline { display: inline-flex; gap: 4px; align-items: center; }
+.cf-jaeger select { font-size: 11px; padding: 1px 4px; }
+.cf-jaeger-choices { flex-basis: 100%; font-size: 11px; }
+.cf-jaeger-choices > summary { cursor: pointer; color: var(--muted); }
+.cf-jaeger-choices[open] { display: flex; flex-direction: column; gap: 4px; }
+.cf-choice-list { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.cf-choice-list label { display: inline-flex; align-items: center; gap: 2px; }
