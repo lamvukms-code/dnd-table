@@ -183,7 +183,9 @@ function pointInPoly(p: Pt, pts: Pt[]): boolean {
   return inside;
 }
 
-/** Ids of the tokens caught in the template (the caster is never included). */
+/** Ids of the tokens caught in the template. The caster is left out of templates that start from
+ *  them ('self': cone, line, emanation…); a template dropped on a point catches the caster too if
+ *  they stand inside it (a Fireball at your own feet burns you). */
 export function aoeTokenIds(
   spec: AreaSpec,
   anchor: AreaAnchor,
@@ -197,7 +199,7 @@ export function aoeTokenIds(
   const geo = aoeGeometry(spec, anchor, origin, aim, caster?.span ?? 1);
   const hits: string[] = [];
   for (const t of tokens) {
-    if (t.id === casterId) continue;
+    if (t.id === casterId && anchor === 'self') continue;
     const c = centre(t);
     const slack = (t.span - 1) / 2; // bigger creatures reach further into the area
     let hit = false;

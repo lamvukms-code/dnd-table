@@ -47,6 +47,10 @@ import {
   WOOD_WOSE,
   type CharacterSheet,
   type EconomyKind,
+  parseUpcast,
+  scaleDice,
+  upcastDamagePart,
+  casterTypeOf,
 } from '@dnd-table/shared';
 import {
   getLocalKey,
@@ -164,7 +168,9 @@ interface StoreState {
   /** Bestiary entry the DM asked to open from a token (null = none). */
   bestiaryFocus: string | null;
   openBestiary: (id: string | null) => void;
-  resolveCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean }) => Promise<void>;
+  resolveCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean; paid?: boolean }) => Promise<void>;
+  /** Spend the action economy + spell slot for one cast (asks before casting without a slot). false = cancelled. */
+  payCast: (sheetId: string, spell: Spell, castAtLevel?: number) => boolean;
   /** Armed AoE template awaiting placement on the map. */
   aoe: AoeMode | null;
   beginAoe: (mode: AoeMode) => void;
@@ -569,9 +575,12 @@ export const useStore = create<StoreState>((set, get) => {
             casterTokenId,
             rangeFeet,
             onConfirm: (ids, aoeId) => {
+              // Pay once for the whole area — cancelling (no slot) or lacking the action must stop
+              // the cast for EVERY target, not just the first one.
+              if (!get().payCast(sheetId, spell, castAtLevel)) return;
               ids.forEach((id, i) => {
                 set({ castingSpell: { sheetId, spell, castAtLevel } });
-                void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0 });
+                void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0, paid: true });
               });
             },
           },
@@ -623,6 +632,19 @@ export const useStore = create<StoreState>((set, get) => {
     },
     bestiaryFocus: null,
     openBestiary: (id) => set({ bestiaryFocus: id }),
+    payCast: (sheetId, spell, castAtLevel) => {
+      const sheet = get().room?.sheets.find((s) => s.id === sheetId);
+      if (!sheet) return false;
+      const econ = economyKindOf(spell.actionType);
+      if (econ && !get().spendEconomy(sheet.tokenId, econ)) return false;
+      const slot = spendSpellSlot(sheet, spell.level, castAtLevel);
+      if (!slot.available) {
+        if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return false;
+      } else if (Object.keys(slot.patch).length > 0) {
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch }, base: sheet });
+      }
+      return true;
+    },
     resolveCastOnToken: async (targetTokenId, opts) => {
       const cast = get().castingSpell;
       const room = get().room;
@@ -632,20 +654,24 @@ export const useStore = create<StoreState>((set, get) => {
       set({ castingSpell: null });
       if (!sheet) return;
       const castAtLevel = cast.castAtLevel && cast.castAtLevel > spell.level ? cast.castAtLevel : undefined;
-      const label = `${sheet.name} · ${spell.name}${castAtLevel ? ` (nâng ô cấp ${castAtLevel})` : ''}`;
+      const pactLvl = spell.level > 0 && casterTypeOf(sheet) === 'pact' ? sheet.pactSlots?.level : undefined;
+      const shownLvl = pactLvl && pactLvl > spell.level ? pactLvl : castAtLevel;
+      const label = `${sheet.name} · ${spell.name}${shownLvl ? ` (ô cấp ${shownLvl})` : ''}`;
       // An AOE cast resolves once per target hit (see `beginCast`'s aoe.onConfirm) — economy
       // and the spell slot must only be spent once per cast, on the first target.
       const firstTarget = !opts?.skipConc;
-      if (firstTarget) {
-        const econ = economyKindOf(spell.actionType);
-        if (econ && !get().spendEconomy(sheet.tokenId, econ)) return;
-        const slot = spendSpellSlot(sheet, spell.level, cast.castAtLevel);
-        if (!slot.available) {
-          if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return;
-        } else if (Object.keys(slot.patch).length > 0) {
-          rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch }, base: sheet });
-        }
-      }
+      if (firstTarget && !opts?.paid && !get().payCast(sheetId, spell, cast.castAtLevel)) return;
+
+      // Upcast: extra dice per slot level above the spell's own, read from the spell DB's
+      // "Nâng ô: +1d6" guidance. Pact Magic always casts at the Pact slot level.
+      const effLevel =
+        spell.level > 0 && casterTypeOf(sheet) === 'pact' && sheet.pactSlots
+          ? Math.max(spell.level, sheet.pactSlots.level)
+          : (cast.castAtLevel ?? spell.level);
+      const perLevel = spell.level > 0 ? parseUpcast(findCantrip(spell.name)?.guidance) : undefined;
+      const upPart = upcastDamagePart(perLevel, spell.level, effLevel, spell.damage?.[0]?.type);
+      const spellDamage = spell.damage && upPart ? [...spell.damage, upPart] : spell.damage;
+      const healExtra = perLevel && effLevel > spell.level ? scaleDice(perLevel, effLevel - spell.level) : '';
       const atkBonus = spellAttackBonus(sheet, spell) ?? 0;
       const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
       const castAbil = spellcastingAbilityOf(sheet, spell);
@@ -673,14 +699,14 @@ export const useStore = create<StoreState>((set, get) => {
 
       if (spell.castKind === 'heal' && spell.heal) {
         const mod = castMod >= 0 ? `+${castMod}` : `${castMod}`;
-        await get().healRoll(`${label} (hồi máu)`, `${spell.heal}${castMod ? mod : ''}`, targetTokenId, sheetId);
+        await get().healRoll(`${label} (hồi máu)`, `${spell.heal}${healExtra ? `+${healExtra}` : ''}${castMod ? mod : ''}`, targetTokenId, sheetId);
         return;
       }
       if (spell.castKind === 'damage') {
         // Auto-hit damage spell (Magic Missile): no attack roll.
         await get().damageRoll(
           `${label} (phép)`,
-          spellAttackParts(sheet, spell.damage, spell),
+          spellAttackParts(sheet, spellDamage, spell),
           targetTokenId,
           { sheetId, tokenId: sheet.tokenId },
         );
@@ -710,10 +736,10 @@ export const useStore = create<StoreState>((set, get) => {
           label,
           sourceSheetId: sheetId,
           damageOnFail:
-            spell.damage && spell.damage.length
+            spellDamage && spellDamage.length
               ? spell.agonizingBlast && castMod
-                ? [...spell.damage, { dice: String(castMod), type: spell.damage[0].type, label: 'Agonizing Blast' }]
-                : spell.damage
+                ? [...spellDamage, { dice: String(castMod), type: spellDamage[0].type, label: 'Agonizing Blast' }]
+                : spellDamage
               : undefined,
           damageHalfOnSave: spell.save.halfOnSave,
           aoeId: opts?.aoeId,
@@ -741,13 +767,20 @@ export const useStore = create<StoreState>((set, get) => {
         // Eldritch Blast (2024): more levels = more separate beams (each its own attack roll),
         // not bigger dice — `spell.beams` is set by spellFromCantrip/rescaleCantripSpell.
         // Casting is still one Action; the beams themselves don't spend extra economy.
-        const beams = spell.beams && spell.beams > 1 ? spell.beams : 1;
+        // Leveled multi-ray spells (Scorching Ray: "3 tia, mỗi tia … 2d6"): one attack roll per ray,
+        // each dealing the per-ray dice, +1 ray per slot level above when the DB says "Nâng ô: +1 tia".
+        const guide = spell.level > 0 ? (findCantrip(spell.name)?.guidance ?? '') : '';
+        const ray = /(\d+)\s*tia,\s*mỗi tia[^.]*?(\d+d\d+)/i.exec(guide);
+        const rayDamage = ray && spell.damage?.length ? [{ ...spell.damage[0], dice: ray[2] }] : undefined;
+        const beams = ray
+          ? Number(ray[1]) + (/Nâng ô:\s*\+1 tia(?!\s*\()/i.test(guide) ? Math.max(0, effLevel - spell.level) : 0)
+          : spell.beams && spell.beams > 1 ? spell.beams : 1;
         for (let i = 0; i < beams; i++) {
           await get().attackRoll({
             label: beams > 1 ? `${label} (phép, tia ${i + 1}/${beams})` : `${label} (phép)`,
             attackBonus: atkBonus,
             rollMode: 'normal',
-            damageParts: spellAttackParts(sheet, spell.damage, spell),
+            damageParts: spellAttackParts(sheet, rayDamage ?? spellDamage, spell),
             targetTokenId,
             attackerSheetId: sheetId,
             attackerTokenId: sheet.tokenId,

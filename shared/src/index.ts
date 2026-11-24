@@ -23,3 +23,4 @@ export * from './equipment.js';
 export * from './invocations.draft.js';
 export * from './feats.draft.js';
 export * from './godsBane.js';
+export * from './monsterActions.js';

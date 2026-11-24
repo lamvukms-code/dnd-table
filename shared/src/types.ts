@@ -772,6 +772,9 @@ export interface Token {
   /** Legendary actions left to spend this round — resets to `statblock.legendaryActionsPerRound`
    *  at the start of this token's own turn. Undefined for non-legendary tokens. */
   legendaryActionsRemaining?: number;
+  /** Stat-block actions with limited use (Recharge X–6, N/Day): times used since they last came back,
+   *  keyed by action id. Recharge actions are rolled for at the start of the monster's turn. */
+  actionUses?: Record<string, number>;
   /** DM override: show this NPC/monster token's AC / HP / statblock to players. Default (unset) =
    *  hidden — the server strips them from what players receive (see `tokenForPlayers`). */
   revealStats?: boolean;

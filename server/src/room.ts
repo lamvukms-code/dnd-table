@@ -81,6 +81,8 @@ import {
   type RoomState,
   type Statblock,
   type Token,
+  actionLimit,
+  rechargeSucceeds,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -90,7 +92,7 @@ function withOptionIds<T extends { id: string }>(list: T[], prefix: string): T[]
 
 /** Token fields a non-DM may change with `updateToken` (on a token they control). */
 const PLAYER_TOKEN_FIELDS = new Set([
-  'x', 'y', 'label', 'color', 'imageUrl', 'size', 'cover', 'currentHp', 'maxHp', 'tempHp', 'armorClass',
+  'x', 'y', 'label', 'color', 'imageUrl', 'size', 'cover', 'currentHp', 'maxHp', 'tempHp', 'armorClass', 'actionUses',
 ]);
 
 export class Room {
@@ -504,6 +506,30 @@ export class Room {
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
   /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
+  /** Start of a monster's turn: d6 for every spent "Recharge X–6" action; X or more brings it back.
+   *  The rolls are DM-only (they'd tell players when the breath weapon is coming). */
+  private rollRecharges(token: Token): void {
+    const uses = token.actionUses;
+    const sb = token.statblock;
+    if (!uses || !sb) return;
+    for (const a of sb.actions) {
+      const lim = actionLimit(a);
+      if (!lim || lim.kind !== 'recharge' || !((uses[a.id] ?? 0) > 0)) continue;
+      const d6 = rollNotation('1d6').total;
+      const ok = rechargeSucceeds(lim, d6);
+      if (ok) delete uses[a.id];
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: 'system',
+        actorName: 'Hệ thống',
+        label: `${token.label}: ${a.name} — tung Recharge ${d6} → ${ok ? 'đã hồi, dùng lại được' : 'chưa hồi'}`,
+        result: externalRollResult('1d6', { total: d6, faces: [d6] }),
+        private: true,
+      });
+    }
+  }
+
   /** Imported stat blocks keep "resistant to non-magical / non-silvered weapons" as a trait the server can't
    *  apply (it doesn't know what the weapon is made of). When physical damage hits such a creature, say so
    *  in the log so the DM can halve / zero it by hand. */
@@ -2042,6 +2068,7 @@ export class Room {
             starting.legendaryActionsRemaining = starting.statblock.legendaryActionsPerRound;
           }
           this.processTurnEffects(starting, 'start-of-turn');
+          this.rollRecharges(starting);
         }
         this.syncTurnAnchors();
         this.checkDmPrompts({ endingId, prevActiveInit });

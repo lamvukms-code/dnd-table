@@ -48,3 +48,16 @@ describe('aoeTokenIds', () => {
     expect(ids).toEqual(['near']);
   });
 });
+
+describe('caster inside its own area', () => {
+  it('a point-placed sphere catches the caster standing in it; a self cone never does', () => {
+    const toks = [
+      { id: 'me', x: 5, y: 5, span: 1 },
+      { id: 'foe', x: 6, y: 5, span: 1 },
+    ];
+    const sphere = { shape: 'sphere' as const, size: 20 };
+    expect(aoeTokenIds(sphere, 'point', { x: 6, y: 6 }, { x: 6, y: 6 }, toks, 'me').sort()).toEqual(['foe', 'me']);
+    const cone = { shape: 'cone' as const, size: 15 };
+    expect(aoeTokenIds(cone, 'self', { x: 5.5, y: 5.5 }, { x: 9, y: 5.5 }, toks, 'me')).toEqual(['foe']);
+  });
+});

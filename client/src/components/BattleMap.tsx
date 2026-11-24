@@ -42,6 +42,10 @@ import {
   type MapZone,
   type Token,
   type TokenSize,
+  actionLimit,
+  actionAvailable,
+  failCondition,
+  parseMultiattack,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { uploadImage } from '../upload.js';
@@ -156,8 +160,22 @@ function BattleMapImpl() {
     const cSpan = caster ? SIZE_CELLS[caster.size] : 1;
     const cCentre = caster ? { x: caster.x + cSpan / 2, y: caster.y + cSpan / 2 } : null;
     const aim = aoeAim ?? cCentre ?? { x: 0, y: 0 };
-    const origin =
+    let origin =
       aoe.anchor === 'self' && cCentre ? cCentre : { x: Math.round(aim.x), y: Math.round(aim.y) };
+    // A point-placed template can't be dropped beyond the spell's range (grid distance from the
+    // caster's edge): pull the point back along the aim line to the furthest legal grid point.
+    let clamped = false;
+    if (aoe.anchor === 'point' && cCentre && (aoe.rangeFeet ?? 0) > 0) {
+      const maxCells = (aoe.rangeFeet ?? 0) / FEET_PER_CELL + cSpan / 2;
+      const dx = origin.x - cCentre.x;
+      const dy = origin.y - cCentre.y;
+      const d = Math.max(Math.abs(dx), Math.abs(dy));
+      if (d > maxCells) {
+        const k = maxCells / d;
+        origin = { x: Math.round(cCentre.x + dx * k - 0.001 * Math.sign(dx)), y: Math.round(cCentre.y + dy * k - 0.001 * Math.sign(dy)) };
+        clamped = true;
+      }
+    }
     const geo = aoeGeometry(aoe.spec, aoe.anchor, origin, aim, cSpan);
     const hitIds = aoeTokenIds(
       aoe.spec,
@@ -169,7 +187,7 @@ function BattleMapImpl() {
         .map((t) => ({ id: t.id, x: t.x, y: t.y, span: SIZE_CELLS[t.size] })),
       aoe.casterTokenId,
     );
-    return { geo, hitIds, cCentre };
+    return { geo, hitIds, cCentre, clamped };
   })();
 
   const [selected, setSelected] = useState<string | null>(null);
@@ -643,7 +661,9 @@ function BattleMapImpl() {
       {aoe && aoeView && (
         <div className="cover-warning cast-banner" onClick={cancelCast} title="Bấm để hủy">
           🔺 <strong>{aoe.label}</strong> · {aoe.spec.shape} {aoe.spec.size}ft —{' '}
-          <strong>{aoeView.hitIds.length}</strong> mục tiêu trong vùng — bấm bản đồ để xác nhận
+          <strong>{aoeView.hitIds.length}</strong> mục tiêu trong vùng
+          {aoe.casterTokenId && aoeView.hitIds.includes(aoe.casterTokenId) ? ' (gồm cả người dùng phép!)' : ''}
+          {aoeView.clamped ? ` · đã kéo về giới hạn tầm ${aoe.rangeFeet}ft` : ''} — bấm bản đồ để xác nhận
           (Esc / bấm đây để hủy)
         </div>
       )}
@@ -1475,6 +1495,55 @@ function TokenInspector({
 
   const beginAoe = useStore((s) => s.beginAoe);
 
+  /** Limited-use action (Recharge / N per Day): count the use; ask before re-using a spent one. */
+  function useLimited(a: NonNullable<Token['statblock']>['actions'][number]): boolean {
+    const lim = actionLimit(a);
+    if (!lim) return true;
+    const used = token.actionUses?.[a.id] ?? 0;
+    if (!actionAvailable(lim, used)) {
+      const why = lim.kind === 'recharge' ? `chưa recharge (cần ${lim.min}–6)` : `đã dùng hết ${lim.max}/ngày`;
+      if (!window.confirm(`${a.name}: ${why}. Vẫn dùng?`)) return false;
+    }
+    send({ t: 'updateToken', id: token.id, patch: { actionUses: { ...(token.actionUses ?? {}), [a.id]: used + 1 } } });
+    return true;
+  }
+  /** The effect a failed save leaves (condition + repeat save), read from the action text. */
+  function saveEffect(a: NonNullable<Token['statblock']>['actions'][number]) {
+    const condition = failCondition(a.description);
+    if (!condition || !a.save) return undefined;
+    const repeat = /end of each of its turns|end of each of the target's turns|repeat(?:s)? the save at the end/i.test(a.description ?? '')
+      ? ('end-of-turn' as const)
+      : /start of each of its turns/i.test(a.description ?? '')
+        ? ('start-of-turn' as const)
+        : undefined;
+    return {
+      id: '',
+      name: a.name.replace(/\s*\(.*?\)\s*/g, ' ').trim(),
+      sourceTokenId: token.id,
+      condition,
+      note: 'Từ action của quái; thời hạn xem mô tả',
+      save: repeat ? { ability: a.save.ability, dc: a.save.dc, repeat } : undefined,
+    };
+  }
+  async function runMultiattack(steps: ReturnType<typeof parseMultiattack>, targetId: string, targetName: string) {
+    for (const st of steps) {
+      const act = sb!.actions.find((x) => x.id === st.actionId);
+      if (!act || typeof act.attackBonus !== 'number') continue;
+      const parts = statblockDamageParts(act, sb!);
+      for (let i = 0; i < st.count; i++) {
+        await attackRoll({
+          label: `${sb!.name} · ${act.name}${st.count > 1 ? ` (${i + 1}/${st.count})` : ''} → ${targetName} (Multiattack)`,
+          attackBonus: act.attackBonus,
+          rollMode: sbRollMode,
+          damageParts: parts,
+          targetTokenId: targetId,
+          attackerTokenId: token.id,
+          attackRange: attackRangeOf(act),
+        });
+      }
+    }
+  }
+
   function startActionAoe(
     a: NonNullable<Token['statblock']>['actions'][number],
     base: string,
@@ -1487,6 +1556,8 @@ function TokenInspector({
     const rangeFeet = Number(/within (\d+) feet/i.exec(desc)?.[1] ?? 0);
     const half = /half (?:as much )?damage/i.test(desc);
     const save = a.save;
+    if (!useLimited(a)) return;
+    const effectOnFail = saveEffect(a);
     beginAoe({
       label: base,
       spec,
@@ -1508,6 +1579,7 @@ function TokenInspector({
             damageHalfOnSave: half,
             aoeId,
             sourceTokenId: token.id,
+            effectOnFail,
           }),
         ),
     });
@@ -1889,6 +1961,10 @@ function TokenInspector({
             const isAttack = typeof a.attackBonus === 'number' && parts.length > 0;
             const base = `${sb.name} · ${a.name}`;
             const combined = parts.map((p) => p.dice).join(' + ');
+            const lim = actionLimit(a);
+            const used = token.actionUses?.[a.id] ?? 0;
+            const spent = !actionAvailable(lim, used);
+            const multi = /^multiattack/i.test(a.name) ? parseMultiattack(a.description, sb.actions) : [];
             const dmgLabel = parts
               .map((p) => `${p.dice}${p.type ? ' ' + p.type : ''}`)
               .join(' + ');
@@ -1896,14 +1972,44 @@ function TokenInspector({
               <div key={a.id} className="sb-act">
                 <span className="sb-act-name" title={a.description}>
                   {a.name}
+                  {lim && (
+                    <span className={`sb-limit ${spent ? 'spent' : ''}`}>
+                      {lim.kind === 'recharge'
+                        ? spent ? ' · đã dùng (tự tung recharge đầu lượt)' : ' · sẵn sàng'
+                        : ` · còn ${Math.max(0, lim.max - used)}/${lim.max}`}
+                    </span>
+                  )}
+                  {lim && used > 0 && (
+                    <button
+                      className="link"
+                      title="Đặt lại: dùng được ngay"
+                      onClick={() => {
+                        const next = { ...(token.actionUses ?? {}) };
+                        delete next[a.id];
+                        send({ t: 'updateToken', id: token.id, patch: { actionUses: next } });
+                      }}
+                    >
+                      ↺
+                    </button>
+                  )}
                 </span>
                 <span className="sb-act-detail">
                   {isAttack ? `${fmtMod(a.attackBonus!)} · ${dmgLabel}` : a.notation || a.description || ''}
                 </span>
+                {multi.length > 0 && sbTargetId && (
+                  <button
+                    className="roll-btn strong"
+                    title={`Tung lần lượt: ${multi.map((m) => `${m.count}× ${m.name}`).join(', ')}`}
+                    onClick={() => void runMultiattack(multi, sbTargetId, sbTargetName)}
+                  >
+                    ⚔ {multi.map((m) => `${m.count}×${m.name}`).join(' + ')}
+                  </button>
+                )}
                 {isAttack && sbTargetId && (
                   <button
                     className="roll-btn strong"
                     onClick={() =>
+                      useLimited(a) &&
                       attackRoll({
                         label: `${base} → ${sbTargetName}${mtag}`,
                         attackBonus: a.attackBonus!,
@@ -1946,6 +2052,8 @@ function TokenInspector({
                     }
                     onClick={() =>
                       sbTargetId &&
+                      // a rider save after an attack already counted the use on the ⚔ click
+                      (isAttack || useLimited(a)) &&
                       send({
                         t: 'spellSave',
                         targetTokenId: sbTargetId,
@@ -1955,6 +2063,7 @@ function TokenInspector({
                         damageOnFail: saveFailParts(a, parts),
                         damageHalfOnSave: /half (?:as much )?damage/i.test(a.description ?? ''),
                         sourceTokenId: token.id,
+                        effectOnFail: saveEffect(a),
                       })
                     }
                   >
@@ -1965,11 +2074,12 @@ function TokenInspector({
                   <button
                     className="roll-btn"
                     onClick={() =>
-                      sbTargetId
+                      useLimited(a) &&
+                      (sbTargetId
                         ? damageRoll(`${base} → ${sbTargetName}`, parts, sbTargetId, {
                             tokenId: token.id,
                           })
-                        : rollDice(`${base} (dmg)`, combined)
+                        : rollDice(`${base} (dmg)`, combined))
                     }
                   >
                     dmg

@@ -1205,6 +1205,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .rl-dmg-type { color: var(--accent-2); }
 .rl-dmg-note { color: #e0b060; }
 
+.sb-limit { font-size: 11px; color: #8fcf9c; font-weight: 400; }
+.sb-limit.spent { color: #e5a65a; }
+
 /* map top controls */
 .map-top-controls {
   position: absolute;
