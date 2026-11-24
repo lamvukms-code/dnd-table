@@ -105,6 +105,7 @@ import { JaegerFeatures } from './sheet/JaegerFeatures.js';
 import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
 import { mapViewCenterCell } from '../mapView.js';
 import { useWideLayout } from '../useMediaQuery.js';
+import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
 import { coverDexSaveBonus, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
@@ -221,6 +222,7 @@ function SheetDockImpl() {
   const sheet = sheets.find((s) => s.id === openId) ?? mine[0] ?? null;
   const pdfRef = useRef<HTMLInputElement>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
+  const hasBuilder = useCharacterBuilder();
 
   /** Read a filled-in character-sheet PDF in the browser and create the sheet from it. */
   async function importPdf(file: File) {
@@ -335,6 +337,15 @@ function SheetDockImpl() {
           >
             📄 PDF
           </button>
+          {hasBuilder && (
+            <button
+              className="add"
+              title="Mở trang tạo nhân vật (tab mới): chọn chủng tộc, background, tung chỉ số rồi xuất PDF, sau đó bấm 📄 PDF để nhập vào đây"
+              onClick={openCharacterBuilder}
+            >
+              🧙 Tạo nhân vật
+            </button>
+          )}
           <input
             ref={pdfRef}
             type="file"
@@ -380,7 +391,14 @@ function SheetDockImpl() {
 
       <div className="sd-body">
         {!sheet ? (
-          <p className="empty">Chưa có nhân vật. Bấm “+”.</p>
+          <div className="empty">
+            <p>Chưa có nhân vật. Bấm “+” để tạo sheet trống, hoặc “📄 PDF” để nhập từ phiếu.</p>
+            {hasBuilder && (
+              <button className="primary" onClick={openCharacterBuilder}>
+                🧙 Mở trang tạo nhân vật
+              </button>
+            )}
+          </div>
         ) : (
           <SheetEditor key={sheet.id} sheet={sheet} sub={sub} />
         )}

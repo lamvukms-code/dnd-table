@@ -29,3 +29,6 @@ client/src/data/*.local.json
 
 # dnd-verifier reports (local only)
 .reviews/
+
+# local campaign pages (e.g. a character builder with setting content) — never commit
+client/public/campaign/

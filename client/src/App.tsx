@@ -17,6 +17,7 @@ import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
 import { TopMenu } from './components/TopMenu.js';
+import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
 
 export function App() {
@@ -47,6 +48,7 @@ export function App() {
   const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
+  const hasBuilder = useCharacterBuilder();
   const [sfxVolume, setSfxVolumeState] = useState(getSfxVolume);
 
   // Auto sound effects: play a swing/impact sound for each NEW attack/damage roll-log entry that
@@ -150,6 +152,9 @@ export function App() {
               title: 'Mở/đóng cột tra cứu bên phải',
               onClick: () => setRefOpen((v) => !v),
             },
+            ...(hasBuilder
+              ? [{ label: '🧙 Tạo nhân vật (trang riêng)', title: 'Mở trang tạo nhân vật ở tab mới', onClick: openCharacterBuilder }]
+              : []),
             { label: '🧪 Luật nhà / Homebrew', title: 'Vật phẩm / luật nhà tự chế', onClick: () => setHomebrewOpen(true) },
             ...(HEIRLOOMS.length > 0
               ? [{ label: '🏺 Bảo vật', title: 'Bảo vật mở khóa theo cấp', onClick: () => setHeirloomOpen(true) }]
