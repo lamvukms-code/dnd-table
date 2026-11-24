@@ -17,6 +17,7 @@ import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
 import { TopMenu } from './components/TopMenu.js';
+import { GodsBanePanel } from './components/GodsBanePanel.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -42,6 +43,8 @@ export function App() {
   const [homebrewOpen, setHomebrewOpen] = useState(false);
   const [heirloomOpen, setHeirloomOpen] = useState(false);
   const [eqSrdOpen, setEqSrdOpen] = useState(false);
+  const [godsBaneOpen, setGodsBaneOpen] = useState(false);
+  const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
   const [sfxVolume, setSfxVolumeState] = useState(getSfxVolume);
@@ -119,6 +122,7 @@ export function App() {
             items={[
               { label: '🗺 Bản đồ & cảnh', title: 'Thư viện bản đồ theo chương', onClick: () => setMapsOpen(true) },
               { label: '👹 Quái (Bestiary)', onClick: () => setBestiaryOpen(true) },
+              { label: "🗡 God's Bane", title: "Bảo vật nhóm (homebrew): bật/tắt, N, Cleaving Causality, người tuyên thệ", onClick: () => setGodsBaneOpen(true) },
               ...(NPC_CATALOG.length > 0
                 ? [{ label: '🧑 NPC', title: 'NPC của campaign', onClick: () => setNpcOpen(true) }]
                 : []),
@@ -149,6 +153,9 @@ export function App() {
             { label: '🧪 Luật nhà / Homebrew', title: 'Vật phẩm / luật nhà tự chế', onClick: () => setHomebrewOpen(true) },
             ...(HEIRLOOMS.length > 0
               ? [{ label: '🏺 Bảo vật', title: 'Bảo vật mở khóa theo cấp', onClick: () => setHeirloomOpen(true) }]
+              : []),
+            ...(godsBaneOn && !isDm
+              ? [{ label: "🗡 God's Bane", title: 'Lời thề, trao kiếm, Cleaving Causality', onClick: () => setGodsBaneOpen(true) }]
               : []),
             {
               label: '🎒 Trang bị SRD',
@@ -220,6 +227,7 @@ export function App() {
       {homebrewOpen && <HomebrewPanel onClose={() => setHomebrewOpen(false)} />}
       {heirloomOpen && <HeirloomPanel onClose={() => setHeirloomOpen(false)} />}
       {eqSrdOpen && <EquipmentSrdPanel onClose={() => setEqSrdOpen(false)} />}
+      {godsBaneOpen && <GodsBanePanel onClose={() => setGodsBaneOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

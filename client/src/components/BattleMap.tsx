@@ -49,6 +49,7 @@ import { statblockFromToken } from '../statblock.js';
 import { nanoIdish } from '../util.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
 import { DamageTypeSelect, DefensesEditor } from './DefensesEditor.js';
+import { GodsBaneTokenBox } from './GodsBanePanel.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
 import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
@@ -964,6 +965,15 @@ function BattleMapImpl() {
                       {t.effects?.length ? `✦${t.effects.length}` : ''}
                     </span>
                   )}
+                  {(t.baneLayers || t.baneMortal) && (
+                    <span
+                      className="tk-bane"
+                      title={`God's Bane: ${t.baneLayers ?? 0} tầng thần tính bị bóc${t.baneMortal ? ' · bất tử bị phá' : ''}`}
+                    >
+                      🗡{t.baneLayers ?? 0}
+                      {t.baneMortal ? '☠' : ''}
+                    </span>
+                  )}
                   {typeof t.currentHp === 'number' && typeof t.maxHp === 'number' && (
                     <div className="tk-hpbar">
                       <div
@@ -1750,6 +1760,8 @@ function TokenInspector({
           />
         </details>
       )}
+
+      {isDm && <GodsBaneTokenBox token={token} />}
 
       <EffectsPanel token={token} />
 

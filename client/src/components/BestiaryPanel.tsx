@@ -15,6 +15,7 @@ import { nanoIdish } from '../util.js';
 import { blankStatblock, mergeBestiary, normalizeStatblock } from '../statblock.js';
 import { FormulaHint } from './FormulaHint.js';
 import { DamageTypeSelect, DefensesEditor, ExtraDamageEditor } from './DefensesEditor.js';
+import { BaneTagSelect } from './GodsBanePanel.js';
 
 const SIZES: TokenSize[] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 
@@ -485,6 +486,10 @@ export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: (
         <summary>Phòng thủ (kháng / miễn / DR / crit immune)</summary>
         <DefensesEditor defenses={sb.defenses} onChange={(d) => set('defenses', d)} />
       </details>
+
+      <div className="sb-row">
+        <BaneTagSelect value={sb.baneTag} onChange={(t) => set('baneTag', t)} />
+      </div>
 
       <div className="sb-row">
         <label className="grow">

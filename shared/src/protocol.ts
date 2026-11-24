@@ -15,6 +15,7 @@ import type {
   Statblock,
   Token,
 } from './types.js';
+import type { GodsBaneOp } from './godsBane.js';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -182,7 +183,9 @@ export type ClientAction =
   | { t: 'placeSheetToken'; sheetId: string; x: number; y: number }
   // map zones (DM only) — a drawn region on the active scene's map + its read-aloud/DM text
   | { t: 'zoneUpsert'; zone: MapZone }
-  | { t: 'zoneRemove'; id: string };
+  | { t: 'zoneRemove'; id: string }
+  /** Homebrew God's Bane party artifact — DM config / membership, blade passing, Cleaving Causality. */
+  | { t: 'godsBane'; op: GodsBaneOp };
 
 /** Events sent server -> client. */
 export type ServerEvent =

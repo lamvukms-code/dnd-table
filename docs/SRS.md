@@ -211,6 +211,30 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   roll buttons append it to the notation and `removeEffect` clears it. Removing a
   concentration effect also ends the caster's concentration, so a used Guidance
   ends the spell — 5e-correct.
+- **God's Bane party artifact** (homebrew, per room, OFF by default — `RoomState.godsBane`,
+  rules in `shared/src/godsBane.ts`). DM panel "🛠 Công cụ DM → 🗡 God's Bane": enable, party number
+  **N**, shared **Cleaving Causality** pool, sworn members (by sheet), rejection / atonement, blade
+  holder. Target tags `greatOne` / `minion` / `fallen` live on bestiary entries (copied onto spawned
+  tokens) and tokens (inspector); sheet-linked tokens are never targets. The weapon is an inventory
+  weapon with the `godsBane` weapon trait (DM-only checkbox; not a defence-bypass material).
+  Server hooks, all no-ops while disabled:
+  - sworn, non-rejected attacker vs a tagged token → +N force straight to HP (no defences), once per
+    turn per PC (`round:turnIndex`; not limited outside initiative); vs `greatOne` also on a miss.
+    Applies on `attack` and on a manual `damage` roll (treated as a hit).
+  - God's Bane weapon attack on a `greatOne`: `baneLayers` +1 (hit or miss), a hit sets `baneMortal`
+    (cleared by the DM — there is no NPC long rest in the app).
+  - damage from a tagged token to a sworn, non-rejected PC −N per instance (attack, damage, save
+    damage, retaliation), min 0; +N on server-rolled saves whose effect carries `charmed` /
+    `frightened` (spell saves and repeat saves).
+  - rejected (or oathbroken) wielder: −N on the attack total with the God's Bane weapon, no benefits,
+    can't receive the blade. 4th rejection → `oathbroken` (DM override only).
+  - Cleaving Causality is spent in advance ("arm"): `crit` = the PC's own next d20 (attack, a `roll`
+    with a d20 by the owner, or a server-rolled save for their token) becomes a natural 20; `fumble` =
+    the next enemy d20 (attack by a non-PC token, or a server-rolled save of a non-PC token) becomes a
+    natural 1. The pool is decremented when the roll is changed; dddice pre-rolled damage is
+    discarded and re-rolled by the server when the d20 was changed.
+  - blade pass: holder's owner or DM, to a sworn non-rejected member, once per round while initiative
+    runs (no distance check).
 
 ---
 

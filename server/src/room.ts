@@ -52,6 +52,21 @@ import {
   targetRiderParts,
   tokenConditions,
   tokenStatblockFrom,
+  applyGodsBaneOp,
+  baneAttackPenalty,
+  baneMindSaveBonus,
+  baneReducedDamage,
+  baneStrike,
+  baneTurnKey,
+  consumeCausality,
+  forceD20,
+  isGodsBaneAttack,
+  markPeoplesWillUsed,
+  normalizeGodsBane,
+  peoplesWillDamage,
+  type BaneTag,
+  type ConditionType,
+  type GodsBaneState,
   type Ability,
   type ActiveEffect,
   type AttackRange,
@@ -100,6 +115,7 @@ export class Room {
           migrated.participants.forEach((p) => (p.connected = false));
           migrated.sheets = migrated.sheets.map(normalizeSheet);
           migrated.homebrew ??= []; // added after schema 6 — no version bump needed, just default it in
+          migrated.godsBane = normalizeGodsBane(migrated.godsBane); // optional homebrew block, absent = off
           for (const scene of migrated.scenes ?? []) {
             scene.zones ??= []; // added after schema 6 — default before aliasing, so `state.zones` isn't left undefined
             scene.tokens.forEach((t) => {
@@ -294,6 +310,7 @@ export class Room {
       return;
     }
     const out = resolveDamageParts([{ part: { dice: eff.retaliate.dice, type: eff.retaliate.type }, raw: rolled }], this.effectiveDefenses(attacker));
+    out.totalFinal = this.baneReduce(attacker, target.id, out.totalFinal);
     const dealt = this.applyDamage(attacker, out.totalFinal);
     this.pushRoll({
       id: nanoid(8),
@@ -311,6 +328,106 @@ export class Room {
         notes: damageBreakdownNotes(out),
       },
     });
+  }
+
+  // ---- God's Bane (homebrew party artifact, see shared/src/godsBane.ts). Every hook below returns early
+  // unless the DM switched it on for this room, so other tables are unaffected. ----
+
+  /** The God's Bane state while the feature is on, else undefined. */
+  private godsBane(): GodsBaneState | undefined {
+    return this.state.godsBane?.enabled ? this.state.godsBane : undefined;
+  }
+
+  /** A creature token's God's Bane tag — player-character (sheet-linked) tokens are never targets. */
+  private baneTagOf(token: Token | undefined): BaneTag | undefined {
+    if (!token || this.linkedSheet(token)) return undefined;
+    return token.baneTag ?? undefined;
+  }
+
+  private systemLog(label: string, actor?: { id: string; name: string }): void {
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor?.id ?? 'system',
+      actorName: actor?.name ?? 'Hệ thống',
+      label,
+      result: externalRollResult('', { total: 0, faces: [] }),
+    });
+  }
+
+  /** Protection: damage from a tagged creature to a sworn, non-rejected PC is cut by N (per instance). */
+  private baneReduce(target: Token, sourceTokenId: string | undefined, amount: number): number {
+    const gb = this.godsBane();
+    if (!gb || !sourceTokenId) return amount;
+    const src = this.tokenAnywhere(sourceTokenId);
+    const sheet = this.linkedSheet(target);
+    const r = baneReducedDamage(gb, { targetSheetId: sheet?.id, sourceTag: this.baneTagOf(src) }, amount);
+    if (r.reduced > 0) this.systemLog(`🛡 Lời thề nhân dân: ${target.label} chịu ít hơn ${r.reduced} sát thương (${amount} → ${r.final})`);
+    return r.final;
+  }
+
+  /** Cleaving Causality armed for this d20: the sworn PC's own roll → natural 20, or (for an enemy roll)
+   *  the first armed "enemy → natural 1". Consumes one pool point; returns a log note. */
+  private causalityD20(side: { sheetId?: string; enemy: boolean }): { natural: 1 | 20; note: string } | undefined {
+    const gb = this.godsBane();
+    if (!gb?.armed?.length) return undefined;
+    const pick = side.sheetId
+      ? gb.armed.find((a) => a.sheetId === side.sheetId && a.mode === 'crit')
+      : side.enemy
+        ? gb.armed.find((a) => a.mode === 'fumble')
+        : undefined;
+    if (!pick) return undefined;
+    this.state.godsBane = consumeCausality(gb, pick.sheetId, pick.mode);
+    const who = this.state.sheets.find((x) => x.id === pick.sheetId)?.name ?? '?';
+    const natural = pick.mode === 'crit' ? 20 : 1;
+    return {
+      natural,
+      note: ` · ⚡ Cleaving Causality (${who}) → d20 tự nhiên ${natural} (quỹ còn ${this.state.godsBane.causality})`,
+    };
+  }
+
+  /** After an attack resolved: People's Will force damage, and the blade's divinity stripping. */
+  private afterBaneAttack(
+    target: Token,
+    attackerSheetId: string | undefined,
+    withGodsBane: boolean,
+    hit: boolean,
+    actor: { id: string; name: string },
+  ): void {
+    const gb = this.godsBane();
+    if (!gb) return;
+    const tag = this.baneTagOf(target);
+    if (!tag) return;
+    const sheetName = this.state.sheets.find((x) => x.id === attackerSheetId)?.name ?? actor.name;
+    const turnKey = baneTurnKey(this.state.initiative);
+    const will = peoplesWillDamage(gb, { attackerSheetId, targetTag: tag, hit, turnKey });
+    if (will && attackerSheetId) {
+      this.state.godsBane = markPeoplesWillUsed(gb, attackerSheetId, turnKey);
+      // Straight to HP: no resistance / immunity / damage reduction applies.
+      const took = this.applyDamage(target, will);
+      if (took.applied + took.absorbed > 0) this.maybeBreakConcentration(target, will);
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: actor.id,
+        actorName: actor.name,
+        label: `✊ Ý chí nhân dân (${sheetName}) → ${target.label}: +${will} Lực${hit ? '' : ' (dù trượt)'} — bỏ qua kháng/miễn`,
+        result: externalRollResult(String(will), { total: will, faces: [] }),
+        damage: { targetTokenId: target.id, targetName: target.label, amount: took.applied, raw: will, damageType: 'force' },
+      });
+    }
+    if (withGodsBane) {
+      const patch = baneStrike(gb, target, hit);
+      if (patch) {
+        const wasMortal = !!target.baneMortal;
+        target.baneLayers = patch.baneLayers;
+        target.baneMortal = patch.baneMortal;
+        this.systemLog(
+          `🗡 God's Bane bóc thần tính ${target.label}: tầng ${patch.baneLayers}${patch.baneMortal && !wasMortal ? ' · BẤT TỬ BỊ PHÁ (có thể chết vĩnh viễn)' : ''}`,
+          actor,
+        );
+      }
+    }
   }
 
   private facesOf(result: ReturnType<typeof rollNotation>): number[] {
@@ -495,10 +612,20 @@ export class Room {
     ability: Ability,
     dc: number,
     withCover = false,
+    vsCondition?: ConditionType,
   ): { d20: number; total: number; pass: boolean; bonus: number } {
+    const sheet = this.linkedSheet(token);
     const bonus =
-      this.tokenSaveBonus(token, ability) + (withCover && ability === 'dex' ? coverDexSaveBonus(token.cover) : 0);
-    const d20 = 1 + Math.floor(Math.random() * 20);
+      this.tokenSaveBonus(token, ability) +
+      (withCover && ability === 'dex' ? coverDexSaveBonus(token.cover) : 0) +
+      // God's Bane: sworn PCs add N against mind-altering conditions.
+      baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition);
+    let d20 = 1 + Math.floor(Math.random() * 20);
+    const causality = this.causalityD20({ sheetId: sheet?.id, enemy: !sheet });
+    if (causality) {
+      d20 = causality.natural;
+      this.systemLog(`${token.label}: cứu ${ability.toUpperCase()}${causality.note}`);
+    }
     const total = d20 + bonus;
     const pass = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
     return { d20, total, pass, bonus };
@@ -664,7 +791,7 @@ export class Room {
         continue;
       }
       if (e.save && e.save.repeat === phase) {
-        const { d20, total, pass, bonus } = this.rollTokenSave(token, e.save.ability, e.save.dc);
+        const { d20, total, pass, bonus } = this.rollTokenSave(token, e.save.ability, e.save.dc, false, e.condition);
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
@@ -879,6 +1006,7 @@ export class Room {
           return (err as Error).message;
         }
         const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
+        out.totalFinal = this.baneReduce(target, action.attackerTokenId, out.totalFinal);
         // A plain damage roll against a target is a hit the player resolved themselves.
         this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
         const took = this.applyDamage(target, out.totalFinal);
@@ -906,6 +1034,11 @@ export class Room {
             ],
           },
         });
+        {
+          const atkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
+          const sheetId = action.attackerSheetId ?? (atkTok ? this.linkedSheet(atkTok)?.id : undefined);
+          this.afterBaneAttack(target, sheetId, isGodsBaneAttack(action.damageParts), true, actor);
+        }
         this.touch();
         break;
       }
@@ -1082,6 +1215,18 @@ export class Room {
             return (err as Error).message;
           }
         }
+        // God's Bane Cleaving Causality: a sworn player's own next d20 becomes a natural 20.
+        let causalityNote = '';
+        if (result.d20) {
+          const own = this.godsBane()?.armed?.find(
+            (a) => a.mode === 'crit' && this.state.sheets.some((x) => x.id === a.sheetId && x.ownerId === actor.id),
+          );
+          const c = own ? this.causalityD20({ sheetId: own.sheetId, enemy: false }) : undefined;
+          if (c) {
+            result = forceD20(result, c.natural);
+            causalityNote = c.note;
+          }
+        }
         // Homebrew: skill / ability / save checks crit on nat 20 and fail on nat 1.
         const checkNat = result.d20?.isCrit
           ? ('success' as const)
@@ -1093,7 +1238,7 @@ export class Room {
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: action.label || 'Roll',
+          label: (action.label || 'Roll') + causalityNote,
           result,
           checkNat,
           private: action.private && isDm ? true : undefined,
@@ -1119,6 +1264,23 @@ export class Room {
             return (err as Error).message;
           }
         }
+        // God's Bane: −N for a rejected wielder, Cleaving Causality on this d20.
+        const baneAtkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
+        const baneSheetId = action.attackerSheetId ?? (baneAtkTok ? this.linkedSheet(baneAtkTok)?.id : undefined);
+        const withGodsBane = isGodsBaneAttack(action.damageParts);
+        let baneNote = '';
+        const banePenalty = baneAttackPenalty(this.godsBane(), baneSheetId, withGodsBane);
+        if (banePenalty) {
+          attackRoll = { ...attackRoll, total: attackRoll.total - banePenalty };
+          baneNote += ` · kiếm chối bỏ −${banePenalty}`;
+        }
+        const baneCausality = attackRoll.d20 ? this.causalityD20({ sheetId: baneSheetId, enemy: !baneSheetId && !!baneAtkTok }) : undefined;
+        if (baneCausality) {
+          attackRoll = forceD20(attackRoll, baneCausality.natural);
+          baneNote += baneCausality.note;
+        }
+        // The client pre-rolled damage for the outcome it saw; a changed roll means the server re-rolls it.
+        if (baneNote && action.external) action.external = { ...action.external, partTotals: undefined };
         const res = resolveAttack(attackRoll, ac);
         // Adamantine / crit-immune (token's own defences OR its linked sheet's
         // equipped gear): a crit lands as an ordinary hit.
@@ -1172,7 +1334,7 @@ export class Room {
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: `${action.label || 'Attack'}${coverNote}`,
+          label: `${action.label || 'Attack'}${coverNote}${baneNote}`,
           result: attackRoll,
           attack: {
             targetTokenId: target.id,
@@ -1183,6 +1345,7 @@ export class Room {
             fumble: res.fumble,
           },
         });
+        if (outcome) outcome = { ...outcome, totalFinal: this.baneReduce(target, action.attackerTokenId, outcome.totalFinal) };
         if (damageResult && outcome) {
           const hadTemp = this.tempOf(target);
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
@@ -1238,6 +1401,7 @@ export class Room {
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
         }
+        this.afterBaneAttack(target, baneSheetId, withGodsBane, res.hit, actor);
         // Repelling Blast (2024): once on the attacker's own turn, push a hit target straight
         // away along the attacker→target line.
         if (res.hit && action.pushFeetOnHit && action.attackerTokenId) {
@@ -1396,6 +1560,7 @@ export class Room {
             // deep copy so the two tokens track HP / actions independently
             statblock: src.statblock ? JSON.parse(JSON.stringify(src.statblock)) : undefined,
             defenses: src.defenses ? JSON.parse(JSON.stringify(src.defenses)) : undefined,
+            baneTag: src.baneTag,
           }),
         );
         this.touch();
@@ -1690,6 +1855,7 @@ export class Room {
           action.ability,
           action.dc,
           true,
+          action.effectOnFail?.condition,
         );
         const coverSave = action.ability === 'dex' ? coverDexSaveBonus(target.cover) : 0;
         this.pushRoll({
@@ -1729,7 +1895,7 @@ export class Room {
             }
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
-          const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
+          const dealt = this.baneReduce(target, action.sourceTokenId, pass ? Math.floor(out.totalFinal / 2) : out.totalFinal);
           const took = this.applyDamage(target, dealt);
           const applied = took.applied;
           if (applied + took.absorbed > 0) this.markDealtDamage(action.sourceTokenId);
@@ -2051,6 +2217,36 @@ export class Room {
         break;
       }
 
+      case 'godsBane': {
+        const next = applyGodsBaneOp(this.state.godsBane, action.op, {
+          isDm,
+          ownSheetIds: this.state.sheets.filter((x) => x.ownerId === actor.id).map((x) => x.id),
+          initiative: this.state.initiative,
+        });
+        if (typeof next === 'string') return next;
+        const prev = this.state.godsBane;
+        this.state.godsBane = next;
+        const name = (id?: string) => this.state.sheets.find((x) => x.id === id)?.name ?? '?';
+        const op = action.op;
+        if (op.op === 'pass') this.systemLog(`🗡 God's Bane được trao từ ${name(prev?.holderSheetId)} sang ${name(op.toSheetId)}`, actor);
+        else if (op.op === 'reject') {
+          const m = next.members[op.sheetId];
+          this.systemLog(
+            m?.oathbroken
+              ? `🗡 Kiếm chối bỏ ${name(op.sheetId)} lần thứ 4 — PHÁ THỀ vĩnh viễn`
+              : `🗡 Kiếm chối bỏ ${name(op.sheetId)} (lần ${m?.rejections ?? '?'}/3)`,
+            actor,
+          );
+        } else if (op.op === 'atone') this.systemLog(`🗡 ${name(op.sheetId)} đã chuộc lỗi — kiếm chấp nhận lại`, actor);
+        else if (op.op === 'arm')
+          this.systemLog(
+            `⚡ ${name(op.sheetId)} chuẩn bị Cleaving Causality: ${op.mode === 'crit' ? 'd20 kế tiếp của mình → 20 tự nhiên' : 'd20 kế tiếp của kẻ địch → 1 tự nhiên'}`,
+            actor,
+          );
+        this.touch();
+        break;
+      }
+
       case 'spawnStatblock': {
         if (!isDm) return 'Chỉ DM được spawn NPC';
         const sb = this.state.bestiary.find((s) => s.id === action.id);
@@ -2077,6 +2273,7 @@ export class Room {
             hidden: action.hidden ?? false,
             statblock: tokenStatblockFrom(sb),
             defenses: sb.defenses ? { ...sb.defenses } : undefined,
+            baneTag: sb.baneTag,
           }),
         );
         this.touch();

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **God's Bane** homebrew party artifact (off by default, toggled per room by the DM — see SRS §2.5):
+  party number N, sworn members, target tags on bestiary entries / tokens, +N once-per-turn force damage
+  that ignores defences (also on a miss vs a `greatOne`), −N damage per instance from tagged creatures,
+  +N on charm/fear saves, divinity-layer counter and "mortal" flag on the token, rejection (−N with the
+  blade, 4th time = oathbroken), Cleaving Causality pool (arm a natural 20 for your own next d20 or a
+  natural 1 for the next enemy d20), once-per-round blade passing. New `godsBane` op, `GodsBanePanel`.
+
 ## [0.55.0] - 2026-09-22
 
 ### Added

@@ -156,6 +156,7 @@ export function createToken(partial: Partial<Token>): Token {
     controllerId: partial.controllerId,
     statblock: partial.statblock,
     defenses: partial.defenses,
+    baneTag: partial.baneTag,
     cover: partial.cover ?? 'none',
     effects: partial.effects ?? [],
     concentration: partial.concentration ?? null,

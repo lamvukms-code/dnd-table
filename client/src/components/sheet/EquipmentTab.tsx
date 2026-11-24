@@ -68,6 +68,8 @@ function blankItem(type: ItemType): InventoryItem {
 export function EquipmentTab({ draft, commit }: EditorCtx) {
   const beginCast = useStore((s) => s.beginCast);
   const healRoll = useStore((s) => s.healRoll);
+  const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
+  const isDm = useStore((s) => s.isDm());
   const [usedNote, setUsedNote] = useState<Record<string, string>>({});
   const weight = carriedWeight(draft);
   const capacity = carryCapacity(draft);
@@ -321,6 +323,22 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                         {tr === 'magical' ? 'Vũ khí phép' : tr === 'silvered' ? 'Mạ bạc' : WEAPON_TRAIT_VI[tr]}
                       </label>
                     ))}
+                    {(godsBaneOn || it.weaponTraits?.includes('godsBane')) && (
+                      <label className="check" title="Vũ khí God's Bane của nhóm (chỉ 1 thanh, DM đánh dấu) — đòn bằng nó bóc thần tính Great One">
+                        <input
+                          type="checkbox"
+                          checked={it.weaponTraits?.includes('godsBane') ?? false}
+                          disabled={!isDm}
+                          onChange={(e) => {
+                            const next = new Set(it.weaponTraits ?? []);
+                            if (e.target.checked) next.add('godsBane');
+                            else next.delete('godsBane');
+                            setItem(it.id, { weaponTraits: next.size ? [...next] : undefined });
+                          }}
+                        />
+                        🗡 God's Bane
+                      </label>
+                    )}
                   </span>
                   <label className="grow">
                     Sát thương phụ (flame tongue…)

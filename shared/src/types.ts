@@ -44,9 +44,12 @@ export type Recharge = 'short' | 'long' | 'other';
 /** One damage component of an attack (its own dice + damage type). */
 /** What an attack is made of / with — checked against "resistant to non-magical attacks that aren't
  *  silvered"-style defences. */
-export type WeaponTrait = 'magical' | 'silvered' | 'moongilded';
+/** `godsBane` marks the party's God's Bane artifact weapon (homebrew, see `godsBane.ts`). It rides in
+ *  `weaponTraits` so it reaches the server on every damage part, but it is NOT in `WEAPON_TRAITS` (the
+ *  generic material picker) and no defence is bypassed by it. */
+export type WeaponTrait = 'magical' | 'silvered' | 'moongilded' | 'godsBane';
 export const WEAPON_TRAITS: WeaponTrait[] = ['magical', 'silvered', 'moongilded'];
-export const WEAPON_TRAIT_VI: Record<WeaponTrait, string> = { magical: 'phép', silvered: 'bạc', moongilded: 'moongilded' };
+export const WEAPON_TRAIT_VI: Record<WeaponTrait, string> = { magical: 'phép', silvered: 'bạc', moongilded: 'moongilded', godsBane: "God's Bane" };
 
 export interface DamagePart {
   dice: string; // "2d6" or "1d4+2"
@@ -710,6 +713,8 @@ export interface Statblock {
   tags: string[];
   notes: string;
   source?: string; // attribution
+  /** God's Bane target tag — copied onto tokens spawned from this entry. */
+  baneTag?: BaneTag;
 }
 
 /** Combat-relevant subset embedded on a spawned token. */
@@ -773,6 +778,13 @@ export interface Token {
   /** Only ever present in a PLAYER's copy of a stat-hidden token (computed on the way out, never
    *  stored): the creature's rough condition in place of its HP numbers. */
   healthTier?: HealthTier;
+  /** God's Bane target tag (DM-set; spawned from `Statblock.baneTag`; null = cleared by the DM). Never
+   *  meaningful on a PC token. */
+  baneTag?: BaneTag | null;
+  /** God's Bane: divinity layers stripped so far (+1 per God's Bane attack on a `greatOne`). DM bookkeeping. */
+  baneLayers?: number;
+  /** God's Bane: immortality broken — hit by the blade, this creature can die for good until the DM resets it. */
+  baneMortal?: boolean;
 }
 
 /** What a creature has spent of its action economy since its turn started. */
@@ -998,4 +1010,40 @@ export interface RoomState {
   bestiary: Statblock[];
   /** House-made items / rules / features / notes (docs/LOREBOOK.md §3). Persisted in room.json (unlike bestiary). */
   homebrew: HomebrewEntry[];
+  /** Homebrew God's Bane party artifact (see `godsBane.ts`). Unset / `enabled: false` = every hook is a no-op. */
+  godsBane?: GodsBaneState;
+}
+
+/** God's Bane target categories: the god-like boss, its servants, and fallen hunters. */
+export type BaneTag = 'greatOne' | 'minion' | 'fallen';
+export const BANE_TAGS: BaneTag[] = ['greatOne', 'minion', 'fallen'];
+export const BANE_TAG_VI: Record<BaneTag, string> = { greatOne: 'Great One', minion: 'Tay sai', fallen: 'Thợ săn sa ngã' };
+
+/** One sworn party member. `rejections` counts how often the blade rejected them (0–3); a 4th makes them
+ *  `oathbroken` for good (only a DM override clears it). */
+export interface GodsBaneMember {
+  rejected?: boolean;
+  rejections: number;
+  oathbroken?: boolean;
+}
+
+/** Party-wide God's Bane state (room-level, DM-edited). */
+export interface GodsBaneState {
+  enabled: boolean;
+  /** N, "People's Will": communities saved + allies made. */
+  will: number;
+  /** Cleaving Causality pool (shared by the sworn party). */
+  causality: number;
+  /** Sworn members, keyed by character sheet id. */
+  members: Record<string, GodsBaneMember>;
+  /** Sheet currently carrying the blade. */
+  holderSheetId?: string;
+  /** Initiative round the blade was last passed in (once per round while initiative runs). */
+  lastPassRound?: number;
+  /** sheet id → turn key (`round:turnIndex`) People's Will damage was last added in (once per turn). */
+  willUsed?: Record<string, string>;
+  /** Cleaving Causality spent in advance, waiting for the next matching d20: `crit` = the sworn PC's own
+   *  next d20 becomes a natural 20; `fumble` = the next enemy d20 becomes a natural 1. The pool is
+   *  decremented when the roll is actually changed. */
+  armed?: { sheetId: string; mode: 'crit' | 'fumble' }[];
 }
