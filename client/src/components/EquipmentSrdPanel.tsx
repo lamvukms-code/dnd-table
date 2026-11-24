@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadEquipmentCatalog } from '../equipmentCatalog.js';
 import { equipmentPresetFromDef, type EquipmentPreset, type ItemType } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -25,10 +26,8 @@ export function EquipmentSrdPanel({ onClose }: { onClose: () => void }) {
   const [typeFilter, setTypeFilter] = useState<ItemType | ''>('');
 
   useEffect(() => {
-    fetch('/srd/equipment.json')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((j) => setDefs(Array.isArray(j) ? j : []))
-      .catch(() => setDefs([]));
+    // SRD gear + the DM's local setting gear (firearms, trick weapons…)
+    void loadEquipmentCatalog().then(setDefs);
   }, []);
 
   const filtered = useMemo(() => {

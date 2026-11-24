@@ -1662,3 +1662,14 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .gods-bane .gb-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .gods-bane .gb-rejected td { opacity: 0.75; }
 .gods-bane .gb-oathbroken td { opacity: 0.55; text-decoration: line-through; }
+.exhaustion { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.exhaustion.on { color: #e5a65a; }
+.exhaustion strong { min-width: 12px; text-align: center; }
+.exhaustion .hint.danger { color: #ef8a8a; }
+.feature-actions { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; vertical-align: middle; }
+.madness-panel { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; margin-top: 6px; }
+.madness-panel .mp-title { font-weight: 700; color: #b48be0; }
+.mp-entry { border: 1px solid var(--line); border-left: 3px solid #b48be0; border-radius: 6px; padding: 2px 6px; }
+.mp-entry.long { border-left-color: #e5a65a; }
+.mp-entry.indefinite { border-left-color: #ef6a6a; }
+.mp-add { display: inline-flex; gap: 4px; }

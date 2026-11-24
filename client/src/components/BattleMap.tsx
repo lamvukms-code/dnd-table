@@ -46,6 +46,7 @@ import {
   actionAvailable,
   failCondition,
   parseMultiattack,
+  exhaustionPenalty,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { uploadImage } from '../upload.js';
@@ -58,6 +59,7 @@ import { RollModeToggle, type RollMode } from './SheetDock.js';
 import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
 import { ZONE_LAYOUTS } from '../campaignData.js';
+import { ExhaustionStepper } from './Exhaustion.js';
 
 /** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
  *  `backgroundUrl` (`/maps/battlemaps/<id>.webp`, see MapLibrary.tsx) so a known zone layout can
@@ -81,7 +83,7 @@ const NO_ZONES: MapZone[] = [];
 /** A token's walking speed for the client move tracker. */
 function tokenWalkSpeed(token: Token, sheets: CharacterSheet[]): number {
   const sheet = sheets.find((s) => s.tokenId === token.id);
-  return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token));
+  return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token), (sheet ? sheet.exhaustion : token.exhaustion) ?? 0);
 }
 const SIZE_CELLS: Record<TokenSize, number> = {
   tiny: 0.5,
@@ -1450,7 +1452,8 @@ function TokenInspector({
   const [spellSearch, setSpellSearch] = useState('');
   const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
   const [lootTargetSheetId, setLootTargetSheetId] = useState('');
-  const sbd20 = (mod: number) => d20Check(mod, sbRollMode);
+  // monster d20 tests carry the token's Exhaustion (PCs get it through their sheet bonuses)
+  const sbd20 = (mod: number) => d20Check(mod + exhaustionPenalty(token.exhaustion), sbRollMode);
   const mtag =
     sbRollMode === 'advantage' ? ' (lợi thế)' : sbRollMode === 'disadvantage' ? ' (bất lợi)' : '';
 
@@ -1755,6 +1758,29 @@ function TokenInspector({
             </span>
           )}
         </label>
+        {isDm && (
+          <label className="chk madness-save">
+            <button
+              className="roll-btn sm"
+              title="Bắt save madness (WIS + INT mod); trượt thì choáng và tung bảng madness lên sheet"
+              onClick={() => {
+                const dc = Number(window.prompt('Madness: DC save WIS?', '13'));
+                if (!dc) return;
+                const t = window.prompt('Cấp madness: 1 = ngắn hạn, 2 = dài hạn, 3 = vĩnh viễn', '1');
+                const tier = t === '3' ? 'indefinite' : t === '2' ? 'long' : 'short';
+                send({ t: 'madnessSave', targetTokenIds: [token.id], dc, tier, label: 'Madness' });
+              }}
+            >
+              🌀 Save madness
+            </button>
+          </label>
+        )}
+        {/* PCs keep Exhaustion on their sheet; a monster/NPC token keeps its own */}
+        {!sheets.some((s) => s.tokenId === token.id) && (
+          <label className="chk">
+            <ExhaustionStepper value={token.exhaustion} onChange={(v) => patch({ exhaustion: v })} />
+          </label>
+        )}
           </>
         )}
         <label>

@@ -1,3 +1,4 @@
+import type { MadnessTier } from './madness.js';
 import type {
   Ability,
   ActiveEffect,
@@ -26,6 +27,12 @@ export type ClientAction =
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
   | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
+  /** DM: madness saving throw (WIS + INT mod) for these tokens; a failure stuns and rolls the tier's table. */
+  | { t: 'madnessSave'; targetTokenIds: string[]; dc: number; tier: MadnessTier; label?: string }
+  /** DM: roll a madness effect straight onto a sheet (no save). */
+  | { t: 'madnessRoll'; sheetId: string; tier: MadnessTier }
+  /** DM: advance the in-world clock (expires timed madness). */
+  | { t: 'passTime'; seconds: number }
   | {
       t: 'damage';
       label: string;

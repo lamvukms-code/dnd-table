@@ -83,6 +83,17 @@ import {
   type Token,
   actionLimit,
   rechargeSucceeds,
+  exhaustionPenalty,
+  saveBonus,
+  madnessEffect,
+  madnessDuration,
+  expireMadness,
+  madnessEscalation,
+  fmtDuration,
+  MADNESS_TIER_VI,
+  type MadnessTables,
+  type CharacterSheet,
+  type MadnessTier,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -506,6 +517,80 @@ export class Room {
   /** Roll every damage part (homebrew-crit each on a crit) using dddice totals
    *  where supplied, and synthesise a combined RollResult for the log. */
   /** Damage rolled once per AoE cast (`aoeId`), reused for every creature in the area. */
+  /** Madness tables from the DM's local data (`MADNESS_FILE`, default client/public/campaign/madness.json). */
+  private madnessTables(): MadnessTables | null {
+    try {
+      const file = process.env.MADNESS_FILE ?? new URL('../../client/public/campaign/madness.json', import.meta.url);
+      return JSON.parse(readFileSync(file, 'utf8')) as MadnessTables;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Roll a madness effect of `tier` onto `sheet` (stun is handled by the caller). */
+  private inflictMadness(sheet: CharacterSheet, tier: MadnessTier, actor: Participant): string | null {
+    const tables = this.madnessTables();
+    if (!tables?.[tier]?.length) return 'Chưa có bảng madness (client/public/campaign/madness.json)';
+    const d100 = rollNotation('1d100').total;
+    const d10 = rollNotation('1d10').total;
+    const d4 = rollNotation('1d4').total;
+    const eff = madnessEffect(tables[tier], d100, d10);
+    if (!eff) return 'Bảng madness không khớp kết quả d100';
+    const now = this.state.worldSeconds ?? 0;
+    const dur = madnessDuration(tier, d4);
+    const entry = { id: nanoid(8), tier, theme: eff.theme, text: eff.text, roll: `d100 ${d100} · d10 ${d10}`, startedAt: now, expiresAt: dur === undefined ? undefined : now + dur };
+    sheet.madness = [...(sheet.madness ?? []), entry];
+    sheet.madnessHistory = [...(sheet.madnessHistory ?? []), entry].slice(-40);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor.id,
+      actorName: actor.name,
+      label: `${sheet.name}: madness ${MADNESS_TIER_VI[tier]} — ${eff.theme}: ${eff.text}${dur ? ` (${fmtDuration(dur)})` : ''}`,
+      result: externalRollResult('1d100', { total: d100, faces: [d100] }),
+    });
+    const up = madnessEscalation(sheet.madnessHistory, now);
+    if (up && up !== tier) this.systemLog(`${sheet.name}: đã đủ ngưỡng → nên chịu thêm madness ${MADNESS_TIER_VI[up]} (DM quyết)`);
+    return null;
+  }
+
+  /** Advance the in-world clock and expire timed madness. */
+  private passTime(seconds: number): void {
+    if (seconds <= 0) return;
+    const now = (this.state.worldSeconds ?? 0) + seconds;
+    this.state.worldSeconds = now;
+    for (const sh of this.state.sheets) {
+      if (!sh.madness?.length) continue;
+      const { kept, expired } = expireMadness(sh.madness, now);
+      if (!expired.length) continue;
+      sh.madness = kept;
+      for (const e of expired) this.systemLog(`${sh.name}: hết madness ${MADNESS_TIER_VI[e.tier]} — ${e.theme}`);
+    }
+  }
+
+  /** A label for one more monster of `name` in this scene: "Hunter" while it's alone; once a second
+   *  one arrives the first becomes "Hunter 1" and the new one "Hunter 2", and so on — so targets,
+   *  initiative and the roll log can tell them apart (initiative shows the token's label). */
+  private nextMonsterLabel(name: string): string {
+    const base = name.replace(/\s+\d+$/, '').trim() || name;
+    const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`^${esc}(?: (\\d+))?$`);
+    const same = this.state.tokens.filter((t) => re.test(t.label));
+    if (!same.length) return base;
+    let max = 0;
+    for (const t of same) {
+      const n = Number(re.exec(t.label)![1] ?? 0);
+      max = Math.max(max, n);
+    }
+    const plain = same.find((t) => t.label === base);
+    if (plain) {
+      const n = max + 1;
+      plain.label = `${base} ${n}`;
+      max = n;
+    }
+    return `${base} ${max + 1}`;
+  }
+
   /** Start of a monster's turn: d6 for every spent "Recharge X–6" action; X or more brings it back.
    *  The rolls are DM-only (they'd tell players when the breath weapon is coming). */
   private rollRecharges(token: Token): void {
@@ -615,20 +700,24 @@ export class Room {
   /** Saving-throw bonus for a token in one ability (linked sheet, else stat block, else 0). */
   private tokenSaveBonus(token: Token, ability: Ability): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-    if (sheet) {
-      return (
-        abilityMod(sheet.abilities[ability]) +
-        (sheet.saveProficiencies.includes(ability) ? sheet.proficiencyBonus : 0)
-      );
-    }
+    if (sheet) return saveBonus(sheet, ability); // includes the sheet's Exhaustion
     const sb = token.statblock;
+    const pen = exhaustionPenalty(token.exhaustion);
     if (sb) {
       return (
         abilityMod(sb.abilities[ability]) +
-        (sb.saveProficiencies.includes(ability) ? sb.proficiencyBonus : 0)
+        (sb.saveProficiencies.includes(ability) ? sb.proficiencyBonus : 0) +
+        pen
       );
     }
-    return 0;
+    return pen;
+  }
+
+  /** Exhaustion level of whoever stands behind a token (the linked sheet, else the token). */
+  private tokenExhaustion(token: Token | undefined): number {
+    if (!token) return 0;
+    const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
+    return (sheet ? sheet.exhaustion : token.exhaustion) ?? 0;
   }
 
   /** Roll a d20 save for a token (nat 20 auto-pass, nat 1 auto-fail — homebrew). `withCover`: the save
@@ -845,7 +934,7 @@ export class Room {
   /** A token's walking speed (ft): linked sheet, else stat block, else 30. Grappled → 0. */
   private tokenSpeed(token: Token): number {
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-    return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token));
+    return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token), this.tokenExhaustion(token));
   }
 
   /** After an initiative change: anchor the active token's position for the move tracker. */
@@ -1300,6 +1389,15 @@ export class Room {
           attackRoll = { ...attackRoll, total: attackRoll.total - banePenalty };
           baneNote += ` · kiếm chối bỏ −${banePenalty}`;
         }
+        // 2024 Exhaustion: −2 × level on the attacker's attack roll (any source: PC, monster, spell).
+        const exhLevel = baneAtkTok
+          ? this.tokenExhaustion(baneAtkTok)
+          : (this.state.sheets.find((s) => s.id === action.attackerSheetId)?.exhaustion ?? 0);
+        const exhPen = -exhaustionPenalty(exhLevel);
+        if (exhPen) {
+          attackRoll = { ...attackRoll, total: attackRoll.total - exhPen };
+          baneNote += ` · Exhaustion ${exhLevel} −${exhPen}`;
+        }
         const baneCausality = attackRoll.d20 ? this.causalityD20({ sheetId: baneSheetId, enemy: !baneSheetId && !!baneAtkTok }) : undefined;
         if (baneCausality) {
           attackRoll = forceD20(attackRoll, baneCausality.natural);
@@ -1571,7 +1669,8 @@ export class Room {
         if (!isDm && src.controllerId !== actor.id) return 'Bạn không điều khiển token này';
         this.state.tokens.push(
           createToken({
-            label: src.label,
+            // a cloned monster gets the next number; a cloned PC/prop keeps its name
+            label: src.statblock ? this.nextMonsterLabel(src.label) : src.label,
             x: action.x,
             y: action.y,
             size: src.size,
@@ -1959,6 +2058,60 @@ export class Room {
         break;
       }
 
+      case 'madnessSave': {
+        if (!isDm) return 'Chỉ DM được bắt save madness';
+        if (!this.madnessTables()) return 'Chưa có bảng madness (client/public/campaign/madness.json)';
+        for (const id of action.targetTokenIds) {
+          const tk = this.state.tokens.find((t) => t.id === id);
+          if (!tk) continue;
+          const sheet = this.linkedSheet(tk);
+          // book: creatures add their INT modifier to saves against madness (WIS save by table decision)
+          const intMod = sheet ? abilityMod(sheet.abilities.int) : tk.statblock ? abilityMod(tk.statblock.abilities.int) : 0;
+          const { d20, total, pass, bonus } = this.rollTokenSave(tk, 'wis', action.dc - intMod);
+          const shown = total + intMod;
+          this.pushRoll({
+            id: nanoid(8),
+            ts: Date.now(),
+            actorId: actor.id,
+            actorName: actor.name,
+            label: `${action.label ?? 'Madness'} → ${tk.label}: WIS cứu ${shown} (gồm INT ${intMod >= 0 ? '+' : ''}${intMod}) vs DC ${action.dc} — ${pass ? 'VỮNG' : 'DÍNH'}`,
+            result: externalRollResult(`1d20${bonus + intMod >= 0 ? '+' : ''}${bonus + intMod}`, { total: shown, faces: [d20] }),
+          });
+          if (pass) continue;
+          // stunned until the start of its next turn — only meaningful (and only auto-expiring) in combat
+          if (this.state.initiative.running) {
+            tk.effects = [
+              ...(tk.effects ?? []),
+              { id: nanoid(8), name: 'Madness (choáng)', condition: 'stunned', note: 'Choáng tới đầu lượt sau, rồi hiệu ứng madness có tác dụng', expiresRound: this.state.initiative.round + 1 },
+            ];
+          }
+          if (sheet) {
+            const err = this.inflictMadness(sheet, action.tier, actor);
+            if (err) return err;
+          } else this.systemLog(`${tk.label}: dính madness ${MADNESS_TIER_VI[action.tier]} (token không có sheet — DM tự tung bảng)`);
+        }
+        this.touch();
+        break;
+      }
+
+      case 'madnessRoll': {
+        if (!isDm) return 'Chỉ DM được tung madness';
+        const sheet = this.state.sheets.find((s) => s.id === action.sheetId);
+        if (!sheet) return 'Không tìm thấy nhân vật';
+        const err = this.inflictMadness(sheet, action.tier, actor);
+        if (err) return err;
+        this.touch();
+        break;
+      }
+
+      case 'passTime': {
+        if (!isDm) return 'Chỉ DM được cho thời gian trôi';
+        this.passTime(Math.max(0, Math.min(365 * 86400, Math.round(action.seconds))));
+        this.systemLog(`Thời gian trôi ${fmtDuration(action.seconds)}`);
+        this.touch();
+        break;
+      }
+
       case 'initSet': {
         if (!isDm) return 'Chỉ DM được sửa initiative';
         this.state.initiative.entries = sortInit(action.entries);
@@ -2058,7 +2211,9 @@ export class Room {
         }
         const prevActiveInit = this.state.initiative.entries.find((e) => e.isActive)?.initiative;
         const endingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
+        const roundBefore = this.state.initiative.round;
         advanceTurn(this.state.initiative, 1);
+        if (this.state.initiative.round > roundBefore) this.passTime(6); // a combat round is 6 seconds
         const startingId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
         const ending = endingId && this.state.tokens.find((t) => t.id === endingId);
         if (ending) this.processTurnEffects(ending, 'end-of-turn');
@@ -2288,7 +2443,7 @@ export class Room {
         }
         this.state.tokens.push(
           createToken({
-            label: sb.name,
+            label: this.nextMonsterLabel(sb.name),
             x: action.x,
             y: action.y,
             size: sb.size,

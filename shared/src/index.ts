@@ -24,3 +24,6 @@ export * from './invocations.draft.js';
 export * from './feats.draft.js';
 export * from './godsBane.js';
 export * from './monsterActions.js';
+export * from './featureActions.js';
+export * from './firearms.js';
+export * from './madness.js';

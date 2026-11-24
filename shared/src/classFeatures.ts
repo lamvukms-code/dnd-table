@@ -1,4 +1,5 @@
 import type { CharacterSheet } from './types.js';
+import type { FeatureAction } from './featureActions.js';
 import { barbarianLevel, classLevelOf, druidLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
 
 /**
@@ -45,6 +46,8 @@ export interface SubclassFeatureDef {
   description: string;
   /** A limited-use pool this feature grants (rendered as a pip tracker). */
   uses?: { max: number | 'cha-mod' | 'wis-mod' | 'con-mod' | 'prof'; recharge: 'short' | 'long' };
+  /** Buttons this feature puts on the sheet (see featureActions.ts). */
+  actions?: FeatureAction[];
 }
 
 const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [

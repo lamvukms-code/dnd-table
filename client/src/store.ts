@@ -965,3 +965,9 @@ export const useStore = create<StoreState>((set, get) => {
 if (loadIdentity()) {
   useStore.getState().join(loadIdentity()!);
 }
+
+/** Show a toast even when the same message is already the current error (the toast only reacts to a change). */
+export function flashError(message: string): void {
+  useStore.setState({ error: null });
+  setTimeout(() => useStore.setState({ error: message }), 0);
+}

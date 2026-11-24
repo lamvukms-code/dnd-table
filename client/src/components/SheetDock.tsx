@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useRef, useState } from 'react';
 import {
   ABILITIES,
   circletTempHp,
@@ -80,6 +80,7 @@ import {
   type ActionType,
   type CasterType,
   type CharacterSheet,
+  type InventoryItem,
   type ClassEntry,
   type ConditionType,
   type DamagePart,
@@ -92,7 +93,7 @@ import {
   SRD_FEATS_DRAFT,
   type FeatDef,
 } from '@dnd-table/shared';
-import { useStore } from '../store.js';
+import { flashError, useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
 import { SUBCLASS_DEFS } from '../subclassData.js';
 import { SPECIES_DEFS } from '../speciesData.js';
@@ -105,8 +106,12 @@ import { JaegerFeatures } from './sheet/JaegerFeatures.js';
 import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
 import { mapViewCenterCell } from '../mapView.js';
 import { useWideLayout } from '../useMediaQuery.js';
+import { ExhaustionStepper } from './Exhaustion.js';
+import { FeatureActions } from './sheet/FeatureActions.js';
+import { FirearmControls } from './sheet/FirearmControls.js';
+import { MadnessPanel } from './sheet/MadnessPanel.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
-import { coverDexSaveBonus, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
+import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'STR',
@@ -599,7 +604,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
     // Oaken Resolve (Wood Wose): Advantage on STR / CON saves — cancels a Disadvantage
     const effMode: RollMode =
       kind === 'save' && ab && effectSaveAdvantage(linkedToken?.effects, ab) ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode;
-    let notation = d20Check(mod, effMode);
+    // plain ability checks don't go through skillBonus/saveBonus, so add Exhaustion here
+    let notation = d20Check(mod + (kind === 'check' ? exhaustionPenalty(draft.exhaustion) : 0), effMode);
     let extra = '';
     const gb = kind === 'check' ? pendingRollBonus(linkedToken ?? undefined, 'check') : undefined;
     if (gb) {
@@ -952,7 +958,9 @@ function BasicTab({ draft, commit }: EditorCtx) {
             >
               🔧 Reset (test)
             </button>
+            <ExhaustionStepper value={draft.exhaustion} onChange={(v) => commit({ ...draft, exhaustion: v })} />
           </div>
+          <MadnessPanel sheet={draft} commit={commit} />
 
           <HitDice draft={draft} />
           <Resources draft={draft} commit={commit} />
@@ -1065,12 +1073,34 @@ function BasicTab({ draft, commit }: EditorCtx) {
                     a.id === 'monk-unarmed-bonus' ? monkBonusUnarmedMax(draft, flurryActive) : attacksPerAction(draft);
                   return spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks });
                 };
+                // Firearms: an empty / jammed gun can't fire; each shot spends a round from the barrel.
+                const gun = a.id.startsWith('weapon:') ? draft.inventory.find((it) => `weapon:${it.id}` === a.id && it.firearm) : undefined;
+                const commitItem = (it: InventoryItem) => commit({ ...draft, inventory: draft.inventory.map((x) => (x.id === it.id ? it : x)) });
+                const rowAction = gun?.firearm?.steadyArmed ? { ...a, name: `${a.name} (Steady)`, attackBonus: (a.attackBonus ?? 0) + draft.proficiencyBonus } : a;
+                const rowParts = actionDamageParts(draft, a, linkedToken?.effects, { monkFlurryActive: flurryActive });
+                const spendRow = (attack: boolean) => {
+                  if (gun && attack) {
+                    if (gun.firearm!.spreadFire) {
+                      flashError(`${gun.name} không bắn thường được: dùng nút 🔺 Phun.`);
+                      return false;
+                    }
+                    const c = canFire(gun);
+                    if (!c.ok) {
+                      flashError(`${gun.name}: ${c.reason}`);
+                      return false;
+                    }
+                  }
+                  if (!trySpend(attack)) return false;
+                  if (gun && attack) commitItem(afterShots(gun));
+                  return true;
+                };
                 return (
+                <Fragment key={a.id}>
                 <ActionRow
                   key={a.id}
-                  action={a}
-                  parts={actionDamageParts(draft, a, linkedToken?.effects, { monkFlurryActive: flurryActive })}
-                  onSpend={trySpend}
+                  action={rowAction}
+                  parts={rowParts}
+                  onSpend={spendRow}
                   sheetName={draft.name}
                   attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
                   targetId={targetId}
@@ -1165,6 +1195,19 @@ function BasicTab({ draft, commit }: EditorCtx) {
                       : () => commit({ ...draft, actions: draft.actions.filter((x) => x.id !== a.id) })
                   }
                 />
+                {gun && (
+                  <FirearmControls
+                    sheet={draft}
+                    item={gun}
+                    action={rowAction}
+                    parts={rowParts}
+                    targetId={targetId || undefined}
+                    targetName={targetName}
+                    commitItem={commitItem}
+                    trySpend={trySpend}
+                  />
+                )}
+                </Fragment>
                 );
               })}
             </div>
@@ -1202,7 +1245,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
         <ClassFeatures draft={draft} commit={commit} />
         <SpeciesFeatures draft={draft} commit={commit} />
         <BackgroundFeatures draft={draft} />
-        <SubclassFeatures draft={draft} commit={commit} />
+        <SubclassFeatures draft={draft} commit={commit} targetId={targetId} />
       </div>
     </div>
   );
@@ -2114,7 +2157,7 @@ function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
 }
 
 /** Subclass features, from the DM's local subclass data file. Separate from class features. */
-function SubclassFeatures({ draft, commit }: EditorCtx) {
+function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: string }) {
   const feats = derivedSubclassFeatures(draft, SUBCLASS_DEFS);
   if (feats.length === 0) return null;
   const used = draft.subclassUses ?? {};
@@ -2141,6 +2184,24 @@ function SubclassFeatures({ draft, commit }: EditorCtx) {
                     <FocusPips max={max} used={u} onChange={(n) => setUse(f.id, n)} />
                     <em>hồi khi nghỉ {f.uses.recharge === 'short' ? 'ngắn' : 'dài'}</em>
                   </span>
+                )}
+                {f.actions && f.actions.length > 0 && (
+                  <FeatureActions
+                    sheet={draft}
+                    classKey={f.class}
+                    featureName={f.name}
+                    actions={f.actions}
+                    targetId={targetId}
+                    spendUse={
+                      f.uses
+                        ? () => {
+                            if (u >= max && !window.confirm(`${f.name}: đã hết lượt dùng. Vẫn dùng?`)) return false;
+                            setUse(f.id, u + 1);
+                            return true;
+                          }
+                        : undefined
+                    }
+                  />
                 )}
               </span>
             </div>

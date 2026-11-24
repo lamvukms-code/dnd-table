@@ -1,3 +1,5 @@
+import type { MadnessEntry } from './madness.js';
+import type { FirearmProps } from './firearms.js';
 import type { RollResult } from './dice.js';
 import type { JaegerState } from './jaeger.js';
 
@@ -206,6 +208,9 @@ export interface EquipmentPreset {
   /** Magic weapons (+1/+2/+3 …) — carried straight into the InventoryItem's to-hit/damage bonus. */
   attackBonusMisc?: number;
   damageBonusMisc?: number;
+  weaponTraits?: WeaponTrait[];
+  attackRange?: AttackRange;
+  firearm?: FirearmProps;
   // armor / shield
   armorBase?: number;
   armorCategory?: ArmorCategory;
@@ -244,6 +249,8 @@ export interface InventoryItem {
   rangeText?: string;
   /** Melee / ranged tag for this weapon (a thrown dagger: flip it to melee when stabbing). */
   attackRange?: AttackRange;
+  /** Firearm: barrel / reload / loaded shots and gun properties (see firearms.ts). */
+  firearm?: FirearmProps;
   /** Adamantine armour: while equipped, the wearer's token can't be crit. */
   grantsCritImmune?: boolean;
   /** Magic item the character is currently attuned to (max 3 — `ATTUNEMENT_SLOTS`). */
@@ -292,6 +299,11 @@ export interface CharacterSheet {
   skillExpertise: string[];
   maxHp: number;
   currentHp: number;
+  /** Exhaustion level 0–6 (2024): −2 × level to every d20 test, −5 ft × level Speed; 6 = death. */
+  exhaustion?: number;
+  /** Active madness effects (see madness.ts), plus `madnessHistory` for the escalation rule. */
+  madness?: MadnessEntry[];
+  madnessHistory?: MadnessEntry[];
   tempHp: number;
   /** Manual AC used only when no armor is equipped and no override is set. */
   armorClass: number;
@@ -775,6 +787,8 @@ export interface Token {
   /** Stat-block actions with limited use (Recharge X–6, N/Day): times used since they last came back,
    *  keyed by action id. Recharge actions are rolled for at the start of the monster's turn. */
   actionUses?: Record<string, number>;
+  /** Exhaustion level 0–6 for a token with no linked sheet (monsters). PCs keep it on the sheet. */
+  exhaustion?: number;
   /** DM override: show this NPC/monster token's AC / HP / statblock to players. Default (unset) =
    *  hidden — the server strips them from what players receive (see `tokenForPlayers`). */
   revealStats?: boolean;
@@ -982,6 +996,9 @@ export interface LevelUpRound {
 
 export interface RoomState {
   version: number; // schema version
+  /** In-world clock (seconds since the campaign clock started). Combat rounds add 6 s; the DM
+   *  passes time with "Qua giờ". Drives madness durations. */
+  worldSeconds?: number;
   rev: number; // increments on every mutation
   name: string;
   participants: Participant[];

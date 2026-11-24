@@ -61,9 +61,15 @@ export function fmtMod(n: number): string {
   return n >= 0 ? `+${n}` : `${n}`;
 }
 
+/** 2024 Exhaustion: −2 × level to every D20 Test (attack rolls, ability checks, saving throws). */
+export function exhaustionPenalty(level: number | undefined): number {
+  const l = Math.max(0, Math.min(6, level ?? 0));
+  return l ? -2 * l : 0;
+}
+
 export function saveBonus(sheet: CharacterSheet, ability: Ability): number {
   const base = abilityMod(sheet.abilities[ability]);
-  return base + (sheet.saveProficiencies.includes(ability) ? sheet.proficiencyBonus : 0);
+  return base + (sheet.saveProficiencies.includes(ability) ? sheet.proficiencyBonus : 0) + exhaustionPenalty(sheet.exhaustion);
 }
 
 export function skillBonus(sheet: CharacterSheet, skill: string): number {
@@ -72,11 +78,11 @@ export function skillBonus(sheet: CharacterSheet, skill: string): number {
   let bonus = base;
   if (sheet.skillExpertise.includes(skill)) bonus += sheet.proficiencyBonus * 2;
   else if (sheet.skillProficiencies.includes(skill)) bonus += sheet.proficiencyBonus;
-  return bonus;
+  return bonus + exhaustionPenalty(sheet.exhaustion);
 }
 
 export function initiativeBonus(sheet: CharacterSheet): number {
-  return abilityMod(sheet.abilities.dex) + sheet.initiativeMisc;
+  return abilityMod(sheet.abilities.dex) + sheet.initiativeMisc + exhaustionPenalty(sheet.exhaustion);
 }
 
 /** Suggested proficiency bonus by level (5e). */
@@ -204,9 +210,10 @@ export function walkSpeed(
   sheetSpeed: number | undefined,
   statblockSpeed: number | undefined,
   grappled: boolean,
+  exhaustion = 0,
 ): number {
   if (grappled) return 0;
-  return sheetSpeed ?? statblockSpeed ?? 30;
+  return Math.max(0, (sheetSpeed ?? statblockSpeed ?? 30) - 5 * Math.max(0, Math.min(6, exhaustion)));
 }
 
 /** Parse a range / reach string ("120 ft", "20/60 ft", "Nón 15ft", "Chạm") to feet. */
@@ -1374,6 +1381,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     ...sheet,
     currentHp: sheet.maxHp,
     tempHp: 0,
+    exhaustion: Math.max(0, (sheet.exhaustion ?? 0) - 1), // a long rest removes one level
     resources: sheet.resources.map((r) => (r.recharge === 'other' ? r : { ...r, used: 0 })),
     spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })),
     pactSlots: sheet.pactSlots ? { ...sheet.pactSlots, used: 0 } : sheet.pactSlots,

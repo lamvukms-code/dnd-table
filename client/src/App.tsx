@@ -17,6 +17,7 @@ import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
 import { TopMenu } from './components/TopMenu.js';
+import { fmtDuration } from '@dnd-table/shared';
 import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
 
@@ -48,6 +49,8 @@ export function App() {
   const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
   const [dockOpen, setDockOpen] = useState(true);
   const isDm = me?.role === 'dm';
+  const send = useStore((s) => s.send);
+  const worldSeconds = useStore((s) => s.room?.worldSeconds ?? 0);
   const hasBuilder = useCharacterBuilder();
   const [sfxVolume, setSfxVolumeState] = useState(getSfxVolume);
 
@@ -124,6 +127,30 @@ export function App() {
             items={[
               { label: '🗺 Bản đồ & cảnh', title: 'Thư viện bản đồ theo chương', onClick: () => setMapsOpen(true) },
               { label: '👹 Quái (Bestiary)', onClick: () => setBestiaryOpen(true) },
+              {
+                label: '🌀 Madness cả nhóm',
+                title: 'Bắt save madness cho mọi nhân vật người chơi đang có token trong cảnh',
+                onClick: () => {
+                  const st = useStore.getState().room;
+                  const ids = (st?.tokens ?? []).filter((t) => st?.sheets.some((s) => s.tokenId === t.id)).map((t) => t.id);
+                  if (!ids.length) return;
+                  const dc = Number(window.prompt(`Madness cho ${ids.length} nhân vật: DC save WIS?`, '13'));
+                  if (!dc) return;
+                  const t = window.prompt('Cấp madness: 1 = ngắn hạn, 2 = dài hạn, 3 = vĩnh viễn', '1');
+                  send({ t: 'madnessSave', targetTokenIds: ids, dc, tier: t === '3' ? 'indefinite' : t === '2' ? 'long' : 'short', label: 'Madness' });
+                },
+              },
+              ...([
+                ['10 phút', 600],
+                ['1 giờ', 3600],
+                ['8 giờ (nghỉ dài)', 8 * 3600],
+                ['1 ngày', 86400],
+                ['1 tuần', 7 * 86400],
+              ] as const).map(([lbl, sec]) => ({
+                label: `⏳ Qua ${lbl}`,
+                title: `Cho thời gian trong game trôi ${lbl} (madness hết hạn theo đồng hồ này). Đang ở: ${fmtDuration(worldSeconds) || '0'} từ đầu campaign`,
+                onClick: () => send({ t: 'passTime', seconds: sec }),
+              })),
               { label: "🗡 God's Bane", title: "Bảo vật nhóm (homebrew): bật/tắt, N, Cleaving Causality, người tuyên thệ", onClick: () => setGodsBaneOpen(true) },
               ...(NPC_CATALOG.length > 0
                 ? [{ label: '🧑 NPC', title: 'NPC của campaign', onClick: () => setNpcOpen(true) }]

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { loadEquipmentCatalog } from '../../equipmentCatalog.js';
 import {
   WEAPON_TRAITS,
   WEAPON_TRAIT_VI,
@@ -494,10 +495,8 @@ function EquipmentPicker({ onAdd }: { onAdd: (item: InventoryItem) => void }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    fetch('/srd/equipment.json')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((j) => setDefs(Array.isArray(j) ? j : []))
-      .catch(() => setDefs([]));
+    // SRD gear + the DM's local setting gear (firearms, trick weapons…)
+    void loadEquipmentCatalog().then(setDefs);
   }, []);
 
   const term = q.trim().toLowerCase();
