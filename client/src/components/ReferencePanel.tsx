@@ -40,15 +40,16 @@ export function ReferencePanel({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     const startX = e.clientX;
     const startW = width;
+    let lastW = width; // `width` in this closure is stale once dragging starts
     const move = (ev: PointerEvent) => {
-      const w = Math.max(240, Math.min(900, startW + (startX - ev.clientX)));
-      setWidth(w);
+      lastW = Math.max(240, Math.min(900, startW + (startX - ev.clientX)));
+      setWidth(lastW);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       try {
-        localStorage.setItem(KEY + '.w', String(width));
+        localStorage.setItem(KEY + '.w', String(lastW));
       } catch {
         /* ignore */
       }

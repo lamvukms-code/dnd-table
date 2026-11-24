@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
+import { getSfxVolume, setSfxVolume } from '../sound.js';
 import {
   createGuestKey,
   createRoom,
@@ -98,6 +99,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             ✕
           </button>
         </div>
+
+        <SoundSection />
 
         <section className="settings-section">
           <h3>Người trong phòng</h3>
@@ -244,5 +247,30 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         </section>
       </div>
     </div>
+  );
+}
+
+/** Sound-effect volume (this browser only). The topbar keeps just the 🔊/🔇 toggle. */
+function SoundSection() {
+  const [v, setV] = useState(getSfxVolume);
+  return (
+    <section className="settings-section">
+      <h3>Âm thanh</h3>
+      <label className="sfx-vol-row">
+        Âm lượng hiệu ứng tấn công / sát thương: {Math.round(v * 100)}%
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.1}
+          value={v}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            setSfxVolume(n);
+            setV(n);
+          }}
+        />
+      </label>
+    </section>
   );
 }

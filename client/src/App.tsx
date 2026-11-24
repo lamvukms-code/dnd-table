@@ -16,6 +16,7 @@ import { HeirloomPanel } from './components/HeirloomPanel.js';
 import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
+import { TopMenu } from './components/TopMenu.js';
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -100,105 +101,114 @@ export function App() {
           {me.name} · {me.role === 'dm' ? 'DM' : 'Người chơi'}
           {status !== 'open' ? ' · mất kết nối…' : ''}
         </span>
-        {isDm && (
+        {/* Level-up round in progress: its own highlighted button so the DM sees it and can close it. */}
+        {isDm && levelUp && (
           <button
-            className={levelUp ? 'levelup-dm on' : 'levelup-dm'}
-            title={
-              levelUp
-                ? 'Đang mở đợt thăng cấp — bấm để đóng đợt này'
-                : 'Mở thăng cấp: mọi người chơi nhận thông báo + nút "Lên cấp" trên sheet (tự roll HP)'
-            }
+            className="levelup-dm on"
+            title="Đang mở đợt thăng cấp — bấm để đóng đợt này"
             onClick={() => {
-              if (levelUp) {
-                if (window.confirm('Đóng đợt thăng cấp? Ai chưa bấm "Lên cấp" sẽ không bấm được nữa.')) levelUpClose();
-              } else if (window.confirm('Mở thăng cấp cho TẤT CẢ người chơi? (mỗi người bấm 1 lần để lên 1 cấp)')) {
-                levelUpOpen();
-              }
+              if (window.confirm('Đóng đợt thăng cấp? Ai chưa bấm "Lên cấp" sẽ không bấm được nữa.')) levelUpClose();
             }}
           >
-            {levelUp ? `⬆ Đang thăng cấp ${levelUp.claimed.length}/${sheetCount} · đóng` : '⬆ Tăng level'}
+            ⬆ Đang thăng cấp {levelUp.claimed.length}/{sheetCount} · đóng
           </button>
         )}
         {isDm && (
-          <button title="Thư viện bản đồ theo chương" onClick={() => setMapsOpen(true)}>
-            🗺 Bản đồ
-          </button>
+          <TopMenu
+            label="🛠 Công cụ DM"
+            items={[
+              { label: '🗺 Bản đồ & cảnh', title: 'Thư viện bản đồ theo chương', onClick: () => setMapsOpen(true) },
+              { label: '👹 Quái (Bestiary)', onClick: () => setBestiaryOpen(true) },
+              ...(NPC_CATALOG.length > 0
+                ? [{ label: '🧑 NPC', title: 'NPC của campaign', onClick: () => setNpcOpen(true) }]
+                : []),
+              ...(!levelUp
+                ? [
+                    {
+                      label: '⬆ Tăng cấp',
+                      title: 'Mở thăng cấp: mọi người chơi nhận thông báo + nút "Lên cấp" trên sheet (tự roll HP)',
+                      onClick: () => {
+                        if (window.confirm('Mở thăng cấp cho TẤT CẢ người chơi? (mỗi người bấm 1 lần để lên 1 cấp)'))
+                          levelUpOpen();
+                      },
+                    },
+                  ]
+                : []),
+            ]}
+          />
         )}
-        {isDm && (
-          <button title="Bestiary" onClick={() => setBestiaryOpen(true)}>
-            Bestiary
-          </button>
-        )}
-        {isDm && NPC_CATALOG.length > 0 && (
-          <button title="NPC của campaign" onClick={() => setNpcOpen(true)}>
-            NPC
-          </button>
-        )}
-        <button title="Vật phẩm / luật nhà tự chế" onClick={() => setHomebrewOpen(true)}>
-          🧪 Homebrew
-        </button>
-        {HEIRLOOMS.length > 0 && (
-          <button title="Bảo vật mở khóa theo cấp" onClick={() => setHeirloomOpen(true)}>
-            🏺 Bảo vật
-          </button>
-        )}
-        <button title="Trang bị SRD — gửi thẳng vào túi đồ nhân vật" onClick={() => setEqSrdOpen(true)}>
-          🎒 Trang bị
-        </button>
+        <TopMenu
+          label="📚 Tra cứu"
+          items={[
+            {
+              label: refOpen ? '✓ Bảng tra cứu (SRD, web)' : 'Bảng tra cứu (SRD, web)',
+              on: refOpen,
+              title: 'Mở/đóng cột tra cứu bên phải',
+              onClick: () => setRefOpen((v) => !v),
+            },
+            { label: '🧪 Luật nhà / Homebrew', title: 'Vật phẩm / luật nhà tự chế', onClick: () => setHomebrewOpen(true) },
+            ...(HEIRLOOMS.length > 0
+              ? [{ label: '🏺 Bảo vật', title: 'Bảo vật mở khóa theo cấp', onClick: () => setHeirloomOpen(true) }]
+              : []),
+            {
+              label: '🎒 Trang bị SRD',
+              title: 'Trang bị SRD — gửi thẳng vào túi đồ nhân vật',
+              onClick: () => setEqSrdOpen(true),
+            },
+          ]}
+        />
         <button
           className={dockOpen ? 'on' : ''}
-          title="Ẩn/hiện character sheet"
+          title={dockOpen ? 'Ẩn character sheet (cho bản đồ rộng hơn)' : 'Hiện character sheet'}
           onClick={() => setDockOpen((v) => !v)}
         >
-          Nhân vật
+          ◧ Sheet
         </button>
         <button
-          className={refOpen ? 'on' : ''}
-          title="Bảng tra cứu (5etools mirror của bạn…)"
-          onClick={() => setRefOpen((v) => !v)}
+          className="sfx-toggle"
+          title={sfxVolume <= 0 ? 'Bật âm thanh (chỉnh mức trong Cài đặt)' : 'Tắt âm thanh (chỉnh mức trong Cài đặt)'}
+          onClick={() => {
+            const next = sfxVolume > 0 ? 0 : 0.5;
+            setSfxVolume(next);
+            setSfxVolumeState(next);
+          }}
         >
-          Tra cứu
+          {sfxVolume <= 0 ? '🔇' : '🔊'}
         </button>
-        <span className="sfx-vol" title="Âm lượng sound effect (tấn công/sát thương tự chạy)">
-          <button
-            onClick={() => {
-              const next = sfxVolume > 0 ? 0 : 0.5;
-              setSfxVolume(next);
-              setSfxVolumeState(next);
-            }}
-          >
-            {sfxVolume <= 0 ? '🔇' : '🔊'}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.1}
-            value={sfxVolume}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setSfxVolume(v);
-              setSfxVolumeState(v);
-            }}
-          />
-        </span>
         <button className="gear" title="Cài đặt" onClick={() => setSettingsOpen(true)}>
           ⚙
         </button>
       </header>
 
-      <div className="stage">
-        <div className="map-area">
-          <DmPromptBanner />
-          <InitiativeBar />
-          <BattleMap />
-          <DiceWindow />
+      {status !== 'open' && (
+        <div className="conn-banner" role="alert">
+          Mất kết nối với bàn, đang nối lại… Thao tác lúc này sẽ không được gửi.
         </div>
-        {dockOpen && <SheetDock />}
+      )}
+      {/* .stage is a row: [map + sheet] | reference column. Inside .stage-main the sheet sits to the
+          right of the map on wide screens and under it on narrower ones (iPad portrait). The
+          reference panel takes its own column so it never covers end-turn or the sheet tabs. */}
+      <div className="stage">
+        <div className="stage-main">
+          <div className="map-area">
+            <DmPromptBanner />
+            <InitiativeBar />
+            <BattleMap />
+            <DiceWindow />
+          </div>
+          {dockOpen && <SheetDock />}
+        </div>
         {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
       </div>
 
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && (
+        <SettingsModal
+          onClose={() => {
+            setSettingsOpen(false);
+            setSfxVolumeState(getSfxVolume()); // the volume slider lives in Settings
+          }}
+        />
+      )}
       {bestiaryOpen && isDm && <BestiaryPanel
           onClose={() => {
             setBestiaryOpen(false);

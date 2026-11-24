@@ -63,8 +63,9 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 .topbar {
   display: flex;
+  flex-wrap: wrap; /* never push buttons off-screen on a narrow window / iPad portrait */
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 6px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
@@ -73,8 +74,16 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
 .topbar .conn { margin-left: auto; font-size: 12px; color: var(--muted); }
 .topbar .conn.closed, .topbar .conn.connecting { color: var(--miss); }
 
-.stage { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.map-area { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.stage { flex: 1; display: flex; flex-direction: row; min-height: 0; }
+/* The map keeps ≥400px of width: with the sheet column AND the reference column open on a
+   1024px iPad, those two shrink (to their min-widths) instead of squeezing the map to a strip. */
+.stage-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 400px; }
+.map-area { flex: 1; position: relative; min-height: 0; min-width: 400px; overflow: hidden; }
+/* ≥1000px (keep in sync with WIDE_LAYOUT_QUERY): sheet becomes a right-hand column. */
+@media (min-width: 1000px) {
+  /* explicit: the automatic min would count the sheet at its full width and never let it shrink */
+  .stage-main { flex-direction: row; min-width: 720px; }
+}
 
 .toast {
   position: fixed;
@@ -211,7 +220,36 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   font-size: 12px;
   color: var(--muted);
 }
-.dw-body { padding: 8px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+/* history scrolls on its own; the manual-roll controls stay pinned under it */
+.dw-body { padding: 8px; overflow: hidden; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.dw-body .roll-log { flex: 1; min-height: 60px; overflow: auto; }
+.dw-controls { flex: none; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.dice-window-fab .fab-last.hit { color: #6fd39a; }
+.dice-window-fab .fab-last.miss { color: #ef8a8a; }
+/* outcome toasts while the dice window is collapsed (just above its button) */
+.roll-toasts {
+  position: absolute;
+  left: 10px;
+  bottom: 52px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: min(360px, calc(100% - 20px));
+  cursor: pointer;
+}
+.roll-toast {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent-2);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 13px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.roll-toast.hit { border-left-color: var(--hit); }
+.roll-toast.miss { border-left-color: var(--miss); }
+
 .quick-dice { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
 .quick-dice button { padding: 4px; }
 .roll-form, .d20-check { display: flex; gap: 5px; align-items: center; }
@@ -500,6 +538,27 @@ h1, h2, h3, h4 { margin: 0 0 8px; }
   background: var(--line);
 }
 .sd-resize:hover { background: var(--accent); }
+/* right-hand column variant (wide screens): full height, resized from its left edge */
+.sheet-dock.side {
+  flex: 0 1 auto;
+  min-width: 320px;
+  min-height: 0;
+  border-top: none;
+  border-left: 1px solid var(--line);
+  padding-left: 6px;
+}
+.sheet-dock.side .sd-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  height: auto;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.sheet-dock.side .sd-tabs { flex-direction: column; align-items: stretch; gap: 4px; padding-bottom: 4px; }
+.sheet-dock.side .sd-subtabs { margin-left: 0; }
 .sd-tabs {
   display: flex;
   align-items: flex-end;
@@ -1248,12 +1307,14 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .hb-send select { font-size: 12px; padding: 3px 5px; }
 
 /* reference panel (self-hosted 5etools mirror etc) */
+/* Its own column in .stage (pushes the map narrower) instead of a fixed overlay that covered
+   end-turn, the sheet tabs and the zoom bar. */
 .reference-panel {
-  position: fixed;
-  top: 40px;
-  right: 0;
-  bottom: 0;
-  z-index: 40;
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 260px;
+  max-width: 60vw;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -1347,9 +1408,36 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 
 /* settings modal */
 .gear { margin-left: 8px; padding: 4px 8px; font-size: 15px; line-height: 1; }
-.sfx-vol { display: flex; align-items: center; gap: 3px; margin-left: 6px; }
-.sfx-vol button { padding: 4px 6px; font-size: 14px; line-height: 1; }
-.sfx-vol input[type='range'] { width: 60px; }
+.sfx-toggle { padding: 4px 6px; font-size: 14px; line-height: 1; }
+.sfx-vol-row input[type='range'] { width: 220px; }
+/* topbar drop-down menus */
+.top-menu { position: relative; }
+.top-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 70;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.top-menu-list button { text-align: left; border-color: transparent; background: none; padding: 7px 10px; }
+.top-menu-list button:hover { background: var(--panel-2); border-color: var(--line); }
+.top-menu-list button.on { background: none; color: var(--accent-2); }
+.conn-banner {
+  flex: none;
+  background: var(--miss);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  padding: 5px 10px;
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

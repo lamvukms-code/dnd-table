@@ -326,6 +326,64 @@ function BattleMapImpl() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map.cols, map.rows]);
 
+  // Two-finger pinch on touch screens (iPad): zoom around the fingers' midpoint and pan with it.
+  // Native capture-phase listeners so the second finger never reaches the board's own handlers
+  // (which would restart a one-finger pan or start a token drag). A pinch only starts while no
+  // token is being dragged; the first finger's pan is cancelled when the second lands.
+  useEffect(() => {
+    const el = boardScrollRef.current;
+    if (!el) return;
+    const touches = new Map<number, { x: number; y: number }>();
+    let pinch: { dist: number; zoom: number; cx: number; cy: number; panX: number; panY: number } | null = null;
+    const pair = () => {
+      const [a, b] = [...touches.values()];
+      return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    };
+    function down(e: PointerEvent) {
+      if (e.pointerType !== 'touch') return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2 && !drag.current && !zoneDragStart.current) {
+        const p = pair();
+        pinch = { ...p, zoom: zoomRef.current, panX: pan.current.x, panY: pan.current.y };
+        panDrag.current = null;
+        e.stopPropagation();
+      }
+    }
+    function move(e: PointerEvent) {
+      if (!touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!pinch || touches.size < 2) return;
+      e.stopPropagation();
+      const p = pair();
+      const rect = el!.getBoundingClientRect();
+      const z = clampZoom(pinch.zoom * (p.dist / pinch.dist));
+      // board point that was under the starting midpoint stays under the current midpoint
+      const wx = (pinch.cx - rect.left - pinch.panX) / pinch.zoom;
+      const wy = (pinch.cy - rect.top - pinch.panY) / pinch.zoom;
+      applyCamera(p.cx - rect.left - wx * z, p.cy - rect.top - wy * z, z);
+    }
+    function up(e: PointerEvent) {
+      if (!touches.delete(e.pointerId)) return;
+      if (pinch) {
+        e.stopPropagation();
+        suppressBoardClick.current = true; // the lift must not count as a tap that deselects
+        setTimeout(() => (suppressBoardClick.current = false), 400);
+        if (touches.size < 2) pinch = null;
+      }
+    }
+    el.addEventListener('pointerdown', down, true);
+    el.addEventListener('pointermove', move, true);
+    el.addEventListener('pointerup', up, true);
+    el.addEventListener('pointercancel', up, true);
+    return () => {
+      el.removeEventListener('pointerdown', down, true);
+      el.removeEventListener('pointermove', move, true);
+      el.removeEventListener('pointerup', up, true);
+      el.removeEventListener('pointercancel', up, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map.cols, map.rows]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Delete' || !selectedToken) return;

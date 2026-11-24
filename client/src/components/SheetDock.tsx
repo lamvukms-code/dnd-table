@@ -104,6 +104,7 @@ import { ClassSetup } from './sheet/ClassSetup.js';
 import { JaegerFeatures } from './sheet/JaegerFeatures.js';
 import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
 import { mapViewCenterCell } from '../mapView.js';
+import { useWideLayout } from '../useMediaQuery.js';
 import { coverDexSaveBonus, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
@@ -206,6 +207,7 @@ export function blankSheet(ownerId: string): CharacterSheet {
 type SubTab = 'basic' | 'skills' | 'equipment' | 'spells' | 'feats' | 'abilities';
 
 const DOCK_H_KEY = 'dnd-table.dockHeight';
+const DOCK_W_KEY = 'dnd-table.dockWidth';
 
 function SheetDockImpl() {
   const sheets = useStore((s) => s.room?.sheets)!;
@@ -238,28 +240,43 @@ function SheetDockImpl() {
     }
   }
 
+  // Wide screens (≥1000px, incl. iPad landscape): the sheet is a right-hand column with its own width; narrower
+  // (iPad portrait): it docks under the map with its own height. Each size is remembered.
   // 260px is the shortest height that still fits the ability strip + AC/HP row without
   // clipping CHA (the last ability cell) — see the "CHA bị AC/HP đè" bug: a saved dock
   // height below this, from an older/narrower layout, silently clips the last ability cell.
+  const wide = useWideLayout();
   const MIN_DOCK_H = 260;
+  const MIN_DOCK_W = 340;
   const [height, setHeight] = useState(() => {
     const v = Number(localStorage.getItem(DOCK_H_KEY));
     return v >= MIN_DOCK_H && v <= 900 ? v : Math.max(MIN_DOCK_H, Math.round(window.innerHeight * 0.27));
   });
+  const [width, setWidth] = useState(() => {
+    const v = Number(localStorage.getItem(DOCK_W_KEY));
+    return v >= MIN_DOCK_W && v <= 900 ? v : 400;
+  });
   const drag = (e: React.PointerEvent) => {
     e.preventDefault();
+    const startX = e.clientX;
     const startY = e.clientY;
-    const startH = height;
-    let lastH = height;
+    const start = wide ? width : height;
+    let last = start;
     const move = (ev: PointerEvent) => {
-      lastH = Math.max(MIN_DOCK_H, Math.min(window.innerHeight - 140, startH + (startY - ev.clientY)));
-      setHeight(lastH);
+      if (wide) {
+        // Leave the map at least ~45% of the window.
+        last = Math.max(MIN_DOCK_W, Math.min(Math.round(window.innerWidth * 0.55), start + (startX - ev.clientX)));
+        setWidth(last);
+      } else {
+        last = Math.max(MIN_DOCK_H, Math.min(window.innerHeight - 140, start + (startY - ev.clientY)));
+        setHeight(last);
+      }
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       try {
-        localStorage.setItem(DOCK_H_KEY, String(Math.round(lastH)));
+        localStorage.setItem(wide ? DOCK_W_KEY : DOCK_H_KEY, String(Math.round(last)));
       } catch {
         /* ignore */
       }
@@ -270,8 +287,8 @@ function SheetDockImpl() {
 
   return (
     <div
-      className="sheet-dock"
-      style={{ height }}
+      className={wide ? 'sheet-dock side' : 'sheet-dock'}
+      style={wide ? { width } : { height }}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes('Files')) e.preventDefault();
       }}
