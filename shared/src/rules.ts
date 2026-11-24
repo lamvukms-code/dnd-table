@@ -1014,6 +1014,7 @@ export function tokenConditions(token: Pick<Token, 'effects'> | undefined): Cond
 export function conditionAttackMode(
   attackerConds: ConditionType[],
   targetConds: ConditionType[],
+  opts?: { range?: AttackRange; distanceFeet?: number },
 ): { mode: RollMode; reasons: string[] } {
   const reasons: string[] = [];
   let adv = false;
@@ -1030,19 +1031,31 @@ export function conditionAttackMode(
       reasons.push(`mục tiêu ${CONDITION_VI[c]}`);
     }
   }
-  // prone target: advantage in melee (our default), disadvantage at range — we
-  // don't track range, so assume the common melee case.
+  // Prone target: advantage if the attacker is within 5 ft, disadvantage from farther away. Without a
+  // distance, fall back on the attack type (melee = close, ranged = far).
   if (targetConds.includes('prone')) {
-    adv = true;
-    reasons.push('mục tiêu ngã (giả định cận chiến)');
+    const close =
+      typeof opts?.distanceFeet === 'number' ? opts.distanceFeet <= 5 : opts?.range !== 'ranged';
+    if (close) {
+      adv = true;
+      reasons.push('mục tiêu ngã (đứng sát)');
+    } else {
+      dis = true;
+      reasons.push('mục tiêu ngã (ở xa hơn 5ft)');
+    }
   }
   const mode: RollMode = adv && dis ? 'normal' : adv ? 'advantage' : dis ? 'disadvantage' : 'normal';
   return { mode, reasons };
 }
 
-/** Paralyzed / unconscious targets are auto-crit when hit in melee. */
-export function conditionAutoCrit(targetConds: ConditionType[]): boolean {
-  return targetConds.includes('paralyzed') || targetConds.includes('unconscious');
+/** Paralyzed / unconscious targets: a hit is a Critical Hit if the attacker is within 5 ft (2024 RAW —
+ *  ranged attacks included). Without a distance, fall back on the attack type (melee = within 5 ft). */
+export function conditionAutoCrit(
+  targetConds: ConditionType[],
+  opts?: { range?: AttackRange; distanceFeet?: number },
+): boolean {
+  if (!targetConds.includes('paralyzed') && !targetConds.includes('unconscious')) return false;
+  return typeof opts?.distanceFeet === 'number' ? opts.distanceFeet <= 5 : opts?.range !== 'ranged';
 }
 
 /** Combine two roll modes the 5e way: many advantages don't stack, adv+dis cancel. */

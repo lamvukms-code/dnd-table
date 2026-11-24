@@ -104,7 +104,7 @@ import { ClassSetup } from './sheet/ClassSetup.js';
 import { JaegerFeatures } from './sheet/JaegerFeatures.js';
 import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
 import { mapViewCenterCell } from '../mapView.js';
-import { expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
+import { coverDexSaveBonus, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'STR',
@@ -804,9 +804,13 @@ function BasicTab({ draft, commit }: EditorCtx) {
                       </button>
                       <button
                         className={`roll-btn sm ${prof ? 'prof' : ''}`}
-                        onClick={() => roll(`${ab.toUpperCase()} save`, saveBonus(draft, ab), 'save', ab)}
+                        title={ab === 'dex' && coverDexSaveBonus(linkedToken?.cover) ? 'Đã cộng che chắn của token vào save DEX' : undefined}
+                        onClick={() => {
+                          const cov = ab === 'dex' ? coverDexSaveBonus(linkedToken?.cover) : 0;
+                          roll(`${ab.toUpperCase()} save${cov ? ` (+${cov} che chắn)` : ''}`, saveBonus(draft, ab) + cov, 'save', ab);
+                        }}
                       >
-                        save {fmtMod(saveBonus(draft, ab))}
+                        save {fmtMod(saveBonus(draft, ab) + (ab === 'dex' ? coverDexSaveBonus(linkedToken?.cover) : 0))}
                       </button>
                     </div>
                   )}

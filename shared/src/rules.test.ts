@@ -655,6 +655,18 @@ describe('thin-auto conditions', () => {
   it('paralyzed / unconscious target auto-crits', () => {
     expect(conditionAutoCrit(['paralyzed'])).toBe(true);
     expect(conditionAutoCrit(['prone'])).toBe(false);
+    expect(conditionAutoCrit(['paralyzed'], { range: 'melee' })).toBe(true);
+    expect(conditionAutoCrit(['unconscious'], { range: 'ranged' })).toBe(false); // no distance: ranged = far
+    expect(conditionAutoCrit(['paralyzed'], { range: 'ranged', distanceFeet: 5 })).toBe(true); // 2024 RAW: within 5 ft
+    expect(conditionAutoCrit(['paralyzed'], { range: 'melee', distanceFeet: 10 })).toBe(false); // reach weapon
+  });
+  it('prone target: advantage within 5 ft, disadvantage farther away', () => {
+    expect(conditionAttackMode([], ['prone'], { distanceFeet: 5 }).mode).toBe('advantage');
+    expect(conditionAttackMode([], ['prone'], { range: 'ranged', distanceFeet: 5 }).mode).toBe('advantage');
+    expect(conditionAttackMode([], ['prone'], { range: 'melee', distanceFeet: 10 }).mode).toBe('disadvantage');
+    expect(conditionAttackMode([], ['prone'], { range: 'ranged' }).mode).toBe('disadvantage');
+    expect(conditionAttackMode([], ['prone']).mode).toBe('advantage');
+    expect(conditionAttackMode([], ['prone', 'stunned'], { distanceFeet: 30 }).mode).toBe('normal');
   });
   it('combineRollModes: advantage + disadvantage = normal', () => {
     expect(combineRollModes('advantage', 'advantage')).toBe('advantage');

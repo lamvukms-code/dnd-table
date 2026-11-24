@@ -145,10 +145,13 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   other damage part), and `save` / `note` / `expiresRound` fields.
 - **Thin-auto conditions** (0.14.0). Only the combat-critical conditions are
   wired into rolls: `conditionAttackMode` gives advantage (target
-  blinded/paralyzed/restrained/stunned/unconscious/prone) or disadvantage
+  blinded/paralyzed/restrained/stunned/unconscious; prone = advantage within
+  5 ft, disadvantage farther away) or disadvantage
   (attacker blinded/frightened/poisoned/prone/restrained), combined with the
   manual roll mode the 5e way (`combineRollModes`); `conditionAutoCrit`
-  auto-crits a melee hit on a paralyzed/unconscious target. Everything else is
+  auto-crits a hit on a paralyzed/unconscious target when the attacker is
+  within 5 ft — 2024 RAW, ranged attacks included (user decision 2026-11-24;
+  replaces the earlier "melee hit" wording). Everything else is
   an advisory badge. "Save ends" effects re-roll at the turn boundary
   (`processTurnEffects` on `initNext`); `expiresRound` effects auto-clear.
 - **Spellcasting** (0.14.0). `casterTypeOf(sheet)` → full / half / third / pact

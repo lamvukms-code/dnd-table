@@ -3,6 +3,7 @@ import {
   abilityMod,
   combineRollModes,
   conditionAttackMode,
+  conditionAutoCrit,
   coverAcBonus,
   d20Check,
   derivedDefenses,
@@ -395,7 +396,10 @@ export const useStore = create<StoreState>((set, get) => {
               )
             : undefined;
         const tgtTok = room?.tokens.find((t) => t.id === targetTokenId);
-        const cm = conditionAttackMode(tokenConditions(atkTok), tokenConditions(tgtTok));
+        const cm = conditionAttackMode(tokenConditions(atkTok), tokenConditions(tgtTok), {
+          range: attackRange,
+          distanceFeet: atkTok && tgtTok ? gridFeet(atkTok, tgtTok) : undefined,
+        });
         const reasons = [...cm.reasons];
         let mode = cm.mode;
         // Ranged attack made at close quarters (target within 5 ft): Disadvantage.
@@ -453,8 +457,11 @@ export const useStore = create<StoreState>((set, get) => {
       );
       const critImmune = def?.critImmune ?? false;
       const targetConds = tokenConditions(token);
-      const autoCrit =
-        targetConds.includes('paralyzed') || targetConds.includes('unconscious');
+      const atkTok2 = attackerTokenId ? room?.tokens.find((t) => t.id === attackerTokenId) : undefined;
+      const autoCrit = conditionAutoCrit(targetConds, {
+        range: attackRange,
+        distanceFeet: atkTok2 && token ? gridFeet(atkTok2, token) : undefined,
+      });
       const nat20 = attack.d20Natural === 20;
       const fumble = attack.d20Natural === 1;
       const hit = nat20 || (!fumble && attack.total >= ac);
@@ -476,6 +483,7 @@ export const useStore = create<StoreState>((set, get) => {
         targetTokenId,
         attackerSheetId,
         attackerTokenId,
+        attackRange,
         pushFeetOnHit,
         grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },

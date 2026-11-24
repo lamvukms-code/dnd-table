@@ -16,6 +16,7 @@ import {
   concentrationDc,
   conditionAutoCrit,
   coverAcBonus,
+  coverDexSaveBonus,
   derivedDefenses,
   externalRollResult,
   homebrewCritDamage,
@@ -469,13 +470,16 @@ export class Room {
     return 0;
   }
 
-  /** Roll a d20 save for a token (nat 20 auto-pass, nat 1 auto-fail — homebrew). */
+  /** Roll a d20 save for a token (nat 20 auto-pass, nat 1 auto-fail — homebrew). `withCover`: the save
+   *  is against an effect from another creature, so the token's cover adds to a DEX save (SRS §2.5). */
   private rollTokenSave(
     token: Token,
     ability: Ability,
     dc: number,
+    withCover = false,
   ): { d20: number; total: number; pass: boolean; bonus: number } {
-    const bonus = this.tokenSaveBonus(token, ability);
+    const bonus =
+      this.tokenSaveBonus(token, ability) + (withCover && ability === 'dex' ? coverDexSaveBonus(token.cover) : 0);
     const d20 = 1 + Math.floor(Math.random() * 20);
     const total = d20 + bonus;
     const pass = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
@@ -861,7 +865,8 @@ export class Room {
         this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
         const took = this.applyDamage(target, out.totalFinal);
         const amount = took.applied;
-        if (amount > 0) this.markDealtDamage(action.attackerTokenId);
+        // "Dealt damage" includes what temp HP soaked up (a hit is a hit even if HP didn't move).
+        if (amount + took.absorbed > 0) this.markDealtDamage(action.attackerTokenId);
         this.maybeBreakConcentration(target, out.totalFinal);
         this.pushRoll({
           id: nanoid(8),
@@ -1098,7 +1103,15 @@ export class Room {
         const def = this.effectiveDefenses(target);
         const critImmune = def?.critImmune ?? false;
         // Thin-auto: a paralyzed / unconscious target is auto-crit when hit.
-        const autoCrit = res.hit && conditionAutoCrit(tokenConditions(target));
+        const attackerTok = action.attackerTokenId
+          ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId)
+          : undefined;
+        const autoCrit =
+          res.hit &&
+          conditionAutoCrit(tokenConditions(target), {
+            range: action.attackRange,
+            distanceFeet: attackerTok ? gridFeet(attackerTok, target) : undefined,
+          });
         const effectiveCrit = (res.crit || autoCrit) && !critImmune;
 
         // Target-bound riders (Hex / Hunter's Mark placed on this token by the attacker).
@@ -1153,12 +1166,14 @@ export class Room {
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
           const took = this.applyDamage(target, outcome.totalFinal);
           const applied = took.applied;
-          if (applied > 0) this.markDealtDamage(action.attackerTokenId);
+          // Temp HP soaking the hit still counts as dealing damage (Booming Blade, Bracers).
+          const dealt = applied + took.absorbed;
+          if (dealt > 0) this.markDealtDamage(action.attackerTokenId);
           // Booming Blade: a hit that carried the cantrip's Thunder rider (see `dmgParts`, tagged
           // by the client when the sheet has it armed) leaves the target primed — one Thunder hit
           // if it willingly moves before the caster's next turn (see `case 'updateToken'`).
           const boomingPart = dmgParts.find((p) => p.label === 'Booming Blade');
-          if (applied > 0 && boomingPart) {
+          if (dealt > 0 && boomingPart) {
             target.effects = [
               ...(target.effects ?? []),
               {
@@ -1648,15 +1663,17 @@ export class Room {
           target,
           action.ability,
           action.dc,
+          true,
         );
+        const coverSave = action.ability === 'dex' ? coverDexSaveBonus(target.cover) : 0;
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: `${action.label} → ${target.label}: ${action.ability.toUpperCase()} cứu ${total} vs DC ${action.dc} — ${
-            pass ? 'THOÁT' : 'DÍNH'
-          }`,
+          label: `${action.label} → ${target.label}: ${action.ability.toUpperCase()} cứu ${total} vs DC ${action.dc}${
+            coverSave ? ` (gồm +${coverSave} che chắn)` : ''
+          } — ${pass ? 'THOÁT' : 'DÍNH'}`,
           result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {
             total,
             faces: [d20],
@@ -1683,7 +1700,7 @@ export class Room {
           const dealt = pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           const took = this.applyDamage(target, dealt);
           const applied = took.applied;
-          if (applied > 0) this.markDealtDamage(action.sourceTokenId);
+          if (applied + took.absorbed > 0) this.markDealtDamage(action.sourceTokenId);
           this.pushRoll({
             id: nanoid(8),
             ts: Date.now(),
