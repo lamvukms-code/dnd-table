@@ -1523,9 +1523,9 @@ function TokenInspector({
               const sheet = sheets.find((s) => s.id === e.target.value);
               // unlink whatever this sheet pointed at, then link this token
               if (linkedSheet && (!sheet || sheet.id !== linkedSheet.id)) {
-                send({ t: 'upsertSheet', sheet: { ...linkedSheet, tokenId: undefined } });
+                send({ t: 'upsertSheet', sheet: { ...linkedSheet, tokenId: undefined }, base: linkedSheet });
               }
-              if (sheet) send({ t: 'upsertSheet', sheet: { ...sheet, tokenId: token.id } });
+              if (sheet) send({ t: 'upsertSheet', sheet: { ...sheet, tokenId: token.id }, base: sheet });
             }}
           >
             <option value="">— không —</option>
@@ -1674,7 +1674,7 @@ function TokenInspector({
         </p>
       )}
 
-      {!statblockHidden && (
+      {isDm && !statblockHidden && (
         <details className="def-details">
           <summary>Phòng thủ (kháng / miễn / DR)</summary>
           <DefensesEditor
@@ -1723,6 +1723,7 @@ function TokenInspector({
                       send({
                         t: 'upsertSheet',
                         sheet: { ...target, currency: addCurrency(target.currency, rolledLoot) },
+                        base: target,
                       });
                       setRolledLoot(null);
                       setLootTargetSheetId('');

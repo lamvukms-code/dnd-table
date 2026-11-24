@@ -350,7 +350,7 @@ function SendToInventory({ entry }: { entry: HomebrewEntry }) {
     const sheet = sheets.find((s) => s.id === target);
     if (!sheet) return;
     const item = inventoryItemFromHomebrew(entry, nanoIdish);
-    send({ t: 'upsertSheet', sheet: { ...sheet, inventory: [...sheet.inventory, item] } });
+    send({ t: 'upsertSheet', sheet: { ...sheet, inventory: [...sheet.inventory, item] }, base: sheet });
     setSent(`Đã thêm vào túi đồ của ${sheet.name}.`);
     setTimeout(() => setSent(null), 3000);
   }

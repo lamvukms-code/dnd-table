@@ -166,7 +166,8 @@ export type ClientAction =
     }
   // DM rolls initiative for a chosen group of tokens, silently (no dddice, no log)
   | { t: 'rollInitiativeGroup'; tokenIds: string[] }
-  | { t: 'upsertSheet'; sheet: CharacterSheet }
+  // `base`: the server copy the edit started from — fields unchanged from it keep the server's value
+  | { t: 'upsertSheet'; sheet: CharacterSheet; base?: CharacterSheet }
   | { t: 'removeSheet'; id: string }
   // bestiary (DM only)
   | { t: 'bestiaryUpsert'; statblock: Statblock }

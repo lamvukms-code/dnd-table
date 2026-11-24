@@ -375,6 +375,9 @@ function SheetDockImpl() {
 function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
   const send = useStore((s) => s.send);
   const [draft, setDraft] = useState<CharacterSheet>(sheet);
+  // The server copy the draft was last synced from — sent with each edit so the server only applies the
+  // fields this player actually changed (no stale draft undoing damage or a disarmed rider).
+  const base = useRef<CharacterSheet>(sheet);
 
   useEffect(() => {
     // Only hold back server updates while the player is actually typing in a field. Focus sitting on a
@@ -389,12 +392,16 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
         !['checkbox', 'radio', 'button', 'range', 'color', 'file'].includes((active as HTMLInputElement).type)) ||
         active.tagName === 'TEXTAREA' ||
         active.isContentEditable);
-    if (!typing) setDraft(sheet);
+    if (!typing) {
+      setDraft(sheet);
+      base.current = sheet;
+    }
   }, [sheet]);
 
   function commit(next: CharacterSheet) {
     setDraft(next);
-    send({ t: 'upsertSheet', sheet: next });
+    send({ t: 'upsertSheet', sheet: next, base: base.current });
+    base.current = next;
   }
   const ctx: EditorCtx = { draft, commit };
 

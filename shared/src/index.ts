@@ -13,6 +13,7 @@ export * from './aoe.js';
 export * from './importPdfSheet.js';
 export * from './classDefaults.js';
 export * from './jaeger.js';
+export * from './sheetMerge.js';
 export * from './species.js';
 export * from './background.js';
 export * from './heirloom.js';

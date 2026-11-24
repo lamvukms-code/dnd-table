@@ -149,7 +149,7 @@ function SendToSheet({ def }: { def: EquipmentPreset }) {
     const sheet = sheets.find((s) => s.id === target);
     if (!sheet) return;
     const item = equipmentPresetFromDef(def, nanoIdish);
-    send({ t: 'upsertSheet', sheet: { ...sheet, inventory: [...sheet.inventory, item] } });
+    send({ t: 'upsertSheet', sheet: { ...sheet, inventory: [...sheet.inventory, item] }, base: sheet });
     setSent(`Đã thêm vào túi đồ của ${sheet.name}.`);
     setTimeout(() => setSent(null), 3000);
   }

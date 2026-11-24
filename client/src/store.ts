@@ -539,7 +539,7 @@ export const useStore = create<StoreState>((set, get) => {
           set({ error: 'Hết lần Wild Shape.' });
           return false;
         }
-        rawSend({ t: 'upsertSheet', sheet: { ...sheet, wildShapeUsed: used + 1 } });
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, wildShapeUsed: used + 1 }, base: sheet });
       }
       rawSend({ t: 'applyEffect', targetTokenId: tok.id, effect: { id: '', ...ww.effect } });
       rawSend({ t: 'grantTempHp', targetTokenId: tok.id, notation: String(ww.tempHp), label: 'Rampant Growth (HP tạm)', sourceSheetId: sheet.id });
@@ -635,7 +635,7 @@ export const useStore = create<StoreState>((set, get) => {
         if (!slot.available) {
           if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return;
         } else if (Object.keys(slot.patch).length > 0) {
-          rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch } });
+          rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch }, base: sheet });
         }
       }
       const atkBonus = spellAttackBonus(sheet, spell) ?? 0;

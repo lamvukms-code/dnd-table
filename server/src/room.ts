@@ -44,6 +44,8 @@ import {
   abilityMod as abilityModOf,
   diceFacesOf,
   expendJaegerMomentum,
+  initiativeBonus,
+  mergeSheetEdit,
   rollNotation,
   targetRiderParts,
   tokenConditions,
@@ -63,6 +65,11 @@ import {
   type Statblock,
   type Token,
 } from '@dnd-table/shared';
+
+/** Token fields a non-DM may change with `updateToken` (on a token they control). */
+const PLAYER_TOKEN_FIELDS = new Set([
+  'x', 'y', 'label', 'color', 'imageUrl', 'size', 'cover', 'currentHp', 'maxHp', 'tempHp', 'armorClass',
+]);
 
 export class Room {
   state: RoomState;
@@ -1359,10 +1366,14 @@ export class Room {
         if (!token) return 'Token không tồn tại';
         const canMove = isDm || token.controllerId === actor.id;
         if (!canMove) return 'Bạn không điều khiển token này';
-        const patch = { ...action.patch };
+        let patch = { ...action.patch };
         if (!isDm) {
-          delete patch.hidden;
-          delete patch.revealStats; // only the DM decides what players may see of a token
+          // A player may move and restyle a token they control, and keep its HP / cover; everything the
+          // server uses for rules or turn bookkeeping (movement budget, effects, defences, statblock,
+          // visibility, controller) is DM-only.
+          patch = Object.fromEntries(
+            Object.entries(patch).filter(([k]) => PLAYER_TOKEN_FIELDS.has(k)),
+          ) as typeof patch;
         }
         // Movement tracker: on their turn a player can only move up to Speed
         // (+ Dash); off-turn moves in combat are blocked. The server clamps.
@@ -1738,21 +1749,33 @@ export class Room {
       }
 
       case 'rollInitiative': {
+        let { name, mod } = action;
+        if (!isDm) {
+          // A player rolls only for their own character: the entry must be their sheet's (by token or
+          // by name), and the modifier comes from that sheet, not from the client.
+          const mine = this.state.sheets.filter((s) => s.ownerId === actor.id);
+          const sheet = action.tokenId
+            ? mine.find((s) => s.tokenId === action.tokenId)
+            : mine.find((s) => s.name === action.name);
+          if (!sheet) return 'Chỉ tung initiative được cho nhân vật của bạn';
+          name = sheet.name;
+          mod = initiativeBonus(sheet);
+        }
         let result: RollResult;
         if (action.external) {
-          result = externalRollResult(`1d20${action.mod >= 0 ? '+' : ''}${action.mod}`, action.external);
+          result = externalRollResult(`1d20${mod >= 0 ? '+' : ''}${mod}`, action.external);
         } else {
-          result = rollNotation(initNotation(action.mod));
+          result = rollNotation(initNotation(mod));
         }
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: `${action.name} · Initiative`,
+          label: `${name} · Initiative`,
           result,
         });
-        this.upsertInitEntry(action.name, result.total, action.tokenId);
+        this.upsertInitEntry(name, result.total, action.tokenId);
         this.touch();
         break;
       }
@@ -1890,7 +1913,11 @@ export class Room {
         if (existing && existing.ownerId !== actor.id && !isDm) {
           return 'Bạn không sở hữu character sheet này';
         }
-        const incoming = normalizeSheet({ ...action.sheet });
+        // Three-way merge against the copy the client started from: fields it didn't touch keep the
+        // server's current value (damage, disarmed riders, level-up) instead of a stale draft's.
+        const incoming = normalizeSheet({
+          ...(existing && action.base ? mergeSheetEdit(existing, action.base, action.sheet) : action.sheet),
+        });
         if (!existing) incoming.ownerId = incoming.ownerId || actor.id;
         // A token can back exactly one sheet, and NPC (stat-blocked) tokens can't
         // be linked to a character sheet — copy the token instead.
@@ -2012,8 +2039,11 @@ export class Room {
         // behind on a different map doesn't get moved, a fresh one is placed here instead.
         const existing = sheet.tokenId ? this.state.tokens.find((tk) => tk.id === sheet.tokenId) : undefined;
         if (existing) {
-          existing.x = action.x;
-          existing.y = action.y;
+          // Re-placing a token already on the map is a move: same combat gate as dragging it.
+          const gate = this.moveGate(actor, existing, { x: action.x, y: action.y });
+          if (!gate.ok) return gate.msg;
+          existing.x = gate.pos.x;
+          existing.y = gate.pos.y;
         } else {
           const owner = this.state.participants.find((p) => p.id === sheet.ownerId);
           const token = createToken({
