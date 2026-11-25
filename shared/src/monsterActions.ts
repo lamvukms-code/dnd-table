@@ -18,7 +18,7 @@ export function actionLimit(a: Pick<SheetAction, 'name' | 'description'>): Actio
     const min = Number(r[1]);
     if (min >= 2 && min <= 6) return { kind: 'recharge', min };
   }
-  const d = /\((\d+)\s*\/\s*Day(?:\s+each)?\)/i.exec(name);
+  const d = /\((\d+)\s*\/\s*(?:Day(?:\s+each)?|Short Rest|Long Rest|Short or Long Rest)\)/i.exec(name);
   if (d && Number(d[1]) > 0) return { kind: 'perDay', max: Number(d[1]) };
   return null;
 }

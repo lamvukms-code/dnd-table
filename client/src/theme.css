@@ -461,3 +461,9 @@ label { color: var(--muted); }
 /* monster mechanics the app runs by itself */
 .mech-badge { color: #2f6b3a; font-weight: 700; }
 .eff-chip .eff-escape { color: #1f6fb0; margin-left: 4px; }
+
+/* monster reaction offers + legendary target */
+.react-prompts { top: calc(var(--hud-top, 64px) + 110px); }
+.oa-prompt.react { border-color: #c9a227; }
+.dm-prompt-target { font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.insp-autoreact { font-size: 12px; margin: 2px 0 6px; }

@@ -115,3 +115,40 @@ describe('monster mechanics wave 2: turn hooks and death', () => {
     expect(find('reviveAtZero')).toMatchObject({ hp: '4d10', uses: 1 });
   });
 });
+
+describe('monster mechanics wave 3: reactions', () => {
+  const r = (name: string, description: string) => ({ id: name, name, actionType: 'reaction', description }) as SheetAction;
+  const sb = {
+    name: 'Test Duelist',
+    traits: [
+      { name: 'Spiked Hide', description: 'Whenever a creature within 5 feet of the duelist hits it with a melee attack, the creature takes 3 (1d6) piercing damage.' },
+      { name: 'Quick', description: 'The duelist can take one reaction on every turn in combat.' },
+      { name: 'Flyby', description: 'The duelist doesn\'t provoke opportunity attacks when it flies out of an enemy\'s reach.' },
+    ],
+    actions: [
+      r('Parry', 'The duelist adds 3 to its AC against one melee attack that would hit it.'),
+      r('Sidestep (3/Short Rest)', 'When targeted by a melee attack, it moves 5 feet and makes a Dexterity saving throw with a DC equal to the attack roll\'s total.'),
+      r('Deflect (3/Short Rest)', 'It deflects an attack it can see. It reduces the attack\'s damage by 9 (1d10 + 4).'),
+      r('Snare', 'When a creature starts its turn within 5 feet of the duelist, or enters the area for the first time on a turn, the duelist can snare it. DC 15 Dexterity saving throw.'),
+      r('Guard', 'When another creature within 5 feet of the duelist takes damage, the duelist halves it.'),
+      r('Punish Healing', 'When a spell that restores hit points is being cast within 60 feet of the duelist, it attacks the caster.'),
+    ],
+  };
+  const m = detectMechanics(sb);
+  const find = (k: string, from?: string) => m.find((x) => x.kind === k && (!from || x.from === from)) as Record<string, unknown> | undefined;
+  it('defensive reactions run automatically', () => {
+    expect(find('parry')).toMatchObject({ ac: 3, actionId: 'Parry' });
+    expect(find('dodgeSave')).toMatchObject({ meleeOnly: true });
+    expect(find('reduceDamage')).toMatchObject({ dice: '1d10+4' });
+  });
+  it('passives: thorns, reactive, flyby', () => {
+    expect(find('thorns')).toMatchObject({ radiusFt: 5, dice: '1d6', type: 'piercing' });
+    expect(find('reactive')).toBeTruthy();
+    expect(find('flyby')).toBeTruthy();
+  });
+  it('other reactions get a trigger the DM is asked on', () => {
+    expect(find('reaction', 'Snare')).toMatchObject({ trigger: 'nearStart', radiusFt: 5, enters: true });
+    expect(find('reaction', 'Guard')).toMatchObject({ trigger: 'allyDamaged', radiusFt: 5 });
+    expect(find('reaction', 'Punish Healing')).toMatchObject({ trigger: 'healCast', radiusFt: 60 });
+  });
+});

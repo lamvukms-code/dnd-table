@@ -140,6 +140,9 @@ import {
   type MonsterMechanic,
   mechanicsOfKind,
   regenSuppressed,
+  actionAvailable,
+  failCondition,
+  statblockDamageParts,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -342,6 +345,15 @@ export class Room {
     if (r.hp <= 0) this.endDownEffects(token, 'còn 0 HP');
     if (!sheet && amount > 0 && typeof hpBefore === 'number') this.undyingCheck(token, hpBefore, r.hp, !!opts?.godsBane);
     if (!sheet && typeof hpBefore === 'number' && hpBefore > 0 && r.hp <= 0 && !token.downedUndying) this.pendingDowns.push(token.id);
+    if (amount > 0 && this.state.initiative.running && !this.offeringReactions) {
+      this.offeringReactions = true;
+      try {
+        if (r.hp > 0) this.offerReactionsOf('selfDamaged', token, undefined, 'vừa nhận sát thương', { self: token });
+        this.offerReactionsOf('allyDamaged', token, token, `${token.label} nhận sát thương`);
+      } finally {
+        this.offeringReactions = false;
+      }
+    }
     return { applied: r.applied, absorbed: r.absorbed };
   }
 
@@ -1265,7 +1277,19 @@ export class Room {
   }
 
   /** At a turn boundary: run "save ends" effects on `token` and clear expired ones. */
+  /** A new turn begins: last turn's offers lapse, once-per-turn lists reset, "Reactive" monsters get their reaction back. */
+  private resetTurnScoped(): void {
+    this.state.oaPrompts = [];
+    this.state.reactPrompts = [];
+    for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
+    for (const t of this.state.tokens) {
+      if (t.auraHitTurn?.length) t.auraHitTurn = [];
+      if (t.turnUsed?.reaction && mechanicsOfKind(this.mechOf(t), 'reactive').length) t.turnUsed = { ...t.turnUsed, reaction: false };
+    }
+  }
+
   private processTurnEffects(token: Token, phase: 'start-of-turn' | 'end-of-turn'): void {
+    if (phase === 'start-of-turn') this.resetTurnScoped();
     const round = this.state.initiative.round;
     const keep: ActiveEffect[] = [];
     if (phase === 'start-of-turn') token.turnUsed = undefined; // a new turn: Action / Bonus / Reaction available again
@@ -1430,9 +1454,6 @@ export class Room {
    * lair check (which can legitimately fire before anyone has acted, if nobody rolled 20+).
    */
   private checkDmPrompts(ctx?: { endingId?: string; prevActiveInit?: number; includeLegendary?: boolean }): void {
-    this.state.oaPrompts = []; // a new turn: last turn's Opportunity Attack offers lapse
-    for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
-    for (const t of this.state.tokens) if (t.auraHitTurn?.length) t.auraHitTurn = [];
     if (this.state.dmPrompt) return; // don't clobber an unanswered prompt
     const init = this.state.initiative;
     if (!init.running) return;
@@ -1566,8 +1587,48 @@ export class Room {
     return m;
   }
 
+  /** Can this monster use this reaction now (reaction unspent, alive, able, uses left)? */
+  private canReact(t: Token, m: { actionId?: string }): boolean {
+    if (t.turnUsed?.reaction || !this.alive(t)) return false;
+    if (tokenConditions(t).some((c) => ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'].includes(c))) return false;
+    const a = m.actionId ? t.statblock?.actions.find((x) => x.id === m.actionId) : undefined;
+    const lim = a ? actionLimit(a) : null;
+    return !lim || actionAvailable(lim, t.actionUses?.[a!.id] ?? 0);
+  }
+
+  private spendReaction(t: Token, m: { actionId?: string }): void {
+    t.turnUsed = { ...(t.turnUsed ?? {}), reaction: true };
+    const a = m.actionId ? t.statblock?.actions.find((x) => x.id === m.actionId) : undefined;
+    if (a && actionLimit(a)) t.actionUses = { ...(t.actionUses ?? {}), [a.id]: (t.actionUses?.[a.id] ?? 0) + 1 };
+  }
+
+  /** Offer a monster reaction to the DM (deduped per reactor + action + trigger). */
+  private offerReaction(r: Token, m: { actionId?: string; from?: string }, trigger: Token | undefined, why: string): void {
+    if (!m.actionId || !this.canReact(r, m)) return;
+    const list = (this.state.reactPrompts ??= []);
+    if (list.some((p) => p.tokenId === r.id && p.actionId === m.actionId && p.triggerTokenId === trigger?.id)) return;
+    list.push({ id: nanoid(8), tokenId: r.id, tokenName: r.label, actionId: m.actionId, actionName: m.from ?? 'Reaction', triggerTokenId: trigger?.id, triggerName: trigger?.label, why });
+  }
+
+  /** Reactions of every monster whose trigger is `kind`, filtered by distance to `near`. */
+  private offerReactionsOf(kind: 'selfDamaged' | 'selfAttacked' | 'allyDamaged' | 'nearStart' | 'healCast' | 'spellCast', near: Token, trigger: Token | undefined, why: string, opts?: { self?: Token; enter?: boolean }): void {
+    for (const r of opts?.self ? [opts.self] : this.state.tokens) {
+      for (const m of mechanicsOfKind(this.mechOf(r), 'reaction')) {
+        if (m.trigger !== kind) continue;
+        if (opts?.enter && !m.enters) continue;
+        if (!opts?.self) {
+          if (r.id === near.id) continue;
+          if (kind === 'allyDamaged' ? this.isPlayerSide(r) !== this.isPlayerSide(near) : this.isPlayerSide(r) === this.isPlayerSide(near)) continue;
+          if (edgeFeet(r, tokenSpan(r), near, tokenSpan(near)) > (m.radiusFt ?? 5)) continue;
+        }
+        this.offerReaction(r, m, trigger, why);
+      }
+    }
+  }
+
   /** Monsters that dropped to 0 HP during this action — their death triggers run in `touch()`. */
   private pendingDowns: string[] = [];
+  private offeringReactions = false;
 
   /** Roll damage dice of one or more parts against `t` (its defences), apply, log. Returns damage dealt. */
   private mechDamage(t: Token, parts: { dice: string; type: string }[], label: string, opts?: { save?: { ability: Ability; dc: number }; halfOnSave?: boolean; magical?: boolean }): number {
@@ -1728,6 +1789,7 @@ export class Room {
           if (d.targets === 'grappled' && d.when === 'start') this.mechDamage(t, [{ dice: d.dice, type: d.type }], `${g.label} · ${d.from}`, { save: d.save, halfOnSave: d.halfOnSave });
         }
       }
+      this.offerReactionsOf('nearStart', t, t, `${t.label} bắt đầu lượt cạnh`);
       // auras: hostile creatures with an aura reach this creature
       for (const b of this.state.tokens) {
         if (b.id === t.id || !this.alive(b) || this.isPlayerSide(b) === this.isPlayerSide(t)) continue;
@@ -1776,6 +1838,7 @@ export class Room {
       const reachWeapon = !!sh?.inventory.some((it) => it.type === 'weapon' && it.equipped && /glaive|halberd|lance|pike|whip/i.test(it.name));
       return meleeReach(t, reachWeapon);
     };
+    if (mechanicsOfKind(this.mechOf(mover), 'flyby').length) return; // flies out of reach without provoking
     const reactors = opportunityReactors(mover, from, mover, this.state.tokens, (t) => this.isPlayerSide(t), reachOf);
     for (const r of reactors) {
       const list = (this.state.oaPrompts ??= []);
@@ -1930,6 +1993,10 @@ export class Room {
       case 'heal': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        {
+          const healer = action.sourceSheetId ? this.state.tokens.find((t) => t.id === this.state.sheets.find((x) => x.id === action.sourceSheetId)?.tokenId) : undefined;
+          if (healer && this.state.initiative.running) this.offerReactionsOf('healCast', healer, healer, `${healer.label} ra phép hồi máu`);
+        }
         if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
         let result: RollResult;
         if (typeof action.external === 'number') {
@@ -2001,6 +2068,39 @@ export class Room {
           label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'reactResolve': {
+        if (!isDm) return 'Chỉ DM trả lời reaction của quái';
+        const list = this.state.reactPrompts ?? [];
+        const p = list.find((x) => x.id === action.id);
+        if (!p) return null;
+        this.state.reactPrompts = list.filter((x) => x.id !== p.id);
+        const r = this.state.tokens.find((t) => t.id === p.tokenId);
+        const a = r?.statblock?.actions.find((x) => x.id === p.actionId);
+        if (!action.use || !r || !a) {
+          this.touch();
+          break;
+        }
+        this.spendReaction(r, { actionId: a.id });
+        const victim = p.triggerTokenId ? this.state.tokens.find((t) => t.id === p.triggerTokenId) : undefined;
+        if (a.save && victim) {
+          const s = this.rollTokenSave(victim, a.save.ability, a.save.dc, false, failCondition(a.description));
+          const parts = statblockDamageParts(a, r.statblock).map((x) => ({ dice: x.dice, type: x.type }));
+          const half = /half (?:as much )?damage/i.test(a.description ?? '');
+          if (!s.pass || half) {
+            if (parts.length) this.mechDamage(victim, parts, `${r.label} · ${a.name}`, { halfOnSave: half });
+          }
+          const cond = failCondition(a.description);
+          if (!s.pass && cond) {
+            victim.effects = [...(victim.effects ?? []), { id: nanoid(8), name: `${a.name} (${r.label})`, condition: cond, sourceTokenId: r.id, note: 'Từ reaction của quái; thời hạn xem mô tả' }];
+          }
+          this.systemLog(`⚡ ${r.label} dùng ${a.name} lên ${victim.label}: ${a.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${a.save.dc} — ${s.pass ? 'đỗ' : `trượt${cond ? ` → ${cond}` : ''}`}`);
+        } else {
+          this.systemLog(`⚡ ${r.label} dùng reaction: ${a.name}${victim ? ` (vì ${victim.label})` : ''} — DM xử lý phần còn lại`);
+        }
         this.touch();
         break;
       }
@@ -2330,6 +2430,25 @@ export class Room {
           if (action.external) action.external = { ...action.external, partTotals: undefined }; // re-roll as a crit
           this.pendingBaneLogs.push(`💥 ${attackerTok?.label}: chí mạng với ${nat} (${critFrom}–20)`);
         }
+        // The target's automatic reactions (monsters): Parry when it turns the hit into a miss, a DEX-save dodge.
+        const tgtMechs = this.mechOf(target);
+        if (res.hit && tgtMechs.length && target.autoReactions !== false) {
+          const parry = mechanicsOfKind(tgtMechs, 'parry').find((p) => this.canReact(target, p));
+          if (parry && action.attackRange === 'melee' && !res.crit && attackRoll.total < ac + parry.ac) {
+            this.spendReaction(target, parry);
+            Object.assign(res, { hit: false });
+            this.pendingBaneLogs.push(`🛡 ${target.label}: ${parry.from} (+${parry.ac} AC → ${ac + parry.ac}) — đòn trượt`);
+          }
+          const dodge = res.hit ? mechanicsOfKind(tgtMechs, 'dodgeSave').find((p) => this.canReact(target, p) && (!p.meleeOnly || action.attackRange === 'melee')) : undefined;
+          if (dodge) {
+            this.spendReaction(target, dodge);
+            const s = this.rollTokenSave(target, 'dex', attackRoll.total);
+            if (s.pass) Object.assign(res, { hit: false, crit: false });
+            this.pendingBaneLogs.push(`💨 ${target.label}: ${dodge.from} — DEX cứu ${s.total}${s.modeNote} vs ${attackRoll.total} ${s.pass ? '✔ né được, đòn trượt' : '✘ không né kịp'} (lùi 5–10 ft: dời tay)`);
+          }
+        }
+        if (target.statblock && !this.linkedSheet(target)) this.offerReactionsOf('selfAttacked', target, attackerTok, 'bị nhắm bằng đòn đánh', { self: target });
+        if (action.attackKind === 'spell' && attackerTok) this.offerReactionsOf('spellCast', attackerTok, attackerTok, `${attackerTok.label} ra phép`);
         const mechCrit = res.hit && atkMechs.length ? mechanicAutoCrit(atkMechs, action.actionName, { targetGrappledBySelf: this.grappledBy(target, attackerTok) }) : null;
         if (mechCrit && !res.crit) {
           if (action.external) action.external = { ...action.external, partTotals: undefined };
@@ -2393,6 +2512,27 @@ export class Room {
           },
         });
         if (outcome) outcome = { ...outcome, totalFinal: this.baneReduce(target, action.attackerTokenId, outcome.totalFinal) };
+        if (outcome && damageResult && tgtMechs.length && target.autoReactions !== false) {
+          const cut = mechanicsOfKind(tgtMechs, 'reduceDamage').find((p) => this.canReact(target, p));
+          if (cut && outcome.totalFinal > 0) {
+            this.spendReaction(target, cut);
+            let red = 0;
+            try {
+              red = rollNotation(cut.dice).total;
+            } catch {
+              red = 0;
+            }
+            const before = outcome.totalFinal;
+            outcome = { ...outcome, totalFinal: Math.max(0, before - red) };
+            this.pendingBaneLogs.push(`🛡 ${target.label}: ${cut.from} — giảm ${red} sát thương (${before} → ${outcome.totalFinal})`);
+          }
+        }
+        // Spiked bodies: a melee hit from close by hurts the attacker.
+        if (res.hit && action.attackRange === 'melee' && attackerTok && tgtMechs.length) {
+          for (const th of mechanicsOfKind(tgtMechs, 'thorns')) {
+            if (edgeFeet(attackerTok, tokenSpan(attackerTok), target, tokenSpan(target)) <= th.radiusFt) this.mechDamage(attackerTok, [{ dice: th.dice, type: th.type }], `${target.label} · ${th.from}`);
+          }
+        }
         if (damageResult && outcome) {
           const hadTemp = this.tempOf(target);
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
@@ -2745,6 +2885,12 @@ export class Room {
           }
           for (const b of this.state.tokens) {
             if (b.id === token.id || !this.alive(b) || this.isPlayerSide(b) === this.isPlayerSide(token)) continue;
+            for (const m of mechanicsOfKind(this.mechOf(b), 'reaction')) {
+              if (m.trigger !== 'nearStart' || !m.enters) continue;
+              const r = m.radiusFt ?? 5;
+              const was = edgeFeet({ x: beforeX, y: beforeY }, tokenSpan(token), b, tokenSpan(b)) <= r;
+              if (!was && edgeFeet(token, tokenSpan(token), b, tokenSpan(b)) <= r) this.offerReaction(b, m, token, `${token.label} đi vào cạnh`);
+            }
             for (const a of mechanicsOfKind(this.mechOf(b), 'aura')) {
               if (a.trigger !== 'startOrEnter') continue;
               const was = edgeFeet({ x: beforeX, y: beforeY }, tokenSpan(token), b, tokenSpan(b)) <= a.radiusFt;
@@ -2994,6 +3140,10 @@ export class Room {
       case 'spellSave': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (action.fromSpell && this.state.initiative.running) {
+          const caster = action.sourceTokenId ? this.state.tokens.find((t) => t.id === action.sourceTokenId) : action.sourceSheetId ? this.state.tokens.find((t) => t.id === this.state.sheets.find((x) => x.id === action.sourceSheetId)?.tokenId) : undefined;
+          if (caster) this.offerReactionsOf('spellCast', caster, caster, `${caster.label} ra phép`);
+        }
         if (target.godsBaneBlade) break; // never a target: an area spell just skips the blade
         const ownsSource =
           (action.sourceSheetId &&

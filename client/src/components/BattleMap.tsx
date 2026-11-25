@@ -1752,6 +1752,12 @@ function TokenInspector({
           ✕
         </button>
       </div>
+      {isDm && token.statblock && !linkedSheet && (
+        <label className="chk insp-autoreact" title="Bật: Parry / né bằng save / giảm sát thương tự dùng khi có lợi. Tắt: DM tự bấm.">
+          <input type="checkbox" checked={token.autoReactions !== false} onChange={(e) => patch({ autoReactions: e.target.checked ? undefined : false })} />
+          Tự dùng reaction phòng thủ
+        </label>
+      )}
       {isDm && (token.statblock?.artUrl ?? linkedEntry?.artUrl) && (
         <a className="sb-art" href={token.statblock?.artUrl ?? linkedEntry?.artUrl} target="_blank" rel="noreferrer" title="Bấm để xem ảnh lớn">
           <img src={token.statblock?.artUrl ?? linkedEntry?.artUrl} alt="" loading="lazy" />

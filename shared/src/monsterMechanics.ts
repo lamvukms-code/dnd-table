@@ -75,7 +75,28 @@ export type MonsterMechanic =
       from?: string;
     }
   /** At 0 HP: a reminder line (it reforms elsewhere, curses end…). */
-  | { kind: 'deathNote'; from?: string };
+  | { kind: 'deathNote'; from?: string }
+  /** Reaction: +`ac` against one melee attack that would hit (used only when it turns the hit into a miss). */
+  | { kind: 'parry'; ac: number; actionId?: string; from?: string }
+  /** Reaction: a DEX save against the attack roll's total; a success makes the attack miss. */
+  | { kind: 'dodgeSave'; meleeOnly?: boolean; actionId?: string; from?: string }
+  /** Reaction: the hit's damage is reduced by `dice`. */
+  | { kind: 'reduceDamage'; dice: string; actionId?: string; from?: string }
+  /** Passive: a creature within `radiusFt` that hits it with a melee attack takes damage. */
+  | { kind: 'thorns'; radiusFt: number; dice: string; type: string; from?: string }
+  /** It may take a reaction on every turn, not once per round. */
+  | { kind: 'reactive'; from?: string }
+  /** Doesn't provoke opportunity attacks when it flies out of reach. */
+  | { kind: 'flyby'; from?: string }
+  /** Any other reaction: offered to the DM when its trigger happens (one click runs its save / damage). */
+  | {
+      kind: 'reaction';
+      trigger: 'selfDamaged' | 'selfAttacked' | 'allyDamaged' | 'nearStart' | 'healCast' | 'spellCast';
+      radiusFt?: number;
+      enters?: boolean;
+      actionId?: string;
+      from?: string;
+    };
 
 const SIZES: TokenSize[] = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'];
 export const sizeIndex = (s: TokenSize | undefined) => SIZES.indexOf(s ?? 'medium');
@@ -207,11 +228,38 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
     // a ring that only burns while some state lasts ("when reduced to N hit points or fewer … for the next minute") is a stance, not always-on
     if (ring && !/reduced to \d+ hit points or fewer|for the next minute/i.test(d)) out.push({ kind: 'turnDamage', when: ring[1].toLowerCase() as 'start' | 'end', targets: 'nearby', radiusFt: Number(ring[2]), dice: ring[3].replace(/\s/g, ''), type: ring[4].toLowerCase(), from: name });
 
+    const th = new RegExp(String.raw`whenever a creature within (\d+) feet of (?:it|the [\w' -]+) hits it with a melee attack,? (?:that|the) creature takes \d+ \((${DICE})\) (\w+) damage`, 'i').exec(d);
+    if (th) out.push({ kind: 'thorns', radiusFt: Number(th[1]), dice: th[2].replace(/\s/g, ''), type: th[3].toLowerCase(), from: name });
+    if (/can take one reaction on every turn/i.test(d)) out.push({ kind: 'reactive', from: name });
+    if (/^flyby/i.test(name) || /doesn't provoke opportunity attacks when it flies out of an enemy's reach/i.test(d)) out.push({ kind: 'flyby', from: name });
+
     const crit = /(?:additional|extra) \d+ \((\d+d\d+)\) ?(\w+)? damage when determining the extra damage for a critical hit|scores a critical hit .*?takes an additional \d+ \((\d+d\d+)\) (\w+) damage/i.exec(d);
     if (crit) out.push({ kind: 'critExtraDamage', dice: crit[1] ?? crit[3], type: crit[2] ?? crit[4], meleeOnly: /melee/i.test(d) || undefined, from: name });
   }
   for (const a of sb.actions ?? []) {
     const d = a.description ?? '';
+    if (a.actionType === 'reaction') {
+      const parry = /adds (\d+) to its AC against (?:one melee attack|that attack|a melee attack)/i.exec(d);
+      const red = new RegExp(String.raw`reduces? (?:the attack's |the )?damage[^.]*?by \d+ \((${DICE})\)`, 'i').exec(d);
+      const trig = (/^trigger:\s*([^.]*)/i.exec(d)?.[1] ?? d).toLowerCase();
+      if (parry) out.push({ kind: 'parry', ac: Number(parry[1]), actionId: a.id, from: a.name });
+      else if (/saving throw with a DC equal to the attack/i.test(d))
+        out.push({ kind: 'dodgeSave', meleeOnly: /melee attack/i.test(trig) || undefined, actionId: a.id, from: a.name });
+      else if (red) out.push({ kind: 'reduceDamage', dice: red[1].replace(/\s/g, ''), actionId: a.id, from: a.name });
+      else if (!/reduced to 0 hit points/i.test(trig)) {
+        const near = /within (\d+) feet/i.exec(trig);
+        const trigger =
+          /starts? its turn within/.test(trig) ? 'nearStart'
+          : /spell that restores hit points|casts a spell that restores/.test(trig) ? 'healCast'
+          : /casts? a spell/.test(trig) ? 'spellCast'
+          : /another creature|an ally|a creature (?:the [\w' -]+ )?can see within \d+ feet[^.]*takes damage/.test(trig) && /takes damage/.test(trig) ? 'allyDamaged'
+          : /after being hit|is hit by|takes damage|hits (?:it|the [\w' -]+) with/.test(trig) ? 'selfDamaged'
+          : /targets? (?:it|the [\w' -]+) with an? (?:attack|spell)|is targeted by|is attacked by|attacks (?:it|the [\w' -]+)/.test(trig) ? 'selfAttacked'
+          : undefined;
+        if (trigger)
+          out.push({ kind: 'reaction', trigger, radiusFt: near ? Number(near[1]) : undefined, enters: /enters? (?:the|that) area/.test(trig) || undefined, actionId: a.id, from: a.name });
+      }
+    }
     const rv = /(?:when|if) (?:the|it)[\w' -]*? is reduced to 0 hit points[^.]*?regain(?:s|ing) (all (?:of )?its hit points|(\d+)(?: \((\d+d\d+(?: ?[+-] ?\d+)?)\))? hit points)/i.exec(d);
     if (rv) {
       const uses = /\((\d+)\/day\)/i.exec(a.name);

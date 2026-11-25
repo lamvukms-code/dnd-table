@@ -937,6 +937,8 @@ export interface Token {
   auraImmune?: Record<string, string[]>;
   /** Creatures already caught by this token's auras this turn (once per creature per turn). */
   auraHitTurn?: string[];
+  /** false = the DM answers every reaction of this monster by hand (no automatic Parry / dodge / damage cut). */
+  autoReactions?: boolean;
   /** This token IS the awakened God's Bane blade: DM-moved only, no AC / HP, never a target. */
   godsBaneBlade?: boolean;
 }
@@ -1179,8 +1181,22 @@ export interface RoomState {
   oaPrompts?: OaPrompt[];
   /** "Pick a point on the map" requests (e.g. teleport a creature that failed its save). */
   pickPrompts?: PickPrompt[];
+  /** Monster reactions whose trigger just happened, waiting for the DM (cleared at the turn change). */
+  reactPrompts?: ReactPrompt[];
   /** Lingering spell areas on the current map (a save on entering / ending a turn inside). */
   hazards?: Hazard[];
+}
+
+/** A monster's reaction is available: its trigger fired (against / because of `triggerTokenId`). */
+export interface ReactPrompt {
+  id: string;
+  tokenId: string;
+  tokenName: string;
+  actionId: string;
+  actionName: string;
+  triggerTokenId?: string;
+  triggerName?: string;
+  why: string;
 }
 
 /** The caster picks where a creature lands (within `maxFeet` of `anchorTokenId`). */

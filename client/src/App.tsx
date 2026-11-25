@@ -16,7 +16,7 @@ import { HomebrewPanel } from './components/HomebrewPanel.js';
 import { HeirloomPanel } from './components/HeirloomPanel.js';
 import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
-import { DmPromptBanner } from './components/DmPromptBanner.js';
+import { DmPromptBanner, ReactPromptBanner } from './components/DmPromptBanner.js';
 import { OaPromptBanner } from './components/OaPromptBanner.js';
 import { PickPromptBanner } from './components/PickPromptBanner.js';
 import { TopMenu, type TopMenuItem } from './components/TopMenu.js';
@@ -279,6 +279,7 @@ export function App() {
             </div>
           )}
           <DmPromptBanner />
+          <ReactPromptBanner />
           <OaPromptBanner />
           <PickPromptBanner />
           {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}

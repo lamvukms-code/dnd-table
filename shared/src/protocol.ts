@@ -95,6 +95,8 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** DM answers a monster reaction offer: `use` spends the reaction and runs its save / damage on the trigger creature. */
+  | { t: 'reactResolve'; id: string; use: boolean }
   /** Try to escape a grapple effect (Athletics / Acrobatics vs its escape DC). */
   | { t: 'escapeGrapple'; tokenId: string; effectId: string }
   /** Answer a pick-a-point request: a cell, or `skip`. */
