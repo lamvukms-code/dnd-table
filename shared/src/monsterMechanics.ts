@@ -88,6 +88,37 @@ export type MonsterMechanic =
   | { kind: 'reactive'; from?: string }
   /** Doesn't provoke opportunity attacks when it flies out of reach. */
   | { kind: 'flyby'; from?: string }
+  /** Extra damage on every hit (while it lasts, e.g. from a stance). */
+  | { kind: 'hitExtraDamage'; dice: string; type: string; meleeOnly?: boolean; from?: string }
+  /** A stance / transformation: by hand, or by itself when it takes `damageType` damage or drops to `hpAtMost`. */
+  | {
+      kind: 'stance';
+      name: string;
+      trigger?: 'manual' | 'onDamageType' | 'hpAtMost';
+      damageType?: string;
+      hpAtMost?: number;
+      actionId?: string;
+      uses?: number;
+      rounds?: number;
+      patch: { size?: TokenSize; tempHp?: number; diceBump?: number; acBonus?: number; note?: string; mechanics?: MonsterMechanic[] };
+      endOn?: { type: string; over: number };
+      from?: string;
+    }
+  /** A hit (or a failed save) puts the target inside it: restrained (+ blinded), total cover, damage each turn. */
+  | {
+      kind: 'engulf';
+      actions: string[];
+      label: string;
+      requiresGrappled?: boolean;
+      maxSize?: TokenSize;
+      blinded?: boolean;
+      turnDamage?: { dice: string; type: string };
+      escapeDamage?: number;
+      escapeDc?: number;
+      from?: string;
+    }
+  /** It loses a limb whenever one hit deals more than `loseOver` damage. */
+  | { kind: 'limbs'; count: number; loseOver: number; from?: string }
   /** Any other reaction: offered to the DM when its trigger happens (one click runs its save / damage). */
   | {
       kind: 'reaction';
@@ -231,6 +262,8 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
     const th = new RegExp(String.raw`whenever a creature within (\d+) feet of (?:it|the [\w' -]+) hits it with a melee attack,? (?:that|the) creature takes \d+ \((${DICE})\) (\w+) damage`, 'i').exec(d);
     if (th) out.push({ kind: 'thorns', radiusFt: Number(th[1]), dice: th[2].replace(/\s/g, ''), type: th[3].toLowerCase(), from: name });
     if (/can take one reaction on every turn/i.test(d)) out.push({ kind: 'reactive', from: name });
+    const limb = /takes more than (\d+) damage, one of its limbs/i.exec(d);
+    if (limb) out.push({ kind: 'limbs', count: /two arms[^.]*two legs/i.test(d) ? 4 : 4, loseOver: Number(limb[1]), from: name });
     if (/^flyby/i.test(name) || /doesn't provoke opportunity attacks when it flies out of an enemy's reach/i.test(d)) out.push({ kind: 'flyby', from: name });
 
     const crit = /(?:additional|extra) \d+ \((\d+d\d+)\) ?(\w+)? damage when determining the extra damage for a critical hit|scores a critical hit .*?takes an additional \d+ \((\d+d\d+)\) (\w+) damage/i.exec(d);
@@ -238,6 +271,26 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
   }
   for (const a of sb.actions ?? []) {
     const d = a.description ?? '';
+    // swallowed / devoured / trapped inside it
+    const inside = /\b(swallowed|devoured|trapped in (?:the|its) [\w' -]+|entombed|engulfed)\b/i.exec(d);
+    if (inside && /restrained/i.test(d) && (typeof a.attackBonus === 'number' || a.save || /saving throw|attack hits|bite attack/i.test(d))) {
+      const td = new RegExp(String.raw`takes \d+ \((${DICE})\) (\w+) damage at the start of each of`, 'i').exec(d);
+      const esc = /takes (\d+) damage or more on a single turn from a creature inside/i.exec(d);
+      const dc = /DC (\d+) (?:Strength \()?(?:Athletics|Strength)/i.exec(d);
+      const size = /(tiny|small|medium|large|huge) or smaller/i.exec(d);
+      out.push({
+        kind: 'engulf',
+        actions: [a.name],
+        label: inside[1].split(' ')[0].toLowerCase(),
+        requiresGrappled: /(?:it is|is) grappling|grappled by (?:the|it)/i.test(d) || undefined,
+        maxSize: size ? (size[1].toLowerCase() as TokenSize) : undefined,
+        blinded: /blinded/i.test(d) || undefined,
+        turnDamage: td ? { dice: td[1].replace(/\s/g, ''), type: td[2].toLowerCase() } : undefined,
+        escapeDamage: esc ? Number(esc[1]) : undefined,
+        escapeDc: dc ? Number(dc[1]) : undefined,
+        from: a.name,
+      });
+    }
     if (a.actionType === 'reaction') {
       const parry = /adds (\d+) to its AC against (?:one melee attack|that attack|a melee attack)/i.exec(d);
       const red = new RegExp(String.raw`reduces? (?:the attack's |the )?damage[^.]*?by \d+ \((${DICE})\)`, 'i').exec(d);
@@ -299,9 +352,13 @@ export function registerMonsterMechanics(map: Record<string, MonsterMechanic[]>)
 }
 
 /** All mechanics of a stat block: detected + registered (registered wins for the same feature). */
-export function monsterMechanics(sb: { name?: string; traits?: StatblockTrait[]; actions?: SheetAction[] } | undefined): MonsterMechanic[] {
+export function monsterMechanics(
+  sb: { name?: string; id?: string; fromId?: string; traits?: StatblockTrait[]; actions?: SheetAction[] } | undefined,
+): MonsterMechanic[] {
   if (!sb) return [];
-  const local = REGISTRY.get((sb.name ?? '').trim().toLowerCase()) ?? [];
+  // "id:<stat block id>" entries win (two stat blocks may share a name), then the name
+  const id = (sb.fromId ?? sb.id ?? '').trim().toLowerCase();
+  const local = (id && REGISTRY.get(`id:${id}`)) || REGISTRY.get((sb.name ?? '').trim().toLowerCase()) || [];
   const covered = new Set(local.map((m) => m.from).filter(Boolean));
   return [...detectMechanics(sb).filter((m) => !m.from || !covered.has(m.from)), ...local];
 }

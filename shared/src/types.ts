@@ -535,6 +535,8 @@ export interface ActiveEffect {
   deathSaveAdvantage?: boolean;
   /** A grapple the bearer can try to escape: Athletics / Acrobatics against this DC (action). */
   escapeDc?: number;
+  /** The bearer is held inside this token (swallowed / devoured / trapped): follows it, freed when it dies. */
+  engulfedBy?: string;
   /** Reshapes the bearer's weapon attacks while active (Shillelagh). */
   weaponImbue?: WeaponImbue;
   /** Flat temp HP the bearer gains at the start of each of its turns (Rampant Growth). */
@@ -939,6 +941,18 @@ export interface Token {
   auraHitTurn?: string[];
   /** false = the DM answers every reaction of this monster by hand (no automatic Parry / dodge / damage cut). */
   autoReactions?: boolean;
+  /** An active stance / transformation and what to put back when it ends. */
+  stance?: {
+    name: string;
+    effectId: string;
+    before: { size: TokenSize; damage: Record<string, string> };
+    mechanics?: unknown[];
+    endOn?: { type: string; over: number };
+  };
+  /** Limbs left (monsters with a limb counter). Unset = all. */
+  limbs?: number;
+  /** Damage taken this turn from creatures it holds inside (swallow escapes). */
+  engulfDmgTurn?: number;
   /** This token IS the awakened God's Bane blade: DM-moved only, no AC / HP, never a target. */
   godsBaneBlade?: boolean;
 }

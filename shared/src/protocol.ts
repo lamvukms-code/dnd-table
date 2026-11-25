@@ -95,6 +95,10 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** DM: turn a monster stance / transformation on or off. */
+  | { t: 'stance'; tokenId: string; name: string; on: boolean }
+  /** DM: set a monster's remaining limbs. */
+  | { t: 'setLimbs'; tokenId: string; limbs: number }
   /** DM answers a monster reaction offer: `use` spends the reaction and runs its save / damage on the trigger creature. */
   | { t: 'reactResolve'; id: string; use: boolean }
   /** Try to escape a grapple effect (Athletics / Acrobatics vs its escape DC). */
@@ -145,6 +149,8 @@ export type ClientAction =
       rollMode?: RollMode;
       /** The save is against a spell / magical effect (Magic Resistance). */
       fromSpell?: boolean;
+      /** Stat-block action that forced the save (monster mechanics on a failure: swallow…). */
+      actionName?: string;
       /** On a failed save: push / pull the target relative to `fromTokenId` (the caster). */
       moveOnFail?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; fromTokenId: string };
       /** On a failed save: the caster picks a point within `maxFeet` of `fromTokenId` and the target lands there. */

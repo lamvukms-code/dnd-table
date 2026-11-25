@@ -47,6 +47,7 @@ import {
   actionAvailable,
   failCondition,
   parseMultiattack,
+  mechanicsOfKind,
   automatedFeatures,
   monsterMechanics,
   economyKindOf,
@@ -1707,6 +1708,7 @@ function TokenInspector({
             damageHalfOnSave: half,
             aoeId,
             sourceTokenId: token.id,
+            actionName: a.name,
             effectOnFail,
           }),
         ),
@@ -2231,6 +2233,7 @@ function TokenInspector({
                         damageOnFail: saveFailParts(a, parts),
                         damageHalfOnSave: /half (?:as much )?damage/i.test(a.description ?? ''),
                         sourceTokenId: token.id,
+                        actionName: a.name,
                         effectOnFail: saveEffect(a),
                       })
                     }
@@ -2262,6 +2265,37 @@ function TokenInspector({
               </div>
             );
           })}
+          {isDm && !linkedSheet && (() => {
+            const mechs = monsterMechanics(sb);
+            const stances = mechanicsOfKind(mechs, 'stance');
+            const limb = mechanicsOfKind(mechs, 'limbs')[0];
+            if (!stances.length && !limb) return null;
+            return (
+              <div className="sb-stances">
+                {stances.map((st) => {
+                  const on = token.stance?.name === st.name;
+                  return (
+                    <button
+                      key={st.name}
+                      className={`roll-btn ${on ? 'strong' : ''}`}
+                      title={`${st.patch.note ?? ''}${st.trigger && st.trigger !== 'manual' ? ' · tự bật' : ''}${st.rounds ? ` · ${st.rounds} round` : ''}`}
+                      onClick={() => send({ t: 'stance', tokenId: token.id, name: st.name, on: !on })}
+                    >
+                      {on ? '■ ' : '▶ '}
+                      {st.name}
+                    </button>
+                  );
+                })}
+                {limb && (
+                  <span className="sb-limbs" title={`${limb.from}: mất một chi khi một đòn gây hơn ${limb.loseOver} sát thương`}>
+                    🦴 Chi {token.limbs ?? limb.count}/{limb.count}
+                    <button className="link" onClick={() => send({ t: 'setLimbs', tokenId: token.id, limbs: (token.limbs ?? limb.count) - 1 })}>−</button>
+                    <button className="link" onClick={() => send({ t: 'setLimbs', tokenId: token.id, limbs: Math.min(limb.count, (token.limbs ?? limb.count) + 1) })}>+</button>
+                  </span>
+                )}
+              </div>
+            );
+          })()}
           {sb.traits.length > 0 && (
             <details className="sb-traits-view">
               <summary>Đặc điểm ({sb.traits.length})</summary>

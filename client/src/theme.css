@@ -467,3 +467,7 @@ label { color: var(--muted); }
 .oa-prompt.react { border-color: #c9a227; }
 .dm-prompt-target { font-size: 12px; display: flex; gap: 6px; align-items: center; }
 .insp-autoreact { font-size: 12px; margin: 2px 0 6px; }
+
+/* monster stances + limb counter */
+.sb-stances { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
+.sb-limbs { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }

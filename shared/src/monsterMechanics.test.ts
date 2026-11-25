@@ -152,3 +152,29 @@ describe('monster mechanics wave 3: reactions', () => {
     expect(find('reaction', 'Punish Healing')).toMatchObject({ trigger: 'healCast', radiusFt: 60 });
   });
 });
+
+describe('monster mechanics wave 4: swallow, limbs, registry by id', () => {
+  const sb = {
+    name: 'Test Maw',
+    id: 'test-maw',
+    traits: [{ name: 'Fragile Body', description: 'Whenever the maw takes more than 30 damage, one of its limbs falls off (each of its two arms first, then each of its two legs).' }],
+    actions: [
+      {
+        id: 'swallow', name: 'Swallow', actionType: 'bonus',
+        description: 'Strength Saving Throw: DC 15, one Medium or smaller creature Grappled by the maw. Failure: The target is swallowed, and the Grappled condition ends. A swallowed creature has the Blinded and Restrained conditions and takes 10 (3d6) acid damage at the start of each of the maw\'s turns. If the maw takes 20 damage or more on a single turn from a creature inside it, it regurgitates.',
+        save: { ability: 'str', dc: 15 },
+      } as SheetAction,
+    ],
+  };
+  it('swallow on a failed save, with turn damage and the escape threshold', () => {
+    expect(detectMechanics(sb).find((m) => m.kind === 'engulf')).toMatchObject({
+      actions: ['Swallow'], requiresGrappled: true, maxSize: 'medium', blinded: true, turnDamage: { dice: '3d6', type: 'acid' }, escapeDamage: 20,
+    });
+    expect(detectMechanics(sb).find((m) => m.kind === 'limbs')).toMatchObject({ count: 4, loseOver: 30 });
+  });
+  it('"id:" local entries pick one of two stat blocks that share a name', () => {
+    registerMonsterMechanics({ 'id:test-maw': [{ kind: 'stance', name: 'Rage', patch: { size: 'huge' } }] });
+    expect(monsterMechanics(sb).some((m) => m.kind === 'stance')).toBe(true);
+    expect(monsterMechanics({ ...sb, id: 'other-maw' }).some((m) => m.kind === 'stance')).toBe(false);
+  });
+});

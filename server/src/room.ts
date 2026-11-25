@@ -143,6 +143,7 @@ import {
   actionAvailable,
   failCondition,
   statblockDamageParts,
+  attackRangeOf,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -257,6 +258,7 @@ export class Room {
 
   private touch(): void {
     this.processDowns();
+    for (const t of this.state.tokens) if (t.stance && !t.effects?.some((e) => e.id === t.stance!.effectId)) this.stanceOff(t, 'hết thời hạn');
     this.syncLinkedAc();
     this.enforceConditionImmunity();
     // God's Bane undying / permanent-kill notes queued during damage, logged after the damage lines.
@@ -345,6 +347,26 @@ export class Room {
     if (r.hp <= 0) this.endDownEffects(token, 'còn 0 HP');
     if (!sheet && amount > 0 && typeof hpBefore === 'number') this.undyingCheck(token, hpBefore, r.hp, !!opts?.godsBane);
     if (!sheet && typeof hpBefore === 'number' && hpBefore > 0 && r.hp <= 0 && !token.downedUndying) this.pendingDowns.push(token.id);
+    if (!sheet && token.statblock && amount > 0) {
+      const mechs = this.mechOf(token);
+      const limb = mechanicsOfKind(mechs, 'limbs')[0];
+      if (limb && amount > limb.loseOver && (token.limbs ?? limb.count) > 0) {
+        token.limbs = (token.limbs ?? limb.count) - 1;
+        this.pendingBaneLogs.push(`🦴 ${token.label}: ${limb.from} — mất một chi (còn ${token.limbs}/${limb.count})`);
+      }
+      const types = (opts?.types ?? []).map((x) => x.toLowerCase());
+      if (token.stance?.endOn && types.includes(token.stance.endOn.type.toLowerCase()) && amount > token.stance.endOn.over) {
+        this.stanceOff(token, `nhận hơn ${token.stance.endOn.over} sát thương ${token.stance.endOn.type}`);
+      }
+      if (!token.stance && r.hp > 0) {
+        for (const st of mechanicsOfKind(mechs, 'stance')) {
+          const fire =
+            (st.trigger === 'onDamageType' && st.damageType && types.includes(st.damageType.toLowerCase())) ||
+            (st.trigger === 'hpAtMost' && st.hpAtMost != null && r.hp <= st.hpAtMost);
+          if (fire && !this.stanceOn(token, st, st.trigger === 'onDamageType' ? `dính ${st.damageType}` : `còn ≤ ${st.hpAtMost} HP`)) break;
+        }
+      }
+    }
     if (amount > 0 && this.state.initiative.running && !this.offeringReactions) {
       this.offeringReactions = true;
       try {
@@ -1283,6 +1305,7 @@ export class Room {
     this.state.reactPrompts = [];
     for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
     for (const t of this.state.tokens) {
+      if (t.engulfDmgTurn) t.engulfDmgTurn = 0;
       if (t.auraHitTurn?.length) t.auraHitTurn = [];
       if (t.turnUsed?.reaction && mechanicsOfKind(this.mechOf(t), 'reactive').length) t.turnUsed = { ...t.turnUsed, reaction: false };
     }
@@ -1584,7 +1607,106 @@ export class Room {
       m = monsterMechanics(t.statblock);
       this.mechCache.set(t.statblock, m);
     }
-    return m;
+    return t.stance?.mechanics?.length ? [...m, ...(t.stance.mechanics as MonsterMechanic[])] : m;
+  }
+
+  /** Bump the number of damage dice in "2d8+8" by `n`. */
+  private bumpDice(dice: string, n: number): string {
+    return dice.replace(/(\d+)d(\d+)/, (_m, c, f) => `${Number(c) + n}d${f}`);
+  }
+
+  /** Turn a stance on: an effect for its duration plus size / temp HP / damage dice changes, remembered for the revert. */
+  private stanceOn(t: Token, st: Extract<MonsterMechanic, { kind: 'stance' }>, why: string): string | null {
+    if (t.stance) return `${t.label} đang ở trạng thái ${t.stance.name}`;
+    const key = st.actionId ?? `mech:${st.from ?? st.name}`;
+    const a = st.actionId ? t.statblock?.actions.find((x) => x.id === st.actionId) : undefined;
+    const lim = a ? actionLimit(a) : st.uses ? ({ kind: 'perDay', max: st.uses } as const) : null;
+    if (lim && !actionAvailable(lim, t.actionUses?.[key] ?? 0)) return `${st.name}: hết lượt dùng`;
+    if (lim) t.actionUses = { ...(t.actionUses ?? {}), [key]: (t.actionUses?.[key] ?? 0) + 1 };
+    const effectId = nanoid(8);
+    t.effects = [
+      ...(t.effects ?? []),
+      {
+        id: effectId,
+        name: st.name,
+        note: st.patch.note,
+        acBonus: st.patch.acBonus,
+        expiresRound: st.rounds ? this.state.initiative.round + st.rounds : undefined,
+      },
+    ];
+    const damage: Record<string, string> = {};
+    if (st.patch.diceBump && t.statblock) {
+      for (const x of t.statblock.actions) {
+        if (typeof x.attackBonus === 'number' && x.damage && attackRangeOf(x) === 'melee') {
+          damage[x.id] = x.damage;
+          x.damage = this.bumpDice(x.damage, st.patch.diceBump);
+        }
+      }
+    }
+    t.stance = { name: st.name, effectId, before: { size: t.size, damage }, mechanics: st.patch.mechanics, endOn: st.endOn };
+    if (st.patch.size) t.size = st.patch.size;
+    if (st.patch.tempHp) t.tempHp = Math.max(t.tempHp ?? 0, st.patch.tempHp);
+    this.mechCache.delete(t.statblock!);
+    this.systemLog(`🔥 ${t.label}: ${st.name}${why ? ` (${why})` : ''}${st.patch.note ? ` — ${st.patch.note}` : ''}`);
+    return null;
+  }
+
+  /** Turn the active stance off (its effect ended or was removed): put size and damage dice back. */
+  private stanceOff(t: Token, why: string): void {
+    const st = t.stance;
+    if (!st) return;
+    t.size = st.before.size;
+    if (t.statblock) for (const x of t.statblock.actions) if (st.before.damage[x.id]) x.damage = st.before.damage[x.id];
+    t.effects = (t.effects ?? []).filter((e) => e.id !== st.effectId);
+    t.stance = undefined;
+    if (t.statblock) this.mechCache.delete(t.statblock);
+    this.systemLog(`${t.label}: hết ${st.name} (${why})`);
+  }
+
+  /** Put `victim` inside `holder` (swallowed / devoured / trapped). */
+  private engulf(holder: Token, victim: Token, m: Extract<MonsterMechanic, { kind: 'engulf' }>): void {
+    if (victim.effects?.some((e) => e.engulfedBy)) return;
+    if (m.maxSize && sizeIndex(victim.size) > sizeIndex(m.maxSize)) return;
+    // the grapple that held it ends
+    victim.effects = (victim.effects ?? []).filter((e) => !((e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name)) && e.sourceTokenId === holder.id));
+    const tag = { swallowed: 'nuốt', devoured: 'ăn', trapped: 'nhốt', entombed: 'chôn', engulfed: 'nuốt' }[m.label] ?? 'nuốt';
+    victim.effects = [
+      ...victim.effects,
+      {
+        id: nanoid(8),
+        name: `Bị ${tag} (${holder.label})`,
+        condition: 'restrained',
+        sourceTokenId: holder.id,
+        engulfedBy: holder.id,
+        turnDamage: m.turnDamage,
+        escapeDc: m.escapeDc,
+        note: `Total cover với bên ngoài${m.escapeDamage ? ` · ${holder.label} nhận ${m.escapeDamage}+ sát thương từ bên trong trong 1 lượt thì nhả ra` : ''}`,
+      },
+      ...(m.blinded ? [{ id: nanoid(8), name: `Bị ${tag} — mù`, condition: 'blinded' as ConditionType, engulfedBy: holder.id, sourceTokenId: holder.id }] : []),
+    ];
+    victim.x = holder.x;
+    victim.y = holder.y;
+    this.pendingBaneLogs.push(`🫦 ${holder.label} ${tag} ${victim.label}${m.turnDamage ? ` (${m.turnDamage.dice} ${m.turnDamage.type} mỗi lượt)` : ''}`);
+  }
+
+  /** Free everything `holder` holds (or just `only`): out to a free square next to it, prone unless it escaped. */
+  private releaseEngulfed(holder: Token, why: string, only?: Token, prone = true): void {
+    const held = this.state.tokens.filter((v) => (!only || v.id === only.id) && v.effects?.some((e) => e.engulfedBy === holder.id));
+    for (const v of held) {
+      v.effects = (v.effects ?? []).filter((e) => e.engulfedBy !== holder.id);
+      const span = tokenSpan(holder);
+      const spots: { x: number; y: number }[] = [];
+      for (let dx = -1; dx <= span; dx++) for (let dy = -1; dy <= span; dy++) if (dx < 0 || dy < 0 || dx >= span || dy >= span) spots.push({ x: holder.x + dx, y: holder.y + dy });
+      const free = spots.find(
+        (p) => p.x >= 0 && p.y >= 0 && p.x < this.state.map.cols && p.y < this.state.map.rows && !this.state.tokens.some((t) => t.id !== v.id && edgeFeet(p, tokenSpan(v), t, tokenSpan(t)) === 0),
+      );
+      if (free) {
+        v.x = free.x;
+        v.y = free.y;
+      }
+      if (prone) v.effects = [...(v.effects ?? []), { id: nanoid(8), name: 'Ngã (vừa thoát ra)', condition: 'prone' }];
+      this.pendingBaneLogs.push(`↩ ${v.label} thoát khỏi ${holder.label} (${why})`);
+    }
   }
 
   /** Can this monster use this reaction now (reaction unspent, alive, able, uses left)? */
@@ -1684,6 +1806,7 @@ export class Room {
         if (rv.burst) for (const v of this.tokensNear(t, rv.burst.radiusFt)) this.mechDamage(v, rv.burst.damage, `${t.label} · ${rv.from}`, { save: rv.burst.save, halfOnSave: rv.burst.halfOnSave });
         continue;
       }
+      this.releaseEngulfed(t, `${t.label} gục`);
       // Regeneration that keeps it alive until a turn starts without regenerating: not dead yet.
       if (mechanicsOfKind(mechs, 'regeneration').some((r) => r.diesOnlyAtTurnStart)) {
         this.systemLog(`${t.label} gục ở 0 HP — chỉ chết nếu đầu lượt sau không tái sinh được`);
@@ -2072,6 +2195,31 @@ export class Room {
         break;
       }
 
+      case 'stance': {
+        if (!isDm) return 'Chỉ DM đổi trạng thái của quái';
+        const tk = this.state.tokens.find((t) => t.id === action.tokenId);
+        if (!tk) return 'Không tìm thấy token';
+        if (!action.on) {
+          if (tk.stance?.name === action.name) this.stanceOff(tk, 'DM tắt');
+        } else {
+          const st = mechanicsOfKind(this.mechOf(tk), 'stance').find((x) => x.name === action.name);
+          if (!st) return 'Quái không có trạng thái này';
+          const err = this.stanceOn(tk, st, '');
+          if (err) return err;
+        }
+        this.touch();
+        break;
+      }
+
+      case 'setLimbs': {
+        if (!isDm) return 'Chỉ DM chỉnh chi của quái';
+        const tk = this.state.tokens.find((t) => t.id === action.tokenId);
+        if (!tk) return 'Không tìm thấy token';
+        tk.limbs = Math.max(0, Math.round(action.limbs));
+        this.touch();
+        break;
+      }
+
       case 'reactResolve': {
         if (!isDm) return 'Chỉ DM trả lời reaction của quái';
         const list = this.state.reactPrompts ?? [];
@@ -2093,7 +2241,9 @@ export class Room {
           if (!s.pass || half) {
             if (parts.length) this.mechDamage(victim, parts, `${r.label} · ${a.name}`, { halfOnSave: half });
           }
-          const cond = failCondition(a.description);
+          const sw = mechanicsOfKind(this.mechOf(r), 'engulf').find((m) => m.actions.some((n) => n.toLowerCase() === a.name.toLowerCase()));
+          if (!s.pass && sw) this.engulf(r, victim, sw);
+          const cond = sw ? undefined : failCondition(a.description);
           if (!s.pass && cond) {
             victim.effects = [...(victim.effects ?? []), { id: nanoid(8), name: `${a.name} (${r.label})`, condition: cond, sourceTokenId: r.id, note: 'Từ reaction của quái; thời hạn xem mô tả' }];
           }
@@ -2130,7 +2280,11 @@ export class Room {
         const d20 = 1 + Math.floor(Math.random() * 20);
         const total = d20 + bonus;
         const ok = total >= eff.escapeDc;
-        if (ok) tk.effects = (tk.effects ?? []).filter((e) => e.id !== eff.id);
+        if (ok && eff.engulfedBy) {
+          const holder = this.state.tokens.find((t) => t.id === eff.engulfedBy);
+          if (holder) this.releaseEngulfed(holder, 'tự thoát', tk, false);
+          else tk.effects = (tk.effects ?? []).filter((e) => e.engulfedBy !== eff.engulfedBy);
+        } else if (ok) tk.effects = (tk.effects ?? []).filter((e) => e.id !== eff.id);
         this.pushRoll({
           id: nanoid(8),
           ts: Date.now(),
@@ -2472,6 +2626,9 @@ export class Room {
           }),
         ];
 
+        if (res.hit && atkMechs.length)
+          for (const x of mechanicsOfKind(atkMechs, 'hitExtraDamage'))
+            if (!x.meleeOnly || action.attackRange === 'melee') dmgParts.push({ dice: x.dice, type: x.type, label: x.from });
         if (effectiveCrit && atkMechs.length) dmgParts.push(...critExtraParts(atkMechs, action.attackRange === 'melee', dmgParts[0]?.type ?? ''));
         let damageResult: RollResult | undefined;
         let outcome: MultiDamageOutcome | undefined;
@@ -2538,7 +2695,15 @@ export class Room {
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
           const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane, crit: effectiveCrit, types: partTypes(dmgParts) });
           const applied = took.applied;
+          // a creature held inside the target hurting it from within: enough in one turn and it's spat out
+          if (attackerTok?.effects?.some((e) => e.engulfedBy === target.id)) {
+            target.engulfDmgTurn = (target.engulfDmgTurn ?? 0) + applied + took.absorbed;
+            const esc = mechanicsOfKind(tgtMechs, 'engulf').find((m) => m.escapeDamage);
+            if (esc?.escapeDamage && target.engulfDmgTurn >= esc.escapeDamage) this.releaseEngulfed(target, `nhận ${target.engulfDmgTurn} sát thương từ bên trong`);
+          }
           if (attackerTok && atkMechs.length) {
+            const sw = mechanicsOfKind(atkMechs, 'engulf').find((m) => m.actions.some((n) => n.toLowerCase() === (action.actionName ?? '').toLowerCase()));
+            if (sw && (!sw.requiresGrappled || this.grappledBy(target, attackerTok))) this.engulf(attackerTok, target, sw);
             // A hit that grapples (escape DC), if the target isn't too big and isn't already held by it.
             const g = onHitGrappleFor(atkMechs, action.actionName);
             if (g && !this.grappledBy(target, attackerTok) && (!g.maxSize || sizeIndex(target.size) <= sizeIndex(g.maxSize))) {
@@ -2878,6 +3043,12 @@ export class Room {
           if (typeof patch.currentHp === 'number') this.syncDowned(linked);
         }
         if (movingPos && (token.x !== beforeX || token.y !== beforeY)) {
+          for (const v of this.state.tokens) {
+            if (v.id !== token.id && v.effects?.some((e) => e.engulfedBy === token.id)) {
+              v.x = token.x;
+              v.y = token.y;
+            }
+          }
           this.offerOpportunityAttacks(token, { x: beforeX, y: beforeY });
           for (const h of this.state.hazards ?? []) {
             const was = this.inHazard({ ...token, x: beforeX, y: beforeY }, h);
@@ -3250,6 +3421,11 @@ export class Room {
           const from = this.state.tokens.find((tk) => tk.id === action.moveOnFail!.fromTokenId);
           const ft = from ? this.forceMove(target, from, action.moveOnFail.dir, action.moveOnFail.feet).feet : 0;
           if (ft > 0) this.systemLog(`${action.label} — ${action.moveOnFail.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft`);
+        }
+        if (!pass && action.actionName && action.sourceTokenId) {
+          const src = this.state.tokens.find((t) => t.id === action.sourceTokenId);
+          const sw = src ? mechanicsOfKind(this.mechOf(src), 'engulf').find((m) => m.actions.some((n) => n.toLowerCase() === action.actionName!.toLowerCase())) : undefined;
+          if (src && sw && (!sw.requiresGrappled || this.grappledBy(target, src))) this.engulf(src, target, sw);
         }
         if (!pass && action.teleportOnFail) {
           (this.state.pickPrompts ??= []).push({
