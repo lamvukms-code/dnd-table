@@ -218,6 +218,11 @@ export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: (
 
   return (
     <div className="sb-editor">
+      {sb.artUrl && (
+        <a className="sb-art" href={sb.artUrl} target="_blank" rel="noreferrer" title="Bấm để xem ảnh lớn">
+          <img src={sb.artUrl} alt="" loading="lazy" />
+        </a>
+      )}
       <div className="sb-rollbar">
         <span className="sb-rollbar-label">🎲 Roll thử:</span>
         {ABILITIES.map((ab) => (

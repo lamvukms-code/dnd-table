@@ -1540,6 +1540,25 @@ export class Room {
         break;
       }
 
+      case 'setMoon': {
+        if (!isDm) return 'Chỉ DM được đổi trăng';
+        const m = action.moon;
+        if (m && (typeof m.key !== 'string' || typeof m.name !== 'string' || m.key.length > 40 || m.name.length > 80))
+          return 'Trăng không hợp lệ';
+        const prev = this.state.moon;
+        this.state.moon = m ? { key: m.key, name: m.name, since: Date.now() } : null;
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: 'system',
+          actorName: 'Hệ thống',
+          label: m ? `🌕 Eldritch Moon mọc: ${m.name}` : `🌑 ${prev?.name ?? 'Trăng'} đã lặn`,
+          result: externalRollResult('', { total: 0, faces: [] }),
+        });
+        this.touch();
+        break;
+      }
+
       case 'levelUpClose': {
         if (!isDm) return 'Chỉ DM được đóng đợt thăng cấp';
         this.state.levelUp = null;

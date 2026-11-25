@@ -222,3 +222,194 @@ body { font-size: 16px; }
 }
 .modal h1, .modal h2, .modal h3, .inspector h3, .join-card h1, .join-card h2, .sheet-dock h3, .sheet-dock h4 { color: #2c1e10; font-weight: 700; }
 label { color: var(--muted); }
+
+/* ---------------------------------------------------------------- setting art (local, optional)
+ * /art/* is built locally from purchased art (git-ignored). Missing files simply don't paint. */
+.join {
+  background:
+    linear-gradient(180deg, rgba(10, 8, 6, 0.35), rgba(10, 8, 6, 0.75)),
+    url('/art/bg-join.webp') center / cover no-repeat,
+    #120e09;
+}
+.board-scroll {
+  background:
+    radial-gradient(ellipse at center, rgba(18, 14, 9, 0.55), rgba(18, 14, 9, 0.92) 70%),
+    url('/art/bg-map.webp') center / cover no-repeat,
+    #120e09;
+}
+/* a moon is up: its colour bleeds into the edges of the map */
+.moon-up .board-scroll::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(ellipse at center, transparent 55%, color-mix(in srgb, var(--moon-tint) 22%, transparent) 100%);
+  mix-blend-mode: screen;
+}
+
+/* moon chip + card */
+.moon-wrap { position: relative; flex: none; }
+.moon-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 3px 12px 3px 3px;
+  border-radius: 23px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-family: var(--serif);
+}
+.moon-chip img, .moon-chip .moon-empty {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 22%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  background: #1a140e;
+}
+.moon-chip.up { border-color: var(--moon); box-shadow: 0 0 0 1px var(--moon), 0 0 14px color-mix(in srgb, var(--moon) 55%, transparent); }
+.moon-chip.up img { box-shadow: 0 0 10px var(--moon); }
+.moon-chip .moon-name { font-size: 14px; white-space: nowrap; }
+@media (max-width: 1100px) { .moon-chip .moon-name { display: none; } .moon-chip { padding-right: 3px; } }
+.moon-pop {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(600px, calc(100vw - 24px));
+  max-height: 78vh;
+  overflow: auto;
+  z-index: 60;
+  background: #17110b;
+  color: #efe4cf;
+  border: 1px solid #5a4630;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+  padding: 12px;
+}
+.moon-card { display: flex; gap: 14px; align-items: flex-start; }
+.moon-card .moon-art {
+  width: 150px;
+  flex: none;
+  border-radius: 10px;
+  border: 1px solid var(--moon);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--moon) 40%, transparent);
+}
+.moon-card h3 { margin: 0 0 4px; color: var(--moon); font-family: var(--serif); font-size: 20px; }
+.moon-card h3 small { color: #a8977c; font-size: 12px; font-weight: 400; }
+.moon-card .moon-tag { margin: 0 0 8px; font-style: italic; color: #d8c8a8; }
+.moon-card ul { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.45; }
+.moon-card li { margin: 2px 0; }
+.moon-card li.dm { color: #e5a0a0; }
+.moon-card b { color: #fff3da; }
+.moon-pop .hint { color: #a8977c; }
+.moon-dm { margin-top: 12px; border-top: 1px solid #3d2f20; padding-top: 10px; }
+.moon-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.moon-grid button { padding: 0; border: 2px solid transparent; border-radius: 8px; background: #000; overflow: hidden; aspect-ratio: 3 / 5; }
+.moon-grid button img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.8; }
+.moon-grid button:hover img, .moon-grid button.peek img, .moon-grid button.on img { opacity: 1; }
+.moon-grid button.peek { border-color: var(--moon); }
+.moon-grid button.on { border-color: var(--moon); box-shadow: 0 0 10px var(--moon); }
+.moon-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+@media (max-width: 600px) { .moon-card { flex-direction: column; } .moon-card .moon-art { width: 120px; } }
+
+/* stat block illustration (DM) */
+.sb-art { display: block; margin: 0 0 8px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: #120e09; }
+.sb-art img { display: block; width: 100%; max-height: 260px; object-fit: cover; object-position: 50% 25%; }
+
+/* ---------------------------------------------------------------- sheet dock header (picker + icon tabs) */
+.sheet-dock .sd-chars { align-items: center; flex-wrap: nowrap; gap: 6px; }
+.sd-picker { position: relative; flex: 1; min-width: 0; }
+.sheet-dock .sd-tabs .sd-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 10px 3px 3px;
+  border-radius: 22px;
+  font-size: 15px;
+  text-align: left;
+}
+.sd-current-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+.sd-caret { color: var(--muted); }
+.sd-face {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff6e6;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid #6e5a3e;
+  text-transform: uppercase;
+}
+.sd-face.empty { background: #cbbd9f; color: #5a4630; }
+.sd-pick-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: #f4ecda;
+  border: 1px solid #a8977c;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  max-height: 60vh;
+  overflow: auto;
+}
+.sheet-dock .sd-pick-list button { display: flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; border-color: transparent; background: none; text-align: left; font-size: 14px; }
+.sheet-dock .sd-pick-list button span { flex: 1; }
+.sheet-dock .sd-pick-list button small { color: var(--muted); font-family: var(--serif-body); letter-spacing: 0; }
+.sheet-dock .sd-pick-list button:hover { background: #e6dcc6; }
+.sheet-dock .sd-pick-list button.on { background: #e9d7ae; color: #1f160d; border-color: #c9a96a; }
+.sheet-dock .sd-tabs .sd-mode { flex: none; padding: 5px 10px; font-size: 13px; }
+.sheet-dock .sd-tabs .sd-mode.on { background: #2f6b3a; border-color: #24532d; color: #f2fbef; }
+.sheet-dock .sd-chars .top-menu > button { padding: 4px 11px; font-size: 16px; line-height: 1; }
+.sheet-dock .sd-chars .top-menu-list { right: 0; left: auto; min-width: 200px; }
+.sheet-dock .sd-subtabs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; flex-wrap: nowrap; }
+.sheet-dock .sd-subtabs button { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 3px 2px 2px; line-height: 1.1; }
+.sheet-dock .sd-subtabs .sdt-icon { font-size: 16px; }
+.sheet-dock .sd-subtabs .sdt-label { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* ---------------------------------------------------------------- play mode: set-up fields read as text
+ * Inputs stay in the DOM (the draft logic is unchanged); they just stop looking or acting like inputs.
+ * Anything used mid-game opts out with .play-keep; editor-only controls carry .edit-only. */
+.sheet-dock.play .edit-only,
+.sheet-dock.play .sd-body p.hint,
+.sheet-dock.play .sd-body div.hint,
+.sheet-dock.play .sr-line > button.link:last-child { display: none !important; }
+.sheet-dock.play .sd-body input:not([type='checkbox']):not([type='radio']):not(.play-keep),
+.sheet-dock.play .sd-body select:not(.play-keep),
+.sheet-dock.play .sd-body textarea:not(.play-keep) {
+  pointer-events: none;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  appearance: none;
+  -moz-appearance: textfield;
+  padding-left: 0;
+  padding-right: 0;
+  resize: none;
+}
+.sheet-dock.play .sd-body input::-webkit-inner-spin-button,
+.sheet-dock.play .sd-body input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* empty set-up fields vanish instead of showing a placeholder */
+.sheet-dock.play .sd-body input:not(.play-keep):placeholder-shown,
+.sheet-dock.play .sd-body .bt-ident select:has(option[value='']:checked) { display: none; }
+.sheet-dock.play .bt-name { font-size: 18px; font-weight: 700; }
+.sheet-dock.play .play-keep { background: rgba(255, 253, 247, 0.95) !important; border-color: #8a1c1c !important; }

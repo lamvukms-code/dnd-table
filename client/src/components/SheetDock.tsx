@@ -1,3 +1,4 @@
+import { TopMenu } from './TopMenu.js';
 import { Fragment, memo, useEffect, useRef, useState } from 'react';
 import {
   ABILITIES,
@@ -213,6 +214,20 @@ type SubTab = 'basic' | 'skills' | 'equipment' | 'spells' | 'feats' | 'abilities
 const DOCK_H_KEY = 'dnd-table.dockHeight';
 const DOCK_W_KEY = 'dnd-table.dockWidth';
 
+const PLAY_KEY = 'dnd.sheetPlay';
+
+/** Small round face for a sheet: its token art, else its initials on the token colour. */
+function SheetFace({ sheet, token }: { sheet: CharacterSheet | null; token?: Token }) {
+  if (!sheet) return <span className="sd-face empty">?</span>;
+  return token?.imageUrl ? (
+    <span className="sd-face" style={{ backgroundImage: `url(${token.imageUrl})` }} />
+  ) : (
+    <span className="sd-face" style={{ background: token?.color ?? '#7a5a3a' }}>
+      {sheet.name.slice(0, 2)}
+    </span>
+  );
+}
+
 function SheetDockImpl() {
   const sheets = useStore((s) => s.room?.sheets)!;
   const send = useStore((s) => s.send);
@@ -223,6 +238,27 @@ function SheetDockImpl() {
   const [openId, setOpenId] = useState<string | null>(mine[0]?.id ?? null);
   const [sub, setSub] = useState<SubTab>('basic');
   const sheet = sheets.find((s) => s.id === openId) ?? mine[0] ?? null;
+  // Play mode (default): the sheet reads like a card — set-up fields turn into plain text, hints
+  // and editor-only controls hide. "✏ Sửa" brings every field back. Remembered per viewer.
+  const [play, setPlay] = useState(() => {
+    try {
+      return localStorage.getItem(PLAY_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const togglePlay = () =>
+    setPlay((v) => {
+      try {
+        localStorage.setItem(PLAY_KEY, v ? '0' : '1');
+      } catch {
+        /* ignore */
+      }
+      return !v;
+    });
+  const [pickOpen, setPickOpen] = useState(false);
+  const tokens = useStore((s) => s.room?.tokens);
+  const avatarOf = (s: CharacterSheet) => tokens?.find((t) => t.id === s.tokenId);
   const pdfRef = useRef<HTMLInputElement>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
   const hasBuilder = useCharacterBuilder();
@@ -303,7 +339,7 @@ function SheetDockImpl() {
 
   return (
     <div
-      className={wide ? 'sheet-dock side' : 'sheet-dock'}
+      className={`${wide ? 'sheet-dock side' : 'sheet-dock'}${play ? ' play' : ''}`}
       style={wide ? { width } : { height }}
       onDragOver={(e) => {
         if (e.dataTransfer.types.includes('Files')) e.preventDefault();
@@ -324,42 +360,82 @@ function SheetDockImpl() {
       )}
       <div className="sd-tabs">
         <div className="sd-chars">
-          {mine.map((s) => (
+          <div className="sd-picker">
             <button
-              key={s.id}
-              className={s.id === (sheet?.id ?? '') ? 'on' : ''}
-              onClick={() => setOpenId(s.id)}
+              className="sd-current"
+              title={mine.length > 1 ? 'Đổi nhân vật' : undefined}
+              onClick={() => mine.length > 1 && setPickOpen((v) => !v)}
             >
-              {s.name}
-              {s.ownerId !== meId ? ' *' : ''}
+              <SheetFace sheet={sheet} token={sheet ? avatarOf(sheet) : undefined} />
+              <span className="sd-current-name">{sheet?.name ?? 'Chưa có nhân vật'}</span>
+              {mine.length > 1 && <span className="sd-caret">▾</span>}
             </button>
-          ))}
-          <button
-            className="add"
-            onClick={() => {
-              const s = blankSheet(meId);
-              send({ t: 'upsertSheet', sheet: s });
-              setOpenId(s.id);
-            }}
-          >
-            +
-          </button>
-          <button
-            className="add"
-            title="Nhập phiếu nhân vật từ file PDF (hoặc kéo thả PDF vào đây)"
-            onClick={() => pdfRef.current?.click()}
-          >
-            📄 PDF
-          </button>
-          {hasBuilder && (
+            {pickOpen && (
+              <div className="sd-pick-list" onPointerLeave={() => setPickOpen(false)}>
+                {mine.map((s) => (
+                  <button
+                    key={s.id}
+                    className={s.id === (sheet?.id ?? '') ? 'on' : ''}
+                    onClick={() => {
+                      setOpenId(s.id);
+                      setPickOpen(false);
+                    }}
+                  >
+                    <SheetFace sheet={s} token={avatarOf(s)} />
+                    <span>
+                      {s.name}
+                      {s.ownerId !== meId ? ' *' : ''}
+                    </span>
+                    <small>
+                      {s.className} {s.level}
+                    </small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {sheet && (
             <button
-              className="add"
-              title="Mở trang tạo nhân vật (tab mới): chọn chủng tộc, background, tung chỉ số rồi xuất PDF, sau đó bấm 📄 PDF để nhập vào đây"
-              onClick={openCharacterBuilder}
+              className={`sd-mode ${play ? '' : 'on'}`}
+              title={play ? 'Đang ở chế độ Chơi — bấm để sửa sheet (hiện mọi ô nhập)' : 'Đang sửa — bấm để về chế độ Chơi gọn gàng'}
+              onClick={togglePlay}
             >
-              🧙 Tạo nhân vật
+              {play ? '✏ Sửa' : '✔ Xong'}
             </button>
           )}
+          <TopMenu
+            label="⋯"
+            caret={false}
+            title="Thêm / nhập / xóa nhân vật"
+            items={[
+              {
+                label: '+ Nhân vật trống',
+                onClick: () => {
+                  const s = blankSheet(meId);
+                  send({ t: 'upsertSheet', sheet: s });
+                  setOpenId(s.id);
+                  setPlay(false);
+                },
+              },
+              { label: '📄 Nhập từ PDF', title: 'Nhập phiếu nhân vật từ file PDF (hoặc kéo thả PDF vào đây)', onClick: () => pdfRef.current?.click() },
+              ...(hasBuilder
+                ? [{ label: '🧙 Trang tạo nhân vật', title: 'Mở trang tạo nhân vật (tab mới), xuất PDF rồi nhập lại vào đây', onClick: openCharacterBuilder }]
+                : []),
+              ...(sheet
+                ? [
+                    {
+                      label: `🗑 Xóa "${sheet.name}"`,
+                      title: 'Xóa nhân vật này khỏi bàn chơi',
+                      onClick: () => {
+                        if (!window.confirm(`Xóa nhân vật "${sheet.name}"? Không hoàn tác được.`)) return;
+                        send({ t: 'removeSheet', id: sheet.id });
+                        setOpenId(null);
+                      },
+                    },
+                  ]
+                : []),
+            ]}
+          />
           <input
             ref={pdfRef}
             type="file"
@@ -374,29 +450,19 @@ function SheetDockImpl() {
         </div>
         {sheet && (
           <div className="sd-subtabs">
-            <button
-              className="sd-del"
-              title="Xóa nhân vật này khỏi bàn chơi"
-              onClick={() => {
-                if (!window.confirm(`Xóa nhân vật "${sheet.name}"? Không hoàn tác được.`)) return;
-                send({ t: 'removeSheet', id: sheet.id });
-                setOpenId(null);
-              }}
-            >
-              🗑 Xóa
-            </button>
             {(
               [
-                ['basic', 'Cơ bản'],
-                ['skills', 'Kỹ năng'],
-                ['equipment', 'Trang bị'],
-                ['spells', 'Phép'],
-                ['feats', 'Đặc điểm'],
-                ['abilities', 'Năng lực'],
-              ] as [SubTab, string][]
-            ).map(([key, label]) => (
-              <button key={key} className={sub === key ? 'on' : ''} onClick={() => setSub(key)}>
-                {label}
+                ['basic', '⚔', 'Chiến đấu'],
+                ['skills', '🎯', 'Kỹ năng'],
+                ['equipment', '🎒', 'Trang bị'],
+                ['spells', '✨', 'Phép'],
+                ['feats', '📜', 'Đặc điểm'],
+                ['abilities', '⭐', 'Năng lực'],
+              ] as [SubTab, string, string][]
+            ).map(([key, icon, label]) => (
+              <button key={key} className={sub === key ? 'on' : ''} title={label} onClick={() => setSub(key)}>
+                <span className="sdt-icon">{icon}</span>
+                <span className="sdt-label">{label}</span>
               </button>
             ))}
           </div>
@@ -475,7 +541,7 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
             ⬆ LÊN CẤP {totalLevelOf(draft)} → {totalLevelOf(draft) + 1}
           </button>
           {lvlClasses.length > 1 && (
-            <select value={classIdx} onChange={(e) => setClassIdx(Number(e.target.value))} title="Chọn class sẽ tăng cấp">
+            <select className="play-keep" value={classIdx} onChange={(e) => setClassIdx(Number(e.target.value))} title="Chọn class sẽ tăng cấp">
               {lvlClasses.map((c, i) => (
                 <option key={i} value={i}>
                   {c.name || '?'} {c.level}
@@ -728,7 +794,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
             </label>
             {!multiClass && (
               <button
-                className="bt-multi"
+                className="bt-multi edit-only"
                 title="Thêm nghề thứ hai (đa nghề / multiclass)"
                 onClick={() =>
                   commit({
@@ -748,7 +814,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               {multiClass ? `Tổng cấp ${totalLevelOf(draft)} · ` : ''}Thành thạo {fmtMod(draft.proficiencyBonus)}
             </span>
             <button
-              className="bt-setup"
+              className="bt-setup edit-only"
               title="Tự điền save, kỹ năng class, HP và feature theo class + cấp"
               onClick={() => setShowSetup(true)}
             >
@@ -770,7 +836,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               📍 Đặt lên bản đồ
             </button>
           )}
-          <label className="bt-tokenlink">
+          <label className="bt-tokenlink edit-only">
             Token đại diện
             <select
               value={draft.tokenId ?? ''}
@@ -820,7 +886,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                     <span className="ab-key">{ABILITY_LABEL[ab]}</span>
                     <input
                       type="checkbox"
-                      className="ab-saveprof"
+                      className="ab-saveprof edit-only"
                       checked={prof}
                       title="Thành thạo cứu nguy (saving throw)"
                       onChange={(e) => toggleSaveProf(ab, e.target.checked)}
@@ -891,7 +957,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               <span className="ac-label">AC</span>
               <span className="ac-src">{ac.source}</span>
             </div>
-            <label>
+            <label className="edit-only">
               AC ghi đè
               <input
                 type="number"
@@ -906,6 +972,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               HP
               <input
                 type="number"
+                className="play-keep"
                 value={draft.currentHp}
                 onChange={(e) => set('currentHp', Number(e.target.value))}
               />
@@ -922,6 +989,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               tạm
               <input
                 type="number"
+                className="play-keep"
                 value={draft.tempHp}
                 onChange={(e) => set('tempHp', Number(e.target.value))}
               />
@@ -958,7 +1026,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
               Nghỉ dài
             </button>
             <button
-              className="rest"
+              className="rest edit-only"
               title="Test-only: hồi hết Action/Bonus/Reaction của token + toàn bộ tài nguyên nhân vật (như Nghỉ dài), để tiện thử lại một tình huống mà không cần đợi qua lượt/qua đêm thật"
               onClick={() => {
                 commit({ ...applyLongRest(draft), sneakAttackArmed: false, boomingBladeArmed: false });
@@ -985,7 +1053,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
         <div className={`target-bar ${targetId ? 'has' : ''}`}>
           <span className="tb-title">🎯 Mục tiêu</span>
           <select
-            className="tb-select"
+            className="tb-select play-keep"
             value={targetId}
             onChange={(e) => setTargetId(e.target.value)}
             title="Chọn token mục tiêu cho các nút đánh / phép bên dưới"
@@ -1016,6 +1084,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
             <label className="tb-mark">
               Đánh dấu
               <select
+                className="play-keep"
                 value=""
                 onChange={(e) => {
                   const p = RIDER_PRESETS.find((x) => x.name === e.target.value);
@@ -2487,7 +2556,9 @@ function SpellsTab({ draft, commit }: EditorCtx) {
           </div>
         ))}
 
-      <SpellAdder draft={draft} onAdd={(sp) => set({ spells: [...spells, sp] })} />
+      <div className="edit-only">
+        <SpellAdder draft={draft} onAdd={(sp) => set({ spells: [...spells, sp] })} />
+      </div>
       {spells.length === 0 && <p className="empty">Chưa có phép nào.</p>}
     </div>
   );
@@ -2614,7 +2685,7 @@ function SpellRow({
         )}
         {canCast && upcastLevels.length > 0 && (
           <select
-            className="sr-upcast"
+            className="sr-upcast play-keep"
             value={castLevel}
             title="Nâng ô: chọn Spell Slot cấp cao hơn để trừ khi ra phép này (sát thương/hiệu ứng vẫn chỉnh tay như thường)"
             onChange={(e) => setCastLevel(Number(e.target.value))}
@@ -2937,7 +3008,7 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
           />
           <span className="mc-type">{casterTypeForClass(c.name, c.subclass)}</span>
           {classes.length > 1 && (
-            <button className="link" title="Bỏ nghề này" onClick={() => removeClass(i)}>
+            <button className="link edit-only" title="Bỏ nghề này" onClick={() => removeClass(i)}>
               ✕
             </button>
           )}
@@ -2949,7 +3020,7 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
         ))}
       </datalist>
       <button
-        className="link"
+        className="link edit-only"
         disabled={total >= 20}
         onClick={() => set({ classes: [...classes, { name: '', level: 1 }], subclass: undefined })}
       >

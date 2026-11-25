@@ -82,6 +82,8 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** DM: raise a setting moon (null = no moon / it set). */
+  | { t: 'setMoon'; moon: { key: string; name: string } | null }
   | { t: 'levelUpClose' }
   /** A player claims their level-up: +1 level in `classIndex` (default: first class) and a rolled HP
    *  gain. `external` carries the dddice dice (the 2nd one only when the 1st was a 1 — pity reroll). */

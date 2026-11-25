@@ -1401,6 +1401,7 @@ export function tokenStatblockFrom(sb: Statblock): TokenStatblock {
     defenses: sb.defenses ? { ...sb.defenses } : undefined,
     notes: sb.notes || undefined,
     fromId: sb.id,
+    artUrl: sb.artUrl || undefined,
   };
 }
 

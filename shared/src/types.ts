@@ -803,6 +803,8 @@ export interface Statblock {
   defenses?: Defenses;
   color: string;
   imageUrl?: string;
+  /** Full illustration shown on the stat block (DM views). Local art, never committed. */
+  artUrl?: string;
   tags: string[];
   notes: string;
   source?: string; // attribution
@@ -833,6 +835,7 @@ export interface TokenStatblock {
   defenses?: Defenses;
   notes?: string;
   fromId?: string; // bestiary entry it was spawned from
+  artUrl?: string; // full illustration (copied from the bestiary entry)
 }
 
 /** Coarse, spoiler-free health read-out players get for an enemy whose real HP is hidden. */
@@ -1129,6 +1132,16 @@ export interface RoomState {
   homebrew: HomebrewEntry[];
   /** Homebrew God's Bane party artifact (see `godsBane.ts`). Unset / `enabled: false` = every hook is a no-op. */
   godsBane?: GodsBaneState;
+  /** The setting moon currently in the sky (DM-set). Keys/names come from the local moon data. */
+  moon?: SkyMoon | null;
+}
+
+/** A setting moon in the sky: `key` matches an entry of the local moon data (client). */
+export interface SkyMoon {
+  key: string;
+  name: string;
+  /** When it rose (ms). */
+  since: number;
 }
 
 /** God's Bane target categories: the god-like boss, its servants, and fallen hunters. */

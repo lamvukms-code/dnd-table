@@ -5,6 +5,7 @@ import { JoinScreen } from './components/JoinScreen.js';
 import { BattleMap } from './components/BattleMap.js';
 import { DiceWindow } from './components/DiceWindow.js';
 import { InitiativeBar } from './components/InitiativeBar.js';
+import { MoonChip } from './components/MoonChip.js';
 import { SheetDock } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
@@ -244,6 +245,7 @@ export function App() {
                 </button>
               )}
             </div>
+            <MoonChip />
             <InitiativeBar />
             <PartyBar />
           </div>

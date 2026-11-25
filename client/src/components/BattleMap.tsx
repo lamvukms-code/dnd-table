@@ -1643,6 +1643,11 @@ function TokenInspector({
           ✕
         </button>
       </div>
+      {isDm && (token.statblock?.artUrl ?? linkedEntry?.artUrl) && (
+        <a className="sb-art" href={token.statblock?.artUrl ?? linkedEntry?.artUrl} target="_blank" rel="noreferrer" title="Bấm để xem ảnh lớn">
+          <img src={token.statblock?.artUrl ?? linkedEntry?.artUrl} alt="" loading="lazy" />
+        </a>
+      )}
       {isDm && (
         <div className="insp-sb-link">
           {linkedEntry && (

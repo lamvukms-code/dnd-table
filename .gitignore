@@ -32,3 +32,6 @@ client/src/data/*.local.json
 
 # local campaign pages (e.g. a character builder with setting content) — never commit
 client/public/campaign/
+
+# setting art (moon cards, backgrounds) built locally from purchased assets — never commit
+client/public/art/
