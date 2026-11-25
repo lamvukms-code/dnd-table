@@ -59,6 +59,8 @@ export type ClientAction =
       attackRange?: AttackRange;
       /** Weapon strike or spell attack (cover-reducing feats only apply to weapons). Unset = weapon. */
       attackKind?: 'weapon' | 'spell';
+      /** Stat-block action used (monster mechanics tied to one attack: crit range, grapple on hit…). */
+      actionName?: string;
       /** Spell attack forced movement on a hit (`save`: only if the target fails it). */
       moveOnHit?: {
         feet?: number;
@@ -93,6 +95,8 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** Try to escape a grapple effect (Athletics / Acrobatics vs its escape DC). */
+  | { t: 'escapeGrapple'; tokenId: string; effectId: string }
   /** Answer a pick-a-point request: a cell, or `skip`. */
   | { t: 'resolvePick'; id: string; x?: number; y?: number; skip?: boolean }
   /** Place / remove a lingering spell area. */
@@ -137,6 +141,8 @@ export type ClientAction =
       sourceTokenId?: string;
       /** Forced roll mode for this save (e.g. disadvantage within 5 ft); effects' save advantage still applies. */
       rollMode?: RollMode;
+      /** The save is against a spell / magical effect (Magic Resistance). */
+      fromSpell?: boolean;
       /** On a failed save: push / pull the target relative to `fromTokenId` (the caster). */
       moveOnFail?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; fromTokenId: string };
       /** On a failed save: the caster picks a point within `maxFeet` of `fromTokenId` and the target lands there. */

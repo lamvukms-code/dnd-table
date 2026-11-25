@@ -126,6 +126,18 @@ import {
   passiveExtraAttackOnCritOrKill,
   aoeTokenIds,
   type Hazard,
+  monsterMechanics,
+  immuneConditions,
+  mechanicSaveAdvantage,
+  hasEvasion,
+  critMin,
+  mechanicAutoCrit,
+  critExtraParts,
+  onHitGrappleFor,
+  lifestealFor,
+  sizeIndex,
+  skillBonus,
+  type MonsterMechanic,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -236,6 +248,7 @@ export class Room {
 
   private touch(): void {
     this.syncLinkedAc();
+    this.enforceConditionImmunity();
     // God's Bane undying / permanent-kill notes queued during damage, logged after the damage lines.
     for (const label of this.pendingBaneLogs.splice(0)) this.systemLog(label);
     this.state.rev++;
@@ -1118,6 +1131,7 @@ export class Room {
     withCover = false,
     vsCondition?: ConditionType,
     forced?: RollMode,
+    magical?: boolean,
   ): { d20: number; total: number; pass: boolean; bonus: number; modeNote: string } {
     const sheet = this.linkedSheet(token);
     const bonus =
@@ -1127,13 +1141,14 @@ export class Room {
       baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition);
     // advantage from the bearer's effects (effect save advantage) and a forced mode
     // (close-range disadvantage) cancel each other like any 5e advantage/disadvantage
-    const adv = forced === 'advantage' || effectSaveAdvantage(token.effects, ability);
+    const mechAdv = mechanicSaveAdvantage(this.mechOf(token), { ability, magical, vsCondition });
+    const adv = forced === 'advantage' || effectSaveAdvantage(token.effects, ability) || !!mechAdv;
     const dis = forced === 'disadvantage';
     const mode: RollMode = adv && !dis ? 'advantage' : dis && !adv ? 'disadvantage' : 'normal';
     const r1 = 1 + Math.floor(Math.random() * 20);
     const r2 = 1 + Math.floor(Math.random() * 20);
     let d20 = mode === 'advantage' ? Math.max(r1, r2) : mode === 'disadvantage' ? Math.min(r1, r2) : r1;
-    const modeNote = mode === 'normal' ? '' : ` (${mode === 'advantage' ? 'lợi thế' : 'bất lợi'} ${r1}/${r2})`;
+    const modeNote = mode === 'normal' ? '' : ` (${mode === 'advantage' ? `lợi thế${mechAdv ? ` · ${mechAdv}` : ''}` : 'bất lợi'} ${r1}/${r2})`;
     const causality = this.causalityD20({ sheetId: sheet?.id, enemy: !sheet });
     if (causality) {
       d20 = causality.natural;
@@ -1507,7 +1522,7 @@ export class Room {
   private hazardHit(t: Token, h: Hazard, why: string): void {
     if (t.godsBaneBlade || (h.hitThisTurn ?? []).includes(t.id)) return;
     h.hitThisTurn = [...(h.hitThisTurn ?? []), t.id];
-    const s = this.rollTokenSave(t, h.save, h.dc, false);
+    const s = this.rollTokenSave(t, h.save, h.dc, false, undefined, undefined, h.magical);
     let rolled = 0;
     try {
       rolled = rollNotation(h.dice).total;
@@ -1526,6 +1541,40 @@ export class Room {
       result: externalRollResult(h.dice, { total: rolled, faces: [] }),
       damage: { targetTokenId: t.id, targetName: t.label, amount: took.applied, raw: out.totalRaw, damageType: h.type, notes: damageBreakdownNotes(out) },
     });
+  }
+
+  private mechCache = new WeakMap<object, MonsterMechanic[]>();
+  /** A monster token's mechanics (stat block wording + the local file). Characters have none. */
+  private mechOf(t: Token | undefined): MonsterMechanic[] {
+    if (!t?.statblock || this.linkedSheet(t)) return [];
+    let m = this.mechCache.get(t.statblock);
+    if (!m) {
+      m = monsterMechanics(t.statblock);
+      this.mechCache.set(t.statblock, m);
+    }
+    return m;
+  }
+
+  /** Condition immunities: an effect carrying a condition the creature is immune to never sticks. */
+  private enforceConditionImmunity(): void {
+    for (const t of this.state.tokens) {
+      if (!t.effects?.length || !t.statblock) continue;
+      const immune = immuneConditions(this.mechOf(t));
+      if (!immune.length) continue;
+      const blocked = t.effects.filter((e) => e.condition && immune.includes(e.condition));
+      if (!blocked.length) continue;
+      t.effects = t.effects.filter((e) => !blocked.includes(e));
+      for (const e of blocked) this.systemLog(`🛡 ${t.label} miễn nhiễm ${e.condition} — bỏ "${e.name}"`);
+    }
+  }
+
+  /** Is `target` grappled by `by`? */
+  private grappledBy(target: Token, by: Token | undefined): boolean {
+    if (!by) return false;
+    const sid = this.linkedSheet(by)?.id;
+    return !!target.effects?.some(
+      (e) => (e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name)) && (e.sourceTokenId === by.id || (!!sid && e.sourceSheetId === sid)),
+    );
   }
 
   /** Player side = a token linked to a character sheet or handed to a player; everything else is the DM's. */
@@ -1768,6 +1817,44 @@ export class Room {
           actorName: 'Hệ thống',
           label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
           result: externalRollResult('', { total: 0, faces: [] }),
+        });
+        this.touch();
+        break;
+      }
+
+      case 'escapeGrapple': {
+        const tk = this.state.tokens.find((t) => t.id === action.tokenId);
+        const eff = tk?.effects?.find((e) => e.id === action.effectId);
+        if (!tk || !eff?.escapeDc) return 'Không có cú ghì để thoát';
+        const sheet = this.linkedSheet(tk);
+        if (!isDm && tk.controllerId !== actor.id && sheet?.ownerId !== actor.id) return 'Không phải token của bạn';
+        // the better of Athletics / Acrobatics
+        let bonus: number;
+        let skill: string;
+        if (sheet) {
+          const ath = skillBonus(sheet, 'athletics');
+          const acr = skillBonus(sheet, 'acrobatics');
+          bonus = Math.max(ath, acr);
+          skill = ath >= acr ? 'Athletics' : 'Acrobatics';
+        } else {
+          const sb = tk.statblock;
+          const find = (n: string) => sb?.skills.find((s) => s.skill.toLowerCase() === n.toLowerCase())?.bonus;
+          const ath = find('Athletics') ?? abilityMod(sb?.abilities.str ?? 10);
+          const acr = find('Acrobatics') ?? abilityMod(sb?.abilities.dex ?? 10);
+          bonus = Math.max(ath, acr) + exhaustionPenalty(tk.exhaustion);
+          skill = ath >= acr ? 'Athletics' : 'Acrobatics';
+        }
+        const d20 = 1 + Math.floor(Math.random() * 20);
+        const total = d20 + bonus;
+        const ok = total >= eff.escapeDc;
+        if (ok) tk.effects = (tk.effects ?? []).filter((e) => e.id !== eff.id);
+        this.pushRoll({
+          id: nanoid(8),
+          ts: Date.now(),
+          actorId: actor.id,
+          actorName: actor.name,
+          label: `${tk.label} thoát ghì: ${skill} ${total} vs DC ${eff.escapeDc} — ${ok ? 'THOÁT' : 'vẫn bị ghì'}`,
+          result: externalRollResult('1d20', { total, faces: [d20] }),
         });
         this.touch();
         break;
@@ -2051,7 +2138,22 @@ export class Room {
         const attackerTok = action.attackerTokenId
           ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId)
           : undefined;
+        // Monster mechanics on this attack: a wider crit range, or an automatic crit (target grappled by it).
+        const atkMechs = this.mechOf(attackerTok);
+        const nat = attackRoll.d20?.natural;
+        const critFrom = atkMechs.length ? critMin(atkMechs, action.actionName) : 20;
+        if (nat && nat < 20 && nat >= critFrom) {
+          Object.assign(res, { hit: true, crit: true, fumble: false });
+          if (action.external) action.external = { ...action.external, partTotals: undefined }; // re-roll as a crit
+          this.pendingBaneLogs.push(`💥 ${attackerTok?.label}: chí mạng với ${nat} (${critFrom}–20)`);
+        }
+        const mechCrit = res.hit && atkMechs.length ? mechanicAutoCrit(atkMechs, action.actionName, { targetGrappledBySelf: this.grappledBy(target, attackerTok) }) : null;
+        if (mechCrit && !res.crit) {
+          if (action.external) action.external = { ...action.external, partTotals: undefined };
+          this.pendingBaneLogs.push(`💥 ${mechCrit}: mục tiêu đang bị ghì → chí mạng`);
+        }
         const autoCrit =
+          !!mechCrit ||
           res.hit &&
           conditionAutoCrit(tokenConditions(target), {
             range: action.attackRange,
@@ -2068,6 +2170,7 @@ export class Room {
           }),
         ];
 
+        if (effectiveCrit && atkMechs.length) dmgParts.push(...critExtraParts(atkMechs, action.attackRange === 'melee', dmgParts[0]?.type ?? ''));
         let damageResult: RollResult | undefined;
         let outcome: MultiDamageOutcome | undefined;
         if (res.hit) {
@@ -2112,6 +2215,26 @@ export class Room {
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
           const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane, crit: effectiveCrit });
           const applied = took.applied;
+          if (attackerTok && atkMechs.length) {
+            // A hit that grapples (escape DC), if the target isn't too big and isn't already held by it.
+            const g = onHitGrappleFor(atkMechs, action.actionName);
+            if (g && !this.grappledBy(target, attackerTok) && (!g.maxSize || sizeIndex(target.size) <= sizeIndex(g.maxSize))) {
+              target.effects = [
+                ...(target.effects ?? []),
+                { id: nanoid(8), name: `Bị ghì (${attackerTok.label})`, condition: 'grappled', sourceTokenId: attackerTok.id, escapeDc: g.escapeDc, note: `Thoát: Athletics/Acrobatics DC ${g.escapeDc} (action)` },
+              ];
+              this.pendingBaneLogs.push(`🤼 ${attackerTok.label} ghì ${target.label} (thoát DC ${g.escapeDc})`);
+            }
+            // Life drain: heals by the damage dealt (of one type when the text says so).
+            const ls = lifestealFor(atkMechs, action.actionName);
+            if (ls && (!ls.ifTargetCondition || tokenConditions(target).includes(ls.ifTargetCondition as ConditionType))) {
+              const amount = ls.type
+                ? outcome.parts.filter((p) => p.type.toLowerCase() === ls.type).reduce((n, p) => n + p.final, 0)
+                : applied + took.absorbed;
+              const healed = amount > 0 ? this.applyHeal(attackerTok, amount) : 0;
+              if (healed > 0) this.pendingBaneLogs.push(`🩸 ${attackerTok.label} hút ${healed} HP (${ls.from ?? 'hút máu'})`);
+            }
+          }
           // Temp HP soaking the hit still counts as dealing damage (Booming Blade, Bracers).
           const dealt = applied + took.absorbed;
           if (dealt > 0) this.markDealtDamage(action.attackerTokenId);
@@ -2203,7 +2326,7 @@ export class Room {
           let saveNote = '';
           if (from && mv.save) {
             const large = ['large', 'huge', 'gargantuan'].includes(target.size);
-            const s = this.rollTokenSave(target, mv.save.ability, mv.save.dc, false, undefined, mv.save.largeAdvantage && large ? 'advantage' : undefined);
+            const s = this.rollTokenSave(target, mv.save.ability, mv.save.dc, false, undefined, mv.save.largeAdvantage && large ? 'advantage' : undefined, true);
             moves = !s.pass;
             saveNote = ` · ${mv.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${mv.save.dc} ${s.pass ? '✔' : '✘'}`;
           }
@@ -2697,6 +2820,7 @@ export class Room {
           true,
           action.effectOnFail?.condition,
           action.rollMode,
+          action.fromSpell,
         );
         const coverSave = action.ability === 'dex' ? coverDexSaveBonus(target.cover) : 0;
         this.pushRoll({
@@ -2736,7 +2860,11 @@ export class Room {
             }
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
-          const dealt = this.baneReduce(target, action.sourceTokenId, pass ? Math.floor(out.totalFinal / 2) : out.totalFinal);
+          // Evasion: a DEX save for half takes none on a success and half on a failure
+          const evade = action.ability === 'dex' && !!action.damageHalfOnSave && hasEvasion(this.mechOf(target));
+          const base = evade ? (pass ? 0 : Math.floor(out.totalFinal / 2)) : pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
+          if (evade) this.pendingBaneLogs.push(`${target.label}: Evasion — ${pass ? 'không nhận sát thương' : 'chỉ nhận nửa'}`);
+          const dealt = this.baneReduce(target, action.sourceTokenId, base);
           const took = this.applyDamage(target, dealt);
           const applied = took.applied;
           if (applied + took.absorbed > 0) this.markDealtDamage(action.sourceTokenId);

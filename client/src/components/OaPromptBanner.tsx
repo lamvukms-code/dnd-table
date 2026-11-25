@@ -75,6 +75,7 @@ function OaPromptBannerImpl() {
                     attackerTokenId: atk.tokenId,
                     attackRange: 'melee',
                     attackKind: attackKindOf(atk.action),
+                    actionName: atk.action.name,
                   });
                 }}
               >

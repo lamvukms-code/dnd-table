@@ -457,3 +457,7 @@ label { color: var(--muted); }
 .pick-prompts { top: calc(var(--hud-top, 64px) + 60px); }
 .oa-prompt.armed { border-color: #4fc3ff; }
 .oa-prompt .pick-hint { color: #9fdcff; font-style: italic; }
+
+/* monster mechanics the app runs by itself */
+.mech-badge { color: #2f6b3a; font-weight: 700; }
+.eff-chip .eff-escape { color: #1f6fb0; margin-left: 4px; }

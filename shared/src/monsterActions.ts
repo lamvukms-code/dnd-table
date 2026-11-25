@@ -69,6 +69,19 @@ export function parseMultiattack(description: string | undefined, actions: Sheet
     else steps.push({ actionId: hit.id, name: hit.name, count });
   }
   if (steps.length) return steps;
+  // 2014 wording: "makes three attacks: one with its bite and two with its claws"
+  const sing = (w: string) => w.replace(/(?<=[a-z])s$/, '');
+  const re2 = /\b(one|two|three|four|five|six|\d+)\s+with\s+(?:its|his|her|their)\s+([A-Za-z][A-Za-z' -]*?)(?=\s*(?:,|\.|;|\band\b|\bor\b|$))/gi;
+  while ((m = re2.exec(desc))) {
+    const count = COUNT[m[1].toLowerCase()] ?? Number(m[1]);
+    const phrase = sing(m[2].trim().toLowerCase());
+    const hit = byLen.find((x) => sing(baseName(x.name)) === phrase || phrase.endsWith(sing(baseName(x.name))));
+    if (!hit || !count) continue;
+    const prev = steps.find((st) => st.actionId === hit.id);
+    if (prev) prev.count += count;
+    else steps.push({ actionId: hit.id, name: hit.name, count });
+  }
+  if (steps.length) return steps;
   const n = /\bmakes\s+(two|three|four|five|\d+)\s+(?:melee\s+|ranged\s+)?attacks\b/i.exec(desc);
   if (n) {
     const count = COUNT[n[1].toLowerCase()] ?? Number(n[1]);

@@ -533,6 +533,8 @@ export interface ActiveEffect {
   retaliate?: { dice: string; type: string; always?: boolean };
   /** The bearer rolls death saving throws with advantage. */
   deathSaveAdvantage?: boolean;
+  /** A grapple the bearer can try to escape: Athletics / Acrobatics against this DC (action). */
+  escapeDc?: number;
   /** Reshapes the bearer's weapon attacks while active (Shillelagh). */
   weaponImbue?: WeaponImbue;
   /** Flat temp HP the bearer gains at the start of each of its turns (Rampant Growth). */
@@ -1202,6 +1204,8 @@ export interface Hazard {
   halfOnSave?: boolean;
   sourceTokenId?: string;
   sourceSheetId?: string;
+  /** The area comes from a spell (Magic Resistance applies). */
+  magical?: boolean;
   /** Tokens already caught this turn (once per creature per turn). */
   hitThisTurn?: string[];
 }

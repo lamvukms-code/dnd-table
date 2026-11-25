@@ -47,6 +47,8 @@ import {
   actionAvailable,
   failCondition,
   parseMultiattack,
+  automatedFeatures,
+  monsterMechanics,
   economyKindOf,
   exhaustionPenalty,
 } from '@dnd-table/shared';
@@ -1417,6 +1419,18 @@ function EffectsPanel({ token }: { token: Token }) {
             {e.rider ? ` +${e.rider.dice} ${e.rider.type}` : ''}
             {e.concentration ? ' 🧠' : ''}
             {e.save ? ` · save ${e.save.ability.toUpperCase()} DC${e.save.dc}` : ''}
+            {e.escapeDc ? (
+              <button
+                className="link eff-escape"
+                title={`Dùng action: Athletics/Acrobatics vs DC ${e.escapeDc}`}
+                onClick={() => {
+                  if (!useStore.getState().spendEconomy(token.id, 'action')) return;
+                  useStore.getState().send({ t: 'escapeGrapple', tokenId: token.id, effectId: e.id });
+                }}
+              >
+                🤸 thoát DC{e.escapeDc}
+              </button>
+            ) : null}
             <button className="link" onClick={() => removeEffect(token.id, e.id)}>
               ✕
             </button>
@@ -1544,6 +1558,8 @@ function TokenInspector({
 
   const sb = token.statblock;
   const canSeeStatblock = sb && (isDm || token.controllerId === meId);
+  // features the app runs by itself (monster mechanics) get a ⚙ badge
+  const autoFeatures = automatedFeatures(linkedSheet ? [] : monsterMechanics(sb));
   // Nearest living, visible player-side creature: preselected as the monster's target (its turn
   // starting, or the card opening with no target / a downed one). The DM can still pick another.
   const myTurnNow = !!initiative?.running && initiative.entries.find((e) => e.isActive)?.tokenId === token.id;
@@ -1650,6 +1666,7 @@ function TokenInspector({
           attackRange: attackRangeOf(act),
           attackKind: attackKindOf(act),
           rangeText: act.range ?? act.description,
+          actionName: act.name,
         });
       }
     }
@@ -2111,6 +2128,7 @@ function TokenInspector({
             return (
               <div key={a.id} className="sb-act">
                 <span className="sb-act-name" title={a.description}>
+                  {autoFeatures.has(a.name.toLowerCase()) && <span className="mech-badge" title="App tự áp dụng phần đặc biệt của hành động này (ghì, hút máu, chí mạng…)">⚙ </span>}
                   {a.name}
                   {lim && (
                     <span className={`sb-limit ${spent ? 'spent' : ''}`}>
@@ -2161,6 +2179,7 @@ function TokenInspector({
                         attackRange: attackRangeOf(a),
                         attackKind: attackKindOf(a),
                         rangeText: a.range ?? a.description,
+                        actionName: a.name,
                       })
                     }
                   >
@@ -2242,7 +2261,11 @@ function TokenInspector({
               <summary>Đặc điểm ({sb.traits.length})</summary>
               {sb.traits.map((t, i) => (
                 <p key={i}>
-                  <strong>{t.name}.</strong> {t.description}
+                  <strong>
+                    {autoFeatures.has(t.name.toLowerCase()) && <span className="mech-badge" title="App tự áp dụng đặc điểm này">⚙ </span>}
+                    {t.name}.
+                  </strong>{' '}
+                  {t.description}
                 </p>
               ))}
             </details>

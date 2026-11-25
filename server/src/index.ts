@@ -23,6 +23,8 @@ import {
   registerCustomClass,
   registerFeatureDefs,
   registerFeatDefs,
+  registerMonsterMechanics,
+  type MonsterMechanic,
   type LocalFeatDef,
   type SubclassFeatureDef,
 } from '@dnd-table/shared';
@@ -75,6 +77,15 @@ if (existsSync(FEATS_FILE)) {
     if (Array.isArray(defs)) registerFeatDefs(defs as LocalFeatDef[]);
   } catch (e) {
     console.warn(`Không đọc được ${FEATS_FILE}:`, (e as Error).message);
+  }
+}
+// Local monster mechanics per stat block name (setting content: git-ignored).
+const MECH_FILE = process.env.MONSTER_MECH_FILE ?? join(__dirname, '..', '..', 'client', 'src', 'data', 'monsterMechanics.local.json');
+if (existsSync(MECH_FILE)) {
+  try {
+    registerMonsterMechanics(JSON.parse(readFileSync(MECH_FILE, 'utf8')) as Record<string, MonsterMechanic[]>);
+  } catch (e) {
+    console.warn(`Không đọc được ${MECH_FILE}:`, (e as Error).message);
   }
 }
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h

@@ -30,3 +30,4 @@ export * from './firearms.js';
 export * from './madness.js';
 export * from './deathSaves.js';
 export * from './opportunity.js';
+export * from './monsterMechanics.js';

@@ -30,6 +30,7 @@ import {
   type AreaSpec,
   tokenConditions,
   type ActiveEffect,
+  type Token,
   type ClientAction,
   type DamagePart,
   type ExternalRoll,
@@ -39,6 +40,10 @@ import {
   type ServerEvent,
   type Spell,
   findCantrip,
+  monsterMechanics,
+  mechanicAttackAdvantage,
+  edgeFeet,
+  tokenSpan,
   passiveRangeMultiplier,
   rangeBand,
   passiveRangedCover,
@@ -107,6 +112,8 @@ interface AttackParams {
   effectOnCrit?: ActiveEffect;
   /** Weapon range text ("80/320 ft", "range 30/120 ft."): long range = disadvantage, beyond it asks first. */
   rangeText?: string;
+  /** Stat-block action name (monster mechanics tied to one attack). */
+  actionName?: string;
   /** Repelling Blast (2024): on a hit, push the target this many feet from the attacker. */
   pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
@@ -411,6 +418,7 @@ export const useStore = create<StoreState>((set, get) => {
       moveOnHit,
       effectOnCrit,
       rangeText,
+      actionName,
       pushFeetOnHit,
       grappleOnHit,
     }) => {
@@ -445,6 +453,29 @@ export const useStore = create<StoreState>((set, get) => {
           mode = combineRollModes(mode, 'disadvantage');
           reasons.push('tầm xa trong tầm cận chiến');
         }
+        // Monster mechanics (Pack Tactics, Blood Frenzy, vs grappled / deafened…): advantage when they hold.
+        if (atkTok?.statblock && !atkSheet && tgtTok && room) {
+          const mechs = monsterMechanics(atkTok.statblock);
+          if (mechs.length) {
+            const playerSide = (t: Token) => !!t.controllerId || room.sheets.some((s) => s.tokenId === t.id);
+            const able = (t: Token) =>
+              !(typeof t.currentHp === 'number' && t.currentHp <= 0) &&
+              !tokenConditions(t).some((c) => ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'].includes(c));
+            const near = (a: Token, b: Token) => edgeFeet(a, tokenSpan(a), b, tokenSpan(b)) <= 5;
+            const why = mechanicAttackAdvantage(mechs, {
+              melee: attackRange === 'melee',
+              allyAdjacentToTarget: room.tokens.some((t) => t.id !== atkTok.id && t.id !== tgtTok.id && playerSide(t) === playerSide(atkTok) && able(t) && near(t, tgtTok)),
+              targetAdjacentToItsAlly: room.tokens.some((t) => t.id !== tgtTok.id && t.id !== atkTok.id && playerSide(t) === playerSide(tgtTok) && able(t) && near(t, tgtTok)),
+              targetGrappledBySelf: !!tgtTok.effects?.some((e) => (e.condition === 'grappled' || /grapple|bị ghì/i.test(e.name)) && e.sourceTokenId === atkTok.id),
+              targetDamaged: typeof tgtTok.currentHp === 'number' && typeof tgtTok.maxHp === 'number' && tgtTok.currentHp < tgtTok.maxHp,
+              targetConditions: tokenConditions(tgtTok),
+            });
+            if (why.length) {
+              mode = combineRollModes(mode, 'advantage');
+              reasons.push(...why);
+            }
+          }
+        }
         // Ranged weapon: beyond normal range = disadvantage, beyond long range = can't (asks first).
         if (attackRange === 'ranged' && attackKind !== 'spell' && atkTok && tgtTok) {
           const mult = passiveRangeMultiplier(atkSheet);
@@ -473,6 +504,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackKind,
           moveOnHit,
           effectOnCrit,
+          actionName,
           pushFeetOnHit,
           grappleOnHit,
         });
@@ -497,6 +529,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackKind,
           moveOnHit,
           effectOnCrit,
+          actionName,
           pushFeetOnHit,
           grappleOnHit,
           external: { attack },
@@ -545,6 +578,7 @@ export const useStore = create<StoreState>((set, get) => {
         attackKind,
         moveOnHit,
         effectOnCrit,
+        actionName,
         pushFeetOnHit,
         grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },
@@ -779,6 +813,7 @@ export const useStore = create<StoreState>((set, get) => {
         if (fs) {
           rawSend({
             t: 'spellSave',
+            fromSpell: true,
             targetTokenId,
             ability: fs.ability,
             dc,
@@ -821,6 +856,7 @@ export const useStore = create<StoreState>((set, get) => {
         const sfx = spell.effect ? upcastEffect(spell.effect, spell.level, effLevel) : undefined;
         rawSend({
           t: 'spellSave',
+            fromSpell: true,
           targetTokenId,
           ability: spell.save.ability,
           dc,
@@ -931,6 +967,7 @@ export const useStore = create<StoreState>((set, get) => {
           for (const id of caught) {
             rawSend({
               t: 'spellSave',
+            fromSpell: true,
               targetTokenId: id,
               ability: burst.save,
               dc,
@@ -945,6 +982,7 @@ export const useStore = create<StoreState>((set, get) => {
             rawSend({
               t: 'addHazard',
               hazard: {
+                magical: true,
                 label: `${spell.name} (vùng)`,
                 cx: tgt.x + span(tgt) / 2,
                 cy: tgt.y + span(tgt) / 2,
@@ -1069,6 +1107,7 @@ export const useStore = create<StoreState>((set, get) => {
       if (spell.castKind === 'save' && spell.save) {
         rawSend({
           t: 'spellSave',
+            fromSpell: true,
           targetTokenId,
           ability: spell.save.ability,
           dc,
