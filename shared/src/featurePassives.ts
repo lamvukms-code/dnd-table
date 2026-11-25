@@ -40,6 +40,8 @@ export interface FeaturePassive {
   noCloseRangedPenalty?: boolean;
   /** Ranged attacks ignore half cover and treat three-quarters cover as half. */
   rangedCoverReduce?: boolean;
+  /** Ranged weapon attacks: normal and long range are multiplied by this. */
+  rangeMultiplier?: number;
   /** Once per turn, a melee critical hit or dropping a creature to 0 HP grants one extra melee attack (reminder). */
   extraAttackOnCritOrKill?: boolean;
 }
@@ -131,6 +133,12 @@ export function activePassives(sheet: CharacterSheet): ActivePassive[] {
     .filter((f) => f.passive)
     .map((f) => ({ feature: f, passive: f.passive!, classLevel: sheet.level }));
   return [...sub, ...feats];
+}
+
+/** Range multiplier for the sheet's ranged weapon attacks (1 = none). */
+export function passiveRangeMultiplier(sheet: CharacterSheet | undefined): number {
+  if (!sheet) return 1;
+  return activePassives(sheet).reduce((m, p) => Math.max(m, p.passive.rangeMultiplier ?? 1), 1);
 }
 
 /** Whether the sheet gets an extra melee attack after a melee crit / a kill (reminder only). */

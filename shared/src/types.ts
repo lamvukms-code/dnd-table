@@ -531,6 +531,8 @@ export interface ActiveEffect {
   acBase?: number;
   /** Melee attackers take this damage while the bearer has temp HP (Armor of Agathys); `always` = no temp HP needed. */
   retaliate?: { dice: string; type: string; always?: boolean };
+  /** The bearer rolls death saving throws with advantage. */
+  deathSaveAdvantage?: boolean;
   /** Reshapes the bearer's weapon attacks while active (Shillelagh). */
   weaponImbue?: WeaponImbue;
   /** Flat temp HP the bearer gains at the start of each of its turns (Rampant Growth). */
@@ -610,6 +612,8 @@ export interface SpellForcedMove {
   save?: Ability;
   /** Large or bigger targets have advantage on that save. */
   largeAdvantage?: boolean;
+  /** A push stopped by another creature or the map edge leaves the target with this condition until its next turn ends. */
+  collideCondition?: ConditionType;
 }
 
 /** How an effect placed by a spell grows with the slot level. */
@@ -633,6 +637,8 @@ export interface SpellBurst {
   halfOnSave?: boolean;
   /** Added to `dice` per slot level above the spell's own. */
   perLevel?: string;
+  /** The area stays until the start of the caster's next turn: entering it or ending a turn in it means another save. */
+  lingers?: boolean;
 }
 
 /** One class of a (possibly multiclassed) character. */
@@ -706,6 +712,8 @@ export interface Spell {
     charges?: number;
     /** Damage the bearer takes at the start of each of its turns. */
     turnDamage?: { dice: string; type: string };
+    /** The bearer rolls death saves with advantage. */
+    deathSaveAdvantage?: boolean;
   };
   /** Damage spells whose hit also forces a save for a rider effect (Electrify: CON or stunned). */
   followSave?: { ability: Ability; effect: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number } };
@@ -717,6 +725,8 @@ export interface Spell {
   moveOnHit?: SpellForcedMove;
   /** Save spells: on a failed save, push / pull the target (adjacent = pulled next to the caster). */
   moveOnFail?: SpellForcedMove;
+  /** Save spells: on a failed save the caster picks where the target lands (within `maxFeet` of the caster). */
+  teleportOnFail?: { maxFeet: number };
   /** Spell attacks: an effect placed on a critical hit (e.g. stunned until your next turn). */
   critEffect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
   /** Re-usable on later turns without a slot while it lasts (see SpellRecast). */
@@ -1159,6 +1169,41 @@ export interface RoomState {
   moon?: SkyMoon | null;
   /** Open "Opportunity Attack?" offers for the turn in progress (cleared when the turn changes). */
   oaPrompts?: OaPrompt[];
+  /** "Pick a point on the map" requests (e.g. teleport a creature that failed its save). */
+  pickPrompts?: PickPrompt[];
+  /** Lingering spell areas on the current map (a save on entering / ending a turn inside). */
+  hazards?: Hazard[];
+}
+
+/** The caster picks where a creature lands (within `maxFeet` of `anchorTokenId`). */
+export interface PickPrompt {
+  id: string;
+  kind: 'teleport';
+  tokenId: string;
+  tokenName: string;
+  anchorTokenId: string;
+  maxFeet: number;
+  /** Participant who answers (the caster's player; the DM can always answer). */
+  ownerId: string;
+  label: string;
+}
+
+/** A lingering damaging area: circle of `radiusFt` around (cx, cy) in grid cells. */
+export interface Hazard {
+  id: string;
+  label: string;
+  cx: number;
+  cy: number;
+  radiusFt: number;
+  save: Ability;
+  dc: number;
+  dice: string;
+  type: string;
+  halfOnSave?: boolean;
+  sourceTokenId?: string;
+  sourceSheetId?: string;
+  /** Tokens already caught this turn (once per creature per turn). */
+  hitThisTurn?: string[];
 }
 
 /** The active combatant left a hostile creature's reach: that creature may use its reaction. */

@@ -113,6 +113,8 @@ function BattleMapImpl() {
   const resolveMonsterCastOnToken = useStore((s) => s.resolveMonsterCastOnToken);
   const cancelCast = useStore((s) => s.cancelCast);
   const aoe = useStore((s) => s.aoe);
+  const pickPoint = useStore((s) => s.pickPoint);
+  const hazards = useStore((s) => s.room?.hazards);
   const confirmAoe = useStore((s) => s.confirmAoe);
   const [aoeAim, setAoeAim] = useState<{ x: number; y: number } | null>(null);
   const resolveCastOnToken = useStore((s) => s.resolveCastOnToken);
@@ -485,6 +487,15 @@ function BattleMapImpl() {
   }
 
   function onBoardPointerDown(e: React.PointerEvent) {
+    // Answering a pick-a-point request (teleport a creature): the clicked square is the answer.
+    if (pickPoint && boardRef.current && e.target === e.currentTarget) {
+      const rect = boardRef.current.getBoundingClientRect();
+      const gx = Math.floor((e.clientX - rect.left) / (CELL * zoom));
+      const gy = Math.floor((e.clientY - rect.top) / (CELL * zoom));
+      send({ t: 'resolvePick', id: pickPoint.promptId, x: gx, y: gy });
+      useStore.getState().setPickPoint(null);
+      return;
+    }
     if (zoneDraw && isDm) {
       if (e.target !== e.currentTarget || !boardRef.current) return; // only start on empty board
       const rect = boardRef.current.getBoundingClientRect();
@@ -922,6 +933,38 @@ function BattleMapImpl() {
             </>
           )}
 
+          {(hazards ?? []).map((h) => (
+            <div
+              key={h.id}
+              className="hazard-ring"
+              title={`${h.label}: save ${h.save.toUpperCase()} DC ${h.dc}, ${h.dice} ${h.type} — tới đầu lượt sau của người ra phép`}
+              style={{
+                left: h.cx * CELL - (h.radiusFt / FEET_PER_CELL) * CELL,
+                top: h.cy * CELL - (h.radiusFt / FEET_PER_CELL) * CELL,
+                width: (h.radiusFt / FEET_PER_CELL) * CELL * 2,
+                height: (h.radiusFt / FEET_PER_CELL) * CELL * 2,
+              }}
+            >
+              <span>{h.label}</span>
+            </div>
+          ))}
+          {pickPoint &&
+            (() => {
+              const a = tokens.find((t) => t.id === pickPoint.anchorTokenId);
+              if (!a) return null;
+              const r = (pickPoint.maxFeet / FEET_PER_CELL + SIZE_CELLS[a.size] / 2) * CELL;
+              return (
+                <div
+                  className="cast-range pick-range"
+                  style={{
+                    left: (a.x + SIZE_CELLS[a.size] / 2) * CELL - r,
+                    top: (a.y + SIZE_CELLS[a.size] / 2) * CELL - r,
+                    width: r * 2,
+                    height: r * 2,
+                  }}
+                />
+              );
+            })()}
           {castRing && (
             <div
               className="cast-range"
@@ -1606,6 +1649,7 @@ function TokenInspector({
           attackerTokenId: token.id,
           attackRange: attackRangeOf(act),
           attackKind: attackKindOf(act),
+          rangeText: act.range ?? act.description,
         });
       }
     }
@@ -2116,6 +2160,7 @@ function TokenInspector({
                         attackerTokenId: token.id,
                         attackRange: attackRangeOf(a),
                         attackKind: attackKindOf(a),
+                        rangeText: a.range ?? a.description,
                       })
                     }
                   >

@@ -431,3 +431,29 @@ label { color: var(--muted); }
 .oa-prompt { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: #2a1a10; color: #f5e6cc; border: 1px solid #c0392b; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); font-size: 14px; }
 .oa-prompt b { color: #ffd7a8; }
 .oa-prompt button.link { color: #e8cfa8; }
+
+/* lingering spell areas + pick-a-point */
+.hazard-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px dashed #c06bff;
+  background: radial-gradient(circle, rgba(170, 70, 230, 0.22), rgba(170, 70, 230, 0.08) 70%);
+  pointer-events: none;
+  z-index: 2;
+}
+.hazard-ring span {
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  white-space: nowrap;
+  color: #f1dcff;
+  background: rgba(30, 10, 40, 0.8);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+.pick-range { border-color: #4fc3ff !important; background: rgba(79, 195, 255, 0.08) !important; }
+.pick-prompts { top: calc(var(--hud-top, 64px) + 60px); }
+.oa-prompt.armed { border-color: #4fc3ff; }
+.oa-prompt .pick-hint { color: #9fdcff; font-style: italic; }

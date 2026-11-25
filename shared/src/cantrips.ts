@@ -78,6 +78,8 @@ export interface CantripDef {
     charges?: number;
     /** Damage the bearer takes at the start of each of its turns. */
     turnDamage?: { dice: string; type: string };
+    /** The bearer rolls death saves with advantage. */
+    deathSaveAdvantage?: boolean;
   };
   /** Temp HP granted to the target ('2d4+4', '5'); doesn't stack. */
   tempHp?: string;
@@ -107,6 +109,8 @@ export interface CantripDef {
   moveOnHit?: SpellForcedMove;
   /** Save spells: on a failed save, push / pull the target (adjacent = pulled next to the caster). */
   moveOnFail?: SpellForcedMove;
+  /** Save spells: on a failed save the caster picks where the target lands (within `maxFeet` of the caster). */
+  teleportOnFail?: { maxFeet: number };
   /** Spell attacks: an effect placed on a critical hit (e.g. stunned until your next turn). */
   critEffect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
 }
@@ -1144,6 +1148,7 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
     burst: def.burst,
     moveOnHit: def.moveOnHit,
     moveOnFail: def.moveOnFail,
+    teleportOnFail: def.teleportOnFail,
     critEffect: def.critEffect,
     range: def.range,
     area: def.area,

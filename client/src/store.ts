@@ -39,6 +39,8 @@ import {
   type ServerEvent,
   type Spell,
   findCantrip,
+  passiveRangeMultiplier,
+  rangeBand,
   passiveRangedCover,
   upcastEffect,
   burstDice,
@@ -103,6 +105,8 @@ interface AttackParams {
   moveOnHit?: Extract<ClientAction, { t: 'attack' }>['moveOnHit'];
   /** Effect placed on a critical hit. */
   effectOnCrit?: ActiveEffect;
+  /** Weapon range text ("80/320 ft", "range 30/120 ft."): long range = disadvantage, beyond it asks first. */
+  rangeText?: string;
   /** Repelling Blast (2024): on a hit, push the target this many feet from the attacker. */
   pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
@@ -187,6 +191,9 @@ interface StoreState {
   payCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean) => boolean;
   /** Armed AoE template awaiting placement on the map. */
   aoe: AoeMode | null;
+  /** Waiting for a click on the map to answer a pick-a-point request. */
+  pickPoint: { promptId: string; label: string; anchorTokenId: string; maxFeet: number } | null;
+  setPickPoint: (p: { promptId: string; label: string; anchorTokenId: string; maxFeet: number } | null) => void;
   beginAoe: (mode: AoeMode) => void;
   cancelAoe: () => void;
   confirmAoe: (targetIds: string[]) => void;
@@ -403,6 +410,7 @@ export const useStore = create<StoreState>((set, get) => {
       attackKind,
       moveOnHit,
       effectOnCrit,
+      rangeText,
       pushFeetOnHit,
       grappleOnHit,
     }) => {
@@ -436,6 +444,16 @@ export const useStore = create<StoreState>((set, get) => {
         ) {
           mode = combineRollModes(mode, 'disadvantage');
           reasons.push('tầm xa trong tầm cận chiến');
+        }
+        // Ranged weapon: beyond normal range = disadvantage, beyond long range = can't (asks first).
+        if (attackRange === 'ranged' && attackKind !== 'spell' && atkTok && tgtTok) {
+          const mult = passiveRangeMultiplier(atkSheet);
+          const band = rangeBand(rangeText, gridFeet(atkTok, tgtTok), mult);
+          if (band === 'out' && !window.confirm(`Mục tiêu ở ${gridFeet(atkTok, tgtTok)}ft — ngoài tầm tối đa (${rangeText?.match(/\d+\s*\/\s*\d+/)?.[0]}${mult > 1 ? ` ×${mult}` : ''}). Vẫn đánh?`)) return;
+          if (band === 'long') {
+            mode = combineRollModes(mode, 'disadvantage');
+            reasons.push('tầm xa');
+          }
         }
         const finalMode = combineRollModes(rollMode ?? 'normal', mode);
         notation = d20Check(attackBonus, finalMode);
@@ -655,6 +673,8 @@ export const useStore = create<StoreState>((set, get) => {
       set({ castingMonsterSpell: { tokenId, spell, spellAttackBonus }, castingSpell: null });
     },
     aoe: null,
+    pickPoint: null,
+    setPickPoint: (p) => set({ pickPoint: p }),
     beginAoe: (mode) => set({ aoe: mode, castingSpell: null }),
     cancelAoe: () => set({ aoe: null }),
     confirmAoe: (targetIds) => {
@@ -807,6 +827,10 @@ export const useStore = create<StoreState>((set, get) => {
           label,
           sourceSheetId: sheetId,
           rollMode: closeDis ? 'disadvantage' : undefined,
+          teleportOnFail:
+            (spell.teleportOnFail ?? findCantrip(spell.name)?.teleportOnFail) && casterTok
+              ? { maxFeet: (spell.teleportOnFail ?? findCantrip(spell.name)!.teleportOnFail!).maxFeet, fromTokenId: casterTok.id }
+              : undefined,
           moveOnFail:
             (spell.moveOnFail ?? findCantrip(spell.name)?.moveOnFail) && casterTok
               ? { ...(spell.moveOnFail ?? findCantrip(spell.name)!.moveOnFail!), fromTokenId: casterTok.id }
@@ -860,7 +884,7 @@ export const useStore = create<StoreState>((set, get) => {
         // forced movement on a hit (a pull, or a push behind a save) and crit riders
         const mvDef = spell.moveOnHit ?? findCantrip(spell.name)?.moveOnHit;
         const mvHit = mvDef
-          ? { feet: mvDef.feet, dir: mvDef.dir, save: mvDef.save ? { ability: mvDef.save, dc, largeAdvantage: mvDef.largeAdvantage } : undefined }
+          ? { feet: mvDef.feet, dir: mvDef.dir, save: mvDef.save ? { ability: mvDef.save, dc, largeAdvantage: mvDef.largeAdvantage } : undefined, collideCondition: mvDef.collideCondition }
           : undefined;
         const critDef = spell.critEffect ?? findCantrip(spell.name)?.critEffect;
         const critFx: ActiveEffect | undefined = critDef
@@ -917,6 +941,24 @@ export const useStore = create<StoreState>((set, get) => {
               aoeId,
             });
           }
+          if (burst.lingers) {
+            rawSend({
+              t: 'addHazard',
+              hazard: {
+                label: `${spell.name} (vùng)`,
+                cx: tgt.x + span(tgt) / 2,
+                cy: tgt.y + span(tgt) / 2,
+                radiusFt: burst.radiusFt,
+                save: burst.save,
+                dc,
+                dice,
+                type: burst.type,
+                halfOnSave: burst.halfOnSave,
+                sourceTokenId: sheet.tokenId,
+                sourceSheetId: sheetId,
+              },
+            });
+          }
         }
         return;
       }
@@ -942,7 +984,9 @@ export const useStore = create<StoreState>((set, get) => {
         get().activateWoodWose(sheet, { spendWildShape: true });
       }
       // Spells added before an effect was wired (e.g. Shillelagh) fall back to the DB definition.
-      const fx0: Spell['effect'] = spell.effect ?? (spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined);
+      // the DB definition fills fields the sheet's copy predates (it may be older than a data update)
+      const dbFx = findCantrip(spell.name)?.effect;
+      const fx0: Spell['effect'] = spell.effect ? { ...(dbFx ?? {}), ...spell.effect } as Spell['effect'] : spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined;
       // scaling effects: dice and charges grow with the slot
       const fx = fx0 ? upcastEffect(fx0, spell.level, effLevel) : undefined;
       const fxConc = spell.concentration && !(fx?.upcast?.noConcentrationAt && effLevel >= fx.upcast.noConcentrationAt);
@@ -968,6 +1012,7 @@ export const useStore = create<StoreState>((set, get) => {
             attackRiders: fx.attackRiders,
             resist: fx.resist,
             saveAdvantage: fx.saveAdvantage,
+            deathSaveAdvantage: fx.deathSaveAdvantage,
             expiresRound: fx.expiresInRounds
               ? (room.initiative.round ?? 1) + fx.expiresInRounds
               : undefined,

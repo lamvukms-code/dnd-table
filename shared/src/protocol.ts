@@ -16,6 +16,8 @@ import type {
   RoomState,
   Statblock,
   Token,
+  ConditionType,
+  Hazard,
 } from './types.js';
 import type { GodsBaneOp, GodsBaneRoomOp } from './godsBane.js';
 
@@ -58,7 +60,12 @@ export type ClientAction =
       /** Weapon strike or spell attack (cover-reducing feats only apply to weapons). Unset = weapon. */
       attackKind?: 'weapon' | 'spell';
       /** Spell attack forced movement on a hit (`save`: only if the target fails it). */
-      moveOnHit?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; save?: { ability: Ability; dc: number; largeAdvantage?: boolean } };
+      moveOnHit?: {
+        feet?: number;
+        dir: 'push' | 'pull' | 'adjacent';
+        save?: { ability: Ability; dc: number; largeAdvantage?: boolean };
+        collideCondition?: ConditionType;
+      };
       /** Effect placed on the target on a critical hit (stunned until your next turn…). */
       effectOnCrit?: ActiveEffect;
       /** Repelling Blast (2024): on a hit, push the target this many feet straight away from the
@@ -86,6 +93,11 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** Answer a pick-a-point request: a cell, or `skip`. */
+  | { t: 'resolvePick'; id: string; x?: number; y?: number; skip?: boolean }
+  /** Place / remove a lingering spell area. */
+  | { t: 'addHazard'; hazard: Omit<Hazard, 'id' | 'hitThisTurn'> }
+  | { t: 'removeHazard'; id: string }
   /** Answer an Opportunity Attack offer (`used` = the reaction was spent on it). */
   | { t: 'oaResolve'; id: string; used: boolean }
   /** DM: raise a setting moon (null = no moon / it set). */
@@ -127,6 +139,8 @@ export type ClientAction =
       rollMode?: RollMode;
       /** On a failed save: push / pull the target relative to `fromTokenId` (the caster). */
       moveOnFail?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; fromTokenId: string };
+      /** On a failed save: the caster picks a point within `maxFeet` of `fromTokenId` and the target lands there. */
+      teleportOnFail?: { maxFeet: number; fromTokenId: string };
     }
   // heal a target token (adds HP, clamped to its max)
   | {

@@ -124,6 +124,8 @@ import {
   edgeFeet,
   tokenSpan,
   passiveExtraAttackOnCritOrKill,
+  aoeTokenIds,
+  type Hazard,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -378,7 +380,10 @@ export class Room {
   private deathSaveTick(token: Token): void {
     const sheet = this.linkedSheet(token);
     if (!sheet || !rollsDeathSaves(sheet.currentHp, sheet.deathSaves)) return;
-    const d20 = 1 + Math.floor(Math.random() * 20);
+    const adv = !!token.effects?.some((e) => e.deathSaveAdvantage);
+    const a1 = 1 + Math.floor(Math.random() * 20);
+    const a2 = 1 + Math.floor(Math.random() * 20);
+    const d20 = adv ? Math.max(a1, a2) : a1;
     const r = rollDeathSave(sheet.deathSaves, d20);
     sheet.deathSaves = r.ds;
     const what =
@@ -395,7 +400,7 @@ export class Room {
       ts: Date.now(),
       actorId: 'system',
       actorName: 'Hệ thống',
-      label: `☠ ${sheet.name}: death save ${r.total} — ${what} (${this.deathTally(r.ds)})${tail}`,
+      label: `☠ ${sheet.name}: death save ${r.total}${adv ? ` (lợi thế ${a1}/${a2})` : ''} — ${what} (${this.deathTally(r.ds)})${tail}`,
       result: externalRollResult('1d20', { total: r.total, faces: [d20] }),
     });
     if (r.outcome === 'revive') this.applyHeal(token, 1);
@@ -1243,6 +1248,11 @@ export class Room {
     const INCAPACITATING = ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'];
     if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
     if (phase === 'start-of-turn') {
+      const ending = (this.state.hazards ?? []).filter((h) => h.sourceTokenId === token.id);
+      if (ending.length) {
+        this.state.hazards = (this.state.hazards ?? []).filter((h) => h.sourceTokenId !== token.id);
+        for (const h of ending) this.systemLog(`${h.label}: vùng tan (đầu lượt ${token.label})`);
+      }
       this.deathSaveTick(token);
       // Reconstruction: auto-heal via Hit Die at the start of each of the bearer's turns.
       for (const e of token.effects ?? []) this.applyHitDieHealTick(token, e);
@@ -1271,6 +1281,7 @@ export class Room {
       }
     }
     if (phase === 'end-of-turn') {
+      for (const h of this.state.hazards ?? []) if (this.inHazard(token, h)) this.hazardHit(token, h, 'kết thúc lượt trong vùng');
       // Charged effects (retaliation + uses) also discharge into creatures the bearer is grappling.
       for (const e of [...(token.effects ?? [])]) {
         if (e.charges == null || !e.retaliate) continue;
@@ -1395,6 +1406,7 @@ export class Room {
    */
   private checkDmPrompts(ctx?: { endingId?: string; prevActiveInit?: number; includeLegendary?: boolean }): void {
     this.state.oaPrompts = []; // a new turn: last turn's Opportunity Attack offers lapse
+    for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
     if (this.state.dmPrompt) return; // don't clobber an unanswered prompt
     const init = this.state.initiative;
     if (!init.running) return;
@@ -1450,23 +1462,70 @@ export class Room {
    * Forced movement along the line from `from` to `target`: push away / pull toward by `feet`, or pull
    * until adjacent. A pull never goes past the square next to `from`. Returns the feet actually moved.
    */
-  private forceMove(target: Token, from: Token, dir: 'push' | 'pull' | 'adjacent', feet = 0): number {
+  private forceMove(target: Token, from: Token, dir: 'push' | 'pull' | 'adjacent', feet = 0): { feet: number; collided: boolean } {
     const dx = target.x - from.x;
     const dy = target.y - from.y;
     const dist = Math.max(Math.abs(dx), Math.abs(dy)); // cells (Chebyshev)
-    if (dist < 0.01) return 0;
+    if (dist < 0.01) return { feet: 0, collided: false };
     const gap = Math.max(0, edgeFeet(target, tokenSpan(target), from, tokenSpan(from)) / FEET_PER_CELL - 1); // free cells between
-    let cells = dir === 'push' ? feet / FEET_PER_CELL : dir === 'pull' ? Math.min(feet / FEET_PER_CELL, gap) : gap;
-    if (cells <= 0) return 0;
+    const cells = Math.floor(dir === 'push' ? feet / FEET_PER_CELL : dir === 'pull' ? Math.min(feet / FEET_PER_CELL, gap) : gap);
+    if (cells <= 0) return { feet: 0, collided: false };
     const sign = dir === 'push' ? 1 : -1;
     const ux = dx / dist;
     const uy = dy / dist;
-    const nx = Math.max(0, Math.min(this.state.map.cols - 1, Math.round(target.x + sign * ux * cells)));
-    const ny = Math.max(0, Math.min(this.state.map.rows - 1, Math.round(target.y + sign * uy * cells)));
-    cells = Math.max(Math.abs(nx - target.x), Math.abs(ny - target.y));
-    target.x = nx;
-    target.y = ny;
-    return Math.round(cells) * FEET_PER_CELL;
+    const span = tokenSpan(target);
+    const sx = target.x;
+    const sy = target.y;
+    // a square is blocked by the map edge or another creature's footprint
+    const blocked = (x: number, y: number) =>
+      x < 0 || y < 0 || x + span > this.state.map.cols || y + span > this.state.map.rows ||
+      this.state.tokens.some((t) => t.id !== target.id && !t.godsBaneBlade && edgeFeet({ x, y }, span, t, tokenSpan(t)) === 0);
+    let moved = 0;
+    let collided = false;
+    for (let step = 1; step <= cells; step++) {
+      const nx = Math.round(sx + sign * ux * step);
+      const ny = Math.round(sy + sign * uy * step);
+      if (blocked(nx, ny)) {
+        collided = dir === 'push';
+        break;
+      }
+      target.x = nx;
+      target.y = ny;
+      moved = Math.max(Math.abs(nx - sx), Math.abs(ny - sy));
+    }
+    return { feet: moved * FEET_PER_CELL, collided };
+  }
+
+  /** Is the token inside the hazard circle (any part of its footprint)? */
+  private inHazard(t: Token, h: Hazard): boolean {
+    return aoeTokenIds({ shape: 'sphere', size: h.radiusFt }, 'point', { x: h.cx, y: h.cy }, { x: h.cx, y: h.cy }, [
+      { id: t.id, x: t.x, y: t.y, span: tokenSpan(t) },
+    ]).includes(t.id);
+  }
+
+  /** A creature caught by a lingering area: its save, then the damage (half on a success if the area says so). */
+  private hazardHit(t: Token, h: Hazard, why: string): void {
+    if (t.godsBaneBlade || (h.hitThisTurn ?? []).includes(t.id)) return;
+    h.hitThisTurn = [...(h.hitThisTurn ?? []), t.id];
+    const s = this.rollTokenSave(t, h.save, h.dc, false);
+    let rolled = 0;
+    try {
+      rolled = rollNotation(h.dice).total;
+    } catch {
+      return;
+    }
+    const out = resolveDamageParts([{ part: { dice: h.dice, type: h.type }, raw: rolled }], this.effectiveDefenses(t));
+    const dealt = s.pass ? (h.halfOnSave ? Math.floor(out.totalFinal / 2) : 0) : out.totalFinal;
+    const took = dealt > 0 ? this.applyDamage(t, dealt) : { applied: 0, absorbed: 0 };
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `${h.label} (${why}) → ${t.label}: ${h.save.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${h.dc} ${s.pass ? '✔' : '✘'} — ${dealt} ${h.type}`,
+      result: externalRollResult(h.dice, { total: rolled, faces: [] }),
+      damage: { targetTokenId: t.id, targetName: t.label, amount: took.applied, raw: out.totalRaw, damageType: h.type, notes: damageBreakdownNotes(out) },
+    });
   }
 
   /** Player side = a token linked to a character sheet or handed to a player; everything else is the DM's. */
@@ -1710,6 +1769,44 @@ export class Room {
           label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'resolvePick': {
+        const list = this.state.pickPrompts ?? [];
+        const p = list.find((x) => x.id === action.id);
+        if (!p) return null;
+        if (!isDm && p.ownerId !== actor.id) return 'Không phải lựa chọn của bạn';
+        const tk = this.state.tokens.find((t) => t.id === p.tokenId);
+        const anchor = this.state.tokens.find((t) => t.id === p.anchorTokenId);
+        if (!action.skip && tk && typeof action.x === 'number' && typeof action.y === 'number') {
+          const x = Math.round(action.x);
+          const y = Math.round(action.y);
+          if (x < 0 || y < 0 || x >= this.state.map.cols || y >= this.state.map.rows) return 'Điểm nằm ngoài bản đồ';
+          if (anchor && gridFeet(anchor, { x, y }) > p.maxFeet) return `Quá ${p.maxFeet}ft tính từ ${anchor.label}`;
+          tk.x = x;
+          tk.y = y;
+          this.systemLog(`${p.label} — ${tk.label} bị dịch chuyển tới ô (${x}, ${y})`);
+        }
+        this.state.pickPrompts = list.filter((x) => x.id !== p.id);
+        this.touch();
+        break;
+      }
+
+      case 'addHazard': {
+        const h = action.hazard;
+        if (!h || typeof h.radiusFt !== 'number' || !h.dice) return 'Vùng không hợp lệ';
+        const src = h.sourceTokenId ? this.state.tokens.find((t) => t.id === h.sourceTokenId) : undefined;
+        if (!isDm && src && src.controllerId !== actor.id && this.linkedSheet(src)?.ownerId !== actor.id) return 'Không phải phép của bạn';
+        (this.state.hazards ??= []).push({ ...h, id: nanoid(8), hitThisTurn: [] });
+        this.systemLog(`🌀 ${h.label}: vùng ${h.radiusFt}ft tồn tại tới đầu lượt sau của người ra phép (vào hoặc kết thúc lượt trong vùng: save ${h.save.toUpperCase()} DC ${h.dc})`);
+        this.touch();
+        break;
+      }
+
+      case 'removeHazard': {
+        this.state.hazards = (this.state.hazards ?? []).filter((h) => h.id !== action.id);
         this.touch();
         break;
       }
@@ -2110,9 +2207,17 @@ export class Room {
             moves = !s.pass;
             saveNote = ` · ${mv.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${mv.save.dc} ${s.pass ? '✔' : '✘'}`;
           }
-          const ft = moves && from ? this.forceMove(target, from, mv.dir, mv.feet) : 0;
+          const fm = moves && from ? this.forceMove(target, from, mv.dir, mv.feet) : { feet: 0, collided: false };
+          const ft = fm.feet;
+          const crash = fm.collided && !!mv.collideCondition;
+          if (crash) {
+            target.effects = [
+              ...(target.effects ?? []),
+              { id: nanoid(8), name: `Đâm vật cản (${(action.label || 'Attack').replace(/\s*\[.*?\]/g, '')})`, condition: mv.collideCondition, expiresRound: this.state.initiative.round + 1 },
+            ];
+          }
           this.systemLog(
-            `${action.label || 'Attack'}${saveNote} — ${ft > 0 ? `${mv.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft` : `${target.label} không bị dời`}`,
+            `${action.label || 'Attack'}${saveNote} — ${ft > 0 || fm.collided ? `${mv.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft${fm.collided ? ' · đâm vật cản' : ''}${crash ? ` → ${mv.collideCondition}` : ''}` : `${target.label} không bị dời`}`,
           );
         }
         // An effect placed on a critical hit (stunned until the caster's next turn…).
@@ -2326,7 +2431,13 @@ export class Room {
           if (typeof patch.tempHp === 'number') linked.tempHp = patch.tempHp;
           if (typeof patch.currentHp === 'number') this.syncDowned(linked);
         }
-        if (movingPos && (token.x !== beforeX || token.y !== beforeY)) this.offerOpportunityAttacks(token, { x: beforeX, y: beforeY });
+        if (movingPos && (token.x !== beforeX || token.y !== beforeY)) {
+          this.offerOpportunityAttacks(token, { x: beforeX, y: beforeY });
+          for (const h of this.state.hazards ?? []) {
+            const was = this.inHazard({ ...token, x: beforeX, y: beforeY }, h);
+            if (!was && this.inHazard(token, h)) this.hazardHit(token, h, 'đi vào vùng');
+          }
+        }
         // Booming Blade: this token actually changed position (a simplification of "willingly
         // moves" — see the field's doc comment) while primed from an earlier hit.
         if (movingPos && (token.x !== beforeX || token.y !== beforeY)) {
@@ -2668,8 +2779,20 @@ export class Room {
         }
         if (!pass && action.moveOnFail) {
           const from = this.state.tokens.find((tk) => tk.id === action.moveOnFail!.fromTokenId);
-          const ft = from ? this.forceMove(target, from, action.moveOnFail.dir, action.moveOnFail.feet) : 0;
+          const ft = from ? this.forceMove(target, from, action.moveOnFail.dir, action.moveOnFail.feet).feet : 0;
           if (ft > 0) this.systemLog(`${action.label} — ${action.moveOnFail.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft`);
+        }
+        if (!pass && action.teleportOnFail) {
+          (this.state.pickPrompts ??= []).push({
+            id: nanoid(8),
+            kind: 'teleport',
+            tokenId: target.id,
+            tokenName: target.label,
+            anchorTokenId: action.teleportOnFail.fromTokenId,
+            maxFeet: action.teleportOnFail.maxFeet,
+            ownerId: actor.id,
+            label: action.label,
+          });
         }
         this.touch();
         break;

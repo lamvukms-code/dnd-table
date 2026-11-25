@@ -1497,3 +1497,21 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
     source: (shield ? `${armor.name} + khiên` : armor.name) + swap,
   };
 }
+
+/**
+ * Normal / long range of a ranged weapon attack from its range text ("80/320 ft", "range 30/120 ft.").
+ * Null when the text gives no pair (a single number is a spell-style range: no long range).
+ */
+export function weaponRangePair(text: string | undefined): { normal: number; long: number } | null {
+  const m = /(\d+)\s*\/\s*(\d+)\s*(?:ft|feet)?/i.exec(text ?? '');
+  return m ? { normal: Number(m[1]), long: Number(m[2]) } : null;
+}
+
+/** Long range (disadvantage) or beyond it, for a ranged weapon attack at `feet` with a range multiplier. */
+export function rangeBand(text: string | undefined, feet: number, mult = 1): 'normal' | 'long' | 'out' | null {
+  const r = weaponRangePair(text);
+  if (!r) return null;
+  if (feet > r.long * mult) return 'out';
+  if (feet > r.normal * mult) return 'long';
+  return 'normal';
+}

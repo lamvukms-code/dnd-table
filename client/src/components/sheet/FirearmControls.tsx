@@ -54,6 +54,7 @@ export function FirearmControls({ sheet, item, action, parts, targetId, targetNa
     attackerTokenId: sheet.tokenId || undefined,
     attackRange: 'ranged' as const,
     attackKind: 'weapon' as const,
+    rangeText: item.rangeText,
   });
 
   async function fanFire() {

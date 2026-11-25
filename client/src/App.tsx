@@ -18,6 +18,7 @@ import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
 import { OaPromptBanner } from './components/OaPromptBanner.js';
+import { PickPromptBanner } from './components/PickPromptBanner.js';
 import { TopMenu, type TopMenuItem } from './components/TopMenu.js';
 import { PartyBar } from './components/PartyBar.js';
 import { applyLongRest, applyShortRest, fmtDuration } from '@dnd-table/shared';
@@ -279,6 +280,7 @@ export function App() {
           )}
           <DmPromptBanner />
           <OaPromptBanner />
+          <PickPromptBanner />
           {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
           {dockOpen && <SheetDock />}
         </div>

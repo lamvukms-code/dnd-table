@@ -1398,6 +1398,7 @@ function ActionRow({
     attackerTokenId?: string;
     attackRange?: AttackRange;
     attackKind?: 'weapon' | 'spell';
+    rangeText?: string;
   }) => Promise<void>;
   damageRoll: (
     label: string,
@@ -1474,6 +1475,7 @@ function ActionRow({
               attackerTokenId: attacker.tokenId,
               attackRange: attackRangeOf(action),
               attackKind: attackKindOf(action),
+              rangeText: action.range ?? action.description,
             });
             // Armed riders (Sneak Attack, Booming Blade, Finishers…) are disarmed by the server on a hit.
           }}
