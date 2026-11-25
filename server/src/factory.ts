@@ -157,6 +157,7 @@ export function createToken(partial: Partial<Token>): Token {
     statblock: partial.statblock,
     defenses: partial.defenses,
     baneTag: partial.baneTag,
+    undying: partial.undying,
     cover: partial.cover ?? 'none',
     effects: partial.effects ?? [],
     concentration: partial.concentration ?? null,

@@ -151,7 +151,7 @@ export function App() {
                 title: `Cho thời gian trong game trôi ${lbl} (madness hết hạn theo đồng hồ này). Đang ở: ${fmtDuration(worldSeconds) || '0'} từ đầu campaign`,
                 onClick: () => send({ t: 'passTime', seconds: sec }),
               })),
-              { label: "🗡 God's Bane", title: "Bảo vật nhóm (homebrew): bật/tắt, N, Cleaving Causality, người tuyên thệ", onClick: () => setGodsBaneOpen(true) },
+              { label: "🗡 God's Bane", title: "Bảo vật nhóm (homebrew): bật/tắt, thức tỉnh, token kiếm, N, Cleaving Causality, người tuyên thệ", onClick: () => setGodsBaneOpen(true) },
               ...(NPC_CATALOG.length > 0
                 ? [{ label: '🧑 NPC', title: 'NPC của campaign', onClick: () => setNpcOpen(true) }]
                 : []),
@@ -187,7 +187,7 @@ export function App() {
               ? [{ label: '🏺 Bảo vật', title: 'Bảo vật mở khóa theo cấp', onClick: () => setHeirloomOpen(true) }]
               : []),
             ...(godsBaneOn && !isDm
-              ? [{ label: "🗡 God's Bane", title: 'Lời thề, trao kiếm, Cleaving Causality', onClick: () => setGodsBaneOpen(true) }]
+              ? [{ label: "🗡 God's Bane", title: 'Lời thề, hào quang của kiếm, Cleaving Causality', onClick: () => setGodsBaneOpen(true) }]
               : []),
             {
               label: '🎒 Trang bị SRD',

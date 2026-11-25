@@ -212,29 +212,66 @@ DM-only checks are enforced server-side in `room.ts`, never only in the UI.
   concentration effect also ends the caster's concentration, so a used Guidance
   ends the spell — 5e-correct.
 - **God's Bane party artifact** (homebrew, per room, OFF by default — `RoomState.godsBane`,
-  rules in `shared/src/godsBane.ts`). DM panel "🛠 Công cụ DM → 🗡 God's Bane": enable, party number
-  **N**, shared **Cleaving Causality** pool, sworn members (by sheet), rejection / atonement, blade
-  holder. Target tags `greatOne` / `minion` / `fallen` live on bestiary entries (copied onto spawned
-  tokens) and tokens (inspector); sheet-linked tokens are never targets. The weapon is an inventory
-  weapon with the `godsBane` weapon trait (DM-only checkbox; not a defence-bypass material).
-  Server hooks, all no-ops while disabled:
-  - sworn, non-rejected attacker vs a tagged token → +N force straight to HP (no defences), once per
-    turn per PC (`round:turnIndex`; not limited outside initiative); vs `greatOne` also on a miss.
-    Applies on `attack` and on a manual `damage` roll (treated as a hit).
-  - God's Bane weapon attack on a `greatOne`: `baneLayers` +1 (hit or miss), a hit sets `baneMortal`
-    (cleared by the DM — there is no NPC long rest in the app).
-  - damage from a tagged token to a sworn, non-rejected PC −N per instance (attack, damage, save
-    damage, retaliation), min 0; +N on server-rolled saves whose effect carries `charmed` /
-    `frightened` (spell saves and repeat saves).
-  - rejected (or oathbroken) wielder: −N on the attack total with the God's Bane weapon, no benefits,
-    can't receive the blade. 4th rejection → `oathbroken` (DM override only).
+  rules in `shared/src/godsBane.ts`). DM panel "🛠 Công cụ DM → 🗡 God's Bane": enable, **awakened**
+  toggle, party number **N**, shared **Cleaving Causality** pool, sworn members (by sheet), rejection /
+  atonement, blade token / initiative / attack, "long rest: revive undying", per-round layer counter.
+  Target tags `greatOne` / `minion` / `fallen` and the `undying` trait live on bestiary entries (copied
+  onto spawned tokens) and tokens (inspector); sheet-linked tokens are never targets. The weapon item
+  is an inventory weapon with the `godsBane` weapon trait (DM-only checkbox; not a defence-bypass
+  material). Server hooks, all no-ops while disabled:
+  - **Before awakening** the blade is only the flagged weapon item: no token, turn or aura.
+  - **Awakened blade = map entity**: a DM-placed token (`Token.godsBaneBlade`), moved by the DM only
+    (players are refused), speed 30 ft, no AC / HP; every targeted action (attack, damage, heal, temp
+    HP, effects, grapple) is refused and a save spell silently skips it; it can't be copied. Its
+    initiative entry has a fixed count **20** with `loseTies` (sorted after any other 20); the panel adds
+    / removes it, slotting it into a running round at its count (`insertInitiativeEntry`). "Roll all"
+    gives it 20 instead of a roll. Turning `awakened` off removes the blade from every scene and the order.
+  - **Aura 5 ft**: footprints touching (Chebyshev gap 0 squares, sizes counted). No blade token on the
+    active scene = nobody is in the aura.
+  - **People's Will**: a sworn, non-rejected PC whose token is in the aura gets, once per turn
+    (`round:turnIndex`; unlimited outside initiative), +N force straight to HP (no resistance /
+    immunity / DR) on any damage they deal to a tagged creature — `attack` (hit; vs `greatOne` also on a
+    miss), a manual `damage` roll (a hit), and a save spell (deals damage = hit; vs `greatOne` a
+    damaging save spell that deals nothing still counts as a miss). Outside the aura it only applies to
+    attacks made with the God's Bane weapon item (same once per turn). When it triggers on a `greatOne`
+    it strips one divinity layer. Not-yet-sworn characters get nothing.
+  - **The blade's own attack** (`godsBane` op `bladeAttack`, DM-triggered; warns but doesn't block when
+    it isn't the blade's turn or the target is beyond 5 ft): 1d8 force, nothing added, through the
+    target's normal defences (our call — the rules name no damage type). Vs a tagged creature: auto-hit
+    + People's Will (not tied to any PC's once-per-turn), strips a layer and sets `baneMortal` on a
+    `greatOne`. Vs an untagged creature: a plain `1d20` (+0) vs AC (+cover), homebrew crit on a 20, no
+    People's Will.
+  - **Wielding**: an attack (or manual damage) whose parts carry the `godsBane` trait counts as the
+    blade's own attack for stripping (hit or miss), `baneMortal` (on a hit) and the permanent kill, but
+    uses the item's own attack roll and damage (no auto-hit). The old "holder / pass once per round"
+    mechanic is gone; old room state is normalised (holder fields dropped).
+  - **Stripping cap**: at most 3 layers per round per `greatOne` token (`baneStripRound` /
+    `baneStripCount`; a new round number resets it). **Outside initiative there is no cap** (narrative
+    time; the DM edits `baneLayers` by hand when needed). One attack strips at most one layer.
+  - **Undying** (`undying` trait): an undying creature reduced to 0 HP by anything but a God's Bane
+    attack (the blade's own attack, its People's Will, or a `godsBane`-trait weapon) is `downedUndying`
+    (grey token + 💀 badge), not dead; a God's Bane killing blow — or any God's Bane damage on a downed
+    one — sets `baneSlain` (☠, logged "chết vĩnh viễn"). Any creature killed by a God's Bane attack is
+    marked `baneSlain`. "🌙 Nghỉ dài: hồi sinh bất diệt" restores every `downedUndying` token on every
+    scene to full HP. Healing above 0 clears `downedUndying`. The app has no other notion of death —
+    these are visual states + log lines. Only active while the feature is enabled.
+  - **Protection** for every sworn, non-rejected PC, aura or not: damage from a tagged token −N per
+    instance (attack, damage, save damage, retaliation), min 0; +N on server-rolled saves whose effect
+    carries `charmed` / `frightened` (spell saves and repeat saves).
+  - **Rejection** (rejected or oathbroken): no People's Will, protection or save bonus. May still attack
+    with the God's Bane weapon item (stripping, mortal and the permanent kill still count) at −N to the
+    attack total and with no auto-hit. 4th rejection → `oathbroken` (DM override only).
+  - **Divine weapons** (`divine` weapon trait — in the item trait picker and on bestiary actions):
+    attacking a creature within 5 ft of the blade token has disadvantage. Server-rolled attacks get the
+    notation rewritten (`1d20` → `2d20kl1`; advantage cancels to `1d20`); a dddice straight d20 gets a
+    second server-rolled d20 and keeps the lower; a dddice advantage roll is only flagged in the log.
   - Cleaving Causality is spent in advance ("arm"): `crit` = the PC's own next d20 (attack, a `roll`
     with a d20 by the owner, or a server-rolled save for their token) becomes a natural 20; `fumble` =
     the next enemy d20 (attack by a non-PC token, or a server-rolled save of a non-PC token) becomes a
     natural 1. The pool is decremented when the roll is changed; dddice pre-rolled damage is
     discarded and re-rolled by the server when the d20 was changed.
-  - blade pass: holder's owner or DM, to a sworn non-rejected member, once per round while initiative
-    runs (no distance check).
+  - Not covered: Armor of Agathys-style retaliation damage dealt by a PC does not trigger People's Will;
+    the blade's attack does not consume Cleaving Causality.
 
 ---
 

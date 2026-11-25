@@ -1673,3 +1673,28 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 .mp-entry.long { border-left-color: #e5a65a; }
 .mp-entry.indefinite { border-left-color: #ef6a6a; }
 .mp-add { display: inline-flex; gap: 4px; }
+
+/* God's Bane blade token + its 5 ft aura, undying states */
+.gb-aura {
+  position: absolute;
+  border: 2px dashed #d4af37;
+  background: rgba(212, 175, 55, 0.12);
+  border-radius: 6px;
+  pointer-events: none;
+}
+.token.tk-blade { box-shadow: 0 0 0 2px #d4af37, 0 0 10px 2px rgba(212, 175, 55, 0.7); }
+.token.tk-downed { filter: grayscale(0.8); opacity: 0.75; }
+.token.tk-slain { filter: grayscale(1); opacity: 0.5; }
+.tk-undying {
+  position: absolute;
+  bottom: -6px;
+  left: -6px;
+  font-size: 11px;
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 0 2px;
+  line-height: 1.3;
+}
+.gods-bane .gb-blade { border: 1px solid #d4af37; border-radius: 6px; padding: 2px 8px; margin: 6px 0; }
+.gods-bane .gb-chip { border: 1px solid var(--border, #444); border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+.sb-action-traits { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; margin: 2px 0 4px; }

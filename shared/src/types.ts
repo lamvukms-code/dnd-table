@@ -48,10 +48,18 @@ export type Recharge = 'short' | 'long' | 'other';
  *  silvered"-style defences. */
 /** `godsBane` marks the party's God's Bane artifact weapon (homebrew, see `godsBane.ts`). It rides in
  *  `weaponTraits` so it reaches the server on every damage part, but it is NOT in `WEAPON_TRAITS` (the
- *  generic material picker) and no defence is bypassed by it. */
-export type WeaponTrait = 'magical' | 'silvered' | 'moongilded' | 'godsBane';
-export const WEAPON_TRAITS: WeaponTrait[] = ['magical', 'silvered', 'moongilded'];
-export const WEAPON_TRAIT_VI: Record<WeaponTrait, string> = { magical: 'phép', silvered: 'bạc', moongilded: 'moongilded', godsBane: "God's Bane" };
+ *  generic material picker) and no defence is bypassed by it. `divine` (homebrew, God's Bane rules) marks
+ *  a weapon of divine make: attacking a creature within 5 ft of the God's Bane token with it has
+ *  disadvantage. It bypasses no defence either. */
+export type WeaponTrait = 'magical' | 'silvered' | 'moongilded' | 'divine' | 'godsBane';
+export const WEAPON_TRAITS: WeaponTrait[] = ['magical', 'silvered', 'moongilded', 'divine'];
+export const WEAPON_TRAIT_VI: Record<WeaponTrait, string> = {
+  magical: 'phép',
+  silvered: 'bạc',
+  moongilded: 'moongilded',
+  divine: 'thần thánh',
+  godsBane: "God's Bane",
+};
 
 export interface DamagePart {
   dice: string; // "2d6" or "1d4+2"
@@ -727,6 +735,9 @@ export interface Statblock {
   source?: string; // attribution
   /** God's Bane target tag — copied onto tokens spawned from this entry. */
   baneTag?: BaneTag;
+  /** God's Bane "undying" trait (homebrew) — copied onto spawned tokens: at 0 HP it is only downed, not
+   *  dead, unless the killing blow was a God's Bane attack; a long rest revives it. */
+  undying?: boolean;
 }
 
 /** Combat-relevant subset embedded on a spawned token. */
@@ -802,6 +813,17 @@ export interface Token {
   baneLayers?: number;
   /** God's Bane: immortality broken — hit by the blade, this creature can die for good until the DM resets it. */
   baneMortal?: boolean;
+  /** God's Bane: the initiative round `baneStripCount` counts layers for (cap: 3 per round per creature). */
+  baneStripRound?: number;
+  baneStripCount?: number;
+  /** God's Bane "undying" trait (DM-set; spawned from `Statblock.undying`). */
+  undying?: boolean;
+  /** An undying creature at 0 HP from a non-God's-Bane source: down, not dead — revived on a long rest. */
+  downedUndying?: boolean;
+  /** Killed for good by a God's Bane attack (undying or not). Visual state + log only. */
+  baneSlain?: boolean;
+  /** This token IS the awakened God's Bane blade: DM-moved only, no AC / HP, never a target. */
+  godsBaneBlade?: boolean;
 }
 
 /** What a creature has spent of its action economy since its turn started. */
@@ -886,6 +908,8 @@ export interface InitiativeEntry {
   tokenId?: string;
   isActive: boolean;
   hasGone: boolean;
+  /** Sorts after every other entry with the same initiative (the God's Bane blade's fixed count 20). */
+  loseTies?: boolean;
 }
 
 export interface Initiative {
@@ -1056,10 +1080,9 @@ export interface GodsBaneState {
   causality: number;
   /** Sworn members, keyed by character sheet id. */
   members: Record<string, GodsBaneMember>;
-  /** Sheet currently carrying the blade. */
-  holderSheetId?: string;
-  /** Initiative round the blade was last passed in (once per round while initiative runs). */
-  lastPassRound?: number;
+  /** The blade has awakened (DM toggle, default off): from then on it can have its own token, aura and
+   *  initiative turn. Before that it only exists as the flagged weapon item. */
+  awakened?: boolean;
   /** sheet id → turn key (`round:turnIndex`) People's Will damage was last added in (once per turn). */
   willUsed?: Record<string, string>;
   /** Cleaving Causality spent in advance, waiting for the next matching d20: `crit` = the sworn PC's own

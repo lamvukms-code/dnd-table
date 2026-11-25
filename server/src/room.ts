@@ -56,8 +56,23 @@ import {
   baneAttackPenalty,
   baneMindSaveBonus,
   baneReducedDamage,
-  baneStrike,
+  baneStripLayer,
   baneTurnKey,
+  bladeAttackHits,
+  BLADE_DAMAGE,
+  BLADE_INITIATIVE,
+  BLADE_LABEL,
+  BLADE_SPEED,
+  findBladeToken,
+  inBladeAura,
+  insertInitiativeEntry,
+  isDivineAttack,
+  isGodsBaneRoomOp,
+  sortInitiative,
+  undyingOutcome,
+  withDisadvantage,
+  withinFiveFeet,
+  type GodsBaneRoomOp,
   consumeCausality,
   forceD20,
   isGodsBaneAttack,
@@ -204,8 +219,12 @@ export class Room {
 
   private touch(): void {
     this.syncLinkedAc();
+    // God's Bane undying / permanent-kill notes queued during damage, logged after the damage lines.
+    for (const label of this.pendingBaneLogs.splice(0)) this.systemLog(label);
     this.state.rev++;
   }
+
+  private pendingBaneLogs: string[] = [];
 
   private linkedSheet(token: Token) {
     return this.state.sheets.find((s) => s.tokenId === token.id);
@@ -243,8 +262,10 @@ export class Room {
   }
 
   /** Damage lands on temp HP first, then HP. Sheet-linked tokens are handled on the sheet. */
-  private applyDamage(token: Token, amount: number): { applied: number; absorbed: number } {
+  private applyDamage(token: Token, amount: number, opts?: { godsBane?: boolean }): { applied: number; absorbed: number } {
+    if (token.godsBaneBlade) return { applied: 0, absorbed: 0 }; // the blade cannot be damaged
     const sheet = this.linkedSheet(token);
+    const hpBefore = sheet ? sheet.currentHp : token.currentHp;
     let r: { hp: number; temp: number; absorbed: number; applied: number };
     if (sheet) {
       r = damageWithTempHp(sheet.currentHp, sheet.tempHp ?? 0, amount);
@@ -264,6 +285,7 @@ export class Room {
     }
     // Wood Wose & co.: end when the bearer drops to 0 HP
     if (r.hp <= 0) this.endDownEffects(token, 'còn 0 HP');
+    if (!sheet && amount > 0 && typeof hpBefore === 'number') this.undyingCheck(token, hpBefore, r.hp, !!opts?.godsBane);
     return { applied: r.applied, absorbed: r.absorbed };
   }
 
@@ -296,6 +318,7 @@ export class Room {
     const before = token.currentHp;
     token.currentHp =
       typeof token.maxHp === 'number' ? Math.min(token.maxHp, token.currentHp + heal) : token.currentHp + heal;
+    if (token.currentHp > 0) token.downedUndying = undefined;
     return token.currentHp - before;
   }
 
@@ -399,10 +422,56 @@ export class Room {
     };
   }
 
-  /** After an attack resolved: People's Will force damage, and the blade's divinity stripping. */
+  /** The awakened blade's token on the active scene (feature on + awakened), else undefined. */
+  private bladeToken(): Token | undefined {
+    return findBladeToken(this.godsBane(), this.state.tokens);
+  }
+
+  /** The token a PC fights from: the attacker token, else the sheet's token on the active scene. */
+  private attackerTokenOf(sheetId: string | undefined, tokenId: string | undefined): Token | undefined {
+    if (tokenId) return this.state.tokens.find((t) => t.id === tokenId);
+    const sheet = sheetId ? this.state.sheets.find((x) => x.id === sheetId) : undefined;
+    return sheet?.tokenId ? this.state.tokens.find((t) => t.id === sheet.tokenId) : undefined;
+  }
+
+  /** Undying creatures: down (not dead) at 0 HP unless a God's Bane attack landed the killing blow. */
+  private undyingCheck(token: Token, hpBefore: number, hpAfter: number, godsBane: boolean): void {
+    if (!this.godsBane()) return;
+    const o = undyingOutcome(token, hpBefore, hpAfter, godsBane);
+    if (o === 'slain') {
+      token.baneSlain = true;
+      token.downedUndying = undefined;
+      this.pendingBaneLogs.push(`☠ ${token.label} bị God's Bane hạ — chết vĩnh viễn${token.undying ? ' (bất diệt bị phá)' : ''}`);
+    } else if (o === 'downed') {
+      token.downedUndying = true;
+      this.pendingBaneLogs.push(`💀 ${token.label} gục xuống nhưng BẤT DIỆT — chưa chết hẳn, sẽ hồi lại khi nghỉ dài (chỉ God's Bane giết vĩnh viễn được)`);
+    }
+  }
+
+  /** Strip one divinity layer off a greatOne (3 per round cap while initiative runs). */
+  private stripLayer(target: Token, actor: { id: string; name: string }, who: string): void {
+    const round = this.state.initiative.running ? this.state.initiative.round : undefined;
+    const patch = baneStripLayer(target, round);
+    if (!patch) return;
+    if (patch === 'capped') {
+      this.systemLog(`🗡 ${target.label}: đã bóc đủ 3 tầng thần tính trong vòng này — không bóc thêm (${who})`, actor);
+      return;
+    }
+    Object.assign(target, patch);
+    this.systemLog(
+      `🗡 ${who} bóc thần tính ${target.label}: tầng ${patch.baneLayers}${patch.baneStripCount ? ` (${patch.baneStripCount}/3 vòng này)` : ''}`,
+      actor,
+    );
+  }
+
+  /**
+   * After damage / an attack by a PC resolved: People's Will force damage (sworn + non-rejected, from the
+   * blade's aura or with the God's Bane weapon), one divinity layer off a greatOne, and — for a God's Bane
+   * attack — the mortal flag on a hit.
+   */
   private afterBaneAttack(
     target: Token,
-    attackerSheetId: string | undefined,
+    attacker: { sheetId?: string; tokenId?: string },
     withGodsBane: boolean,
     hit: boolean,
     actor: { id: string; name: string },
@@ -411,35 +480,212 @@ export class Room {
     if (!gb) return;
     const tag = this.baneTagOf(target);
     if (!tag) return;
+    const attackerSheetId = attacker.sheetId;
     const sheetName = this.state.sheets.find((x) => x.id === attackerSheetId)?.name ?? actor.name;
     const turnKey = baneTurnKey(this.state.initiative);
-    const will = peoplesWillDamage(gb, { attackerSheetId, targetTag: tag, hit, turnKey });
+    const inAura = inBladeAura(gb, this.state.tokens, this.attackerTokenOf(attackerSheetId, attacker.tokenId));
+    const will = peoplesWillDamage(gb, { attackerSheetId, targetTag: tag, hit, turnKey, inAura, withGodsBane });
+    let stripped = false;
     if (will && attackerSheetId) {
       this.state.godsBane = markPeoplesWillUsed(gb, attackerSheetId, turnKey);
       // Straight to HP: no resistance / immunity / damage reduction applies.
-      const took = this.applyDamage(target, will);
+      const took = this.applyDamage(target, will, { godsBane: withGodsBane });
       if (took.applied + took.absorbed > 0) this.maybeBreakConcentration(target, will);
       this.pushRoll({
         id: nanoid(8),
         ts: Date.now(),
         actorId: actor.id,
         actorName: actor.name,
-        label: `✊ Ý chí nhân dân (${sheetName}) → ${target.label}: +${will} Lực${hit ? '' : ' (dù trượt)'} — bỏ qua kháng/miễn`,
+        label: `✊ Ý chí nhân dân (${sheetName}${inAura ? ', trong hào quang God\'s Bane' : ", đòn God's Bane"}) → ${target.label}: +${will} Lực${hit ? '' : ' (dù trượt)'} — bỏ qua kháng/miễn`,
         result: externalRollResult(String(will), { total: will, faces: [] }),
         damage: { targetTokenId: target.id, targetName: target.label, amount: took.applied, raw: will, damageType: 'force' },
       });
-    }
-    if (withGodsBane) {
-      const patch = baneStrike(gb, target, hit);
-      if (patch) {
-        const wasMortal = !!target.baneMortal;
-        target.baneLayers = patch.baneLayers;
-        target.baneMortal = patch.baneMortal;
-        this.systemLog(
-          `🗡 God's Bane bóc thần tính ${target.label}: tầng ${patch.baneLayers}${patch.baneMortal && !wasMortal ? ' · BẤT TỬ BỊ PHÁ (có thể chết vĩnh viễn)' : ''}`,
-          actor,
-        );
+      if (tag === 'greatOne') {
+        this.stripLayer(target, actor, sheetName);
+        stripped = true;
       }
+    }
+    if (withGodsBane && tag === 'greatOne') {
+      if (!stripped) this.stripLayer(target, actor, `${sheetName} (God's Bane)`);
+      if (hit && !target.baneMortal) {
+        target.baneMortal = true;
+        this.systemLog(`🗡 ${target.label}: BẤT TỬ BỊ PHÁ (có thể chết vĩnh viễn)`, actor);
+      }
+    }
+  }
+
+  /** Divine weapon vs a creature within 5 ft of the blade token: the attack has disadvantage. */
+  private divineDisadvantage(target: Token, parts: DamagePart[] | undefined): boolean {
+    const blade = this.bladeToken();
+    return !!blade && blade.id !== target.id && isDivineAttack(parts) && withinFiveFeet(blade, target);
+  }
+
+  /** The blade's own attack (DM-triggered on its turn): 1d8, auto-hit + People's Will vs tagged creatures. */
+  private bladeAttack(target: Token, actor: Participant): string | null {
+    const gb = this.godsBane();
+    const blade = this.bladeToken();
+    if (!gb || !blade) return "God's Bane chưa thức tỉnh / chưa có token trên bản đồ";
+    if (target.godsBaneBlade) return "God's Bane không thể tự đánh mình";
+    const tag = this.baneTagOf(target);
+    const notes: string[] = [];
+    const active = this.state.initiative.running ? this.state.initiative.entries.find((e) => e.isActive) : undefined;
+    if (active && active.tokenId !== blade.id) notes.push('⚠ không phải lượt God\'s Bane');
+    if (!withinFiveFeet(blade, target)) notes.push('⚠ mục tiêu ngoài 5 ft');
+    const ac = this.tokenAc(target) + coverAcBonus(target.cover ?? 'none');
+    let roll: RollResult | undefined;
+    if (!tag) roll = rollNotation('1d20');
+    const res = bladeAttackHits(tag, roll, ac);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor.id,
+      actorName: actor.name,
+      label: `🗡 ${BLADE_LABEL} tấn công ${target.label}${res.auto ? ' — tự trúng (mục tiêu mang dấu)' : ` (+0 vs AC ${ac})`}${notes.length ? ` · ${notes.join(' · ')}` : ''}`,
+      result: roll ?? externalRollResult('', { total: 0, faces: [] }),
+      attack: res.auto
+        ? undefined
+        : { targetTokenId: target.id, targetName: target.label, targetAc: ac, hit: res.hit, crit: res.crit, fumble: !!roll?.d20?.isFumble },
+    });
+    if (res.hit) {
+      const parts: DamagePart[] = [{ dice: BLADE_DAMAGE, type: 'force', label: BLADE_LABEL, traits: ['godsBane', 'magical'] }];
+      const rd = this.rollDamageParts(parts, res.crit && !this.effectiveDefenses(target)?.critImmune, undefined);
+      const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
+      const took = this.applyDamage(target, out.totalFinal, { godsBane: true });
+      this.maybeBreakConcentration(target, out.totalFinal);
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: actor.id,
+        actorName: actor.name,
+        label: `🗡 ${BLADE_LABEL} — sát thương${res.crit ? ' (chí mạng homebrew)' : ''}`,
+        result: rd.combined,
+        damage: {
+          targetTokenId: target.id,
+          targetName: target.label,
+          amount: took.applied,
+          raw: out.totalRaw,
+          damageType: 'force',
+          notes: [...(damageBreakdownNotes(out) ?? []), ...(took.absorbed ? [`HP tạm hấp thụ ${took.absorbed}`] : [])],
+        },
+      });
+    }
+    if (tag && gb.will > 0) {
+      const took = this.applyDamage(target, gb.will, { godsBane: true });
+      if (took.applied + took.absorbed > 0) this.maybeBreakConcentration(target, gb.will);
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: actor.id,
+        actorName: actor.name,
+        label: `✊ Ý chí nhân dân (đòn của ${BLADE_LABEL}) → ${target.label}: +${gb.will} Lực — bỏ qua kháng/miễn`,
+        result: externalRollResult(String(gb.will), { total: gb.will, faces: [] }),
+        damage: { targetTokenId: target.id, targetName: target.label, amount: took.applied, raw: gb.will, damageType: 'force' },
+      });
+    }
+    if (tag === 'greatOne') {
+      this.stripLayer(target, actor, BLADE_LABEL);
+      if (!target.baneMortal) {
+        target.baneMortal = true;
+        this.systemLog(`🗡 ${target.label}: BẤT TỬ BỊ PHÁ (có thể chết vĩnh viễn)`, actor);
+      }
+    }
+    return null;
+  }
+
+  /** Map / initiative God's Bane operations (DM only). */
+  private godsBaneRoomOp(op: GodsBaneRoomOp, actor: Participant): string | null {
+    if (actor.role !== 'dm') return "Chỉ DM được điều khiển God's Bane";
+    const gb = this.godsBane();
+    if (!gb) return "God's Bane chưa bật";
+    if (op.op === 'reviveUndying') {
+      const revived: string[] = [];
+      for (const scene of this.state.scenes) {
+        for (const t of scene.tokens) {
+          if (!t.downedUndying || t.baneSlain) continue;
+          t.downedUndying = undefined;
+          if (typeof t.maxHp === 'number') t.currentHp = t.maxHp;
+          revived.push(t.label);
+        }
+      }
+      this.systemLog(
+        revived.length ? `🌙 Nghỉ dài: sinh vật bất diệt hồi sinh, đầy HP — ${revived.join(', ')}` : '🌙 Nghỉ dài: không có sinh vật bất diệt nào đang gục',
+        actor,
+      );
+      return null;
+    }
+    if (!gb.awakened) return "God's Bane chưa thức tỉnh — bật \"Đã thức tỉnh\" trước";
+    const blade = this.bladeToken();
+    switch (op.op) {
+      case 'placeBlade': {
+        if (blade) return "God's Bane đã có trên bản đồ này";
+        let x = typeof op.x === 'number' ? op.x : undefined;
+        let y = typeof op.y === 'number' ? op.y : undefined;
+        if (x === undefined || y === undefined) {
+          // Next to the first sworn PC on this map, else the middle of the map.
+          const pc = Object.keys(gb.members)
+            .map((id) => this.attackerTokenOf(id, undefined))
+            .find((t): t is Token => !!t);
+          x = pc ? Math.min(this.state.map.cols - 1, pc.x + 1) : Math.floor(this.state.map.cols / 2);
+          y = pc ? pc.y : Math.floor(this.state.map.rows / 2);
+        }
+        const token = createToken({ label: BLADE_LABEL, x, y, size: 'medium', color: '#d4af37' });
+        token.godsBaneBlade = true;
+        this.state.tokens.push(token);
+        this.systemLog(`🗡 ${BLADE_LABEL} xuất hiện trên bản đồ`, actor);
+        return null;
+      }
+      case 'removeBlade': {
+        if (!blade) return "Không có God's Bane trên bản đồ này";
+        this.removeBladeToken(blade.id);
+        this.systemLog(`🗡 ${BLADE_LABEL} rời bản đồ`, actor);
+        return null;
+      }
+      case 'bladeInit': {
+        if (!blade) return "Đặt God's Bane lên bản đồ trước";
+        const init = this.state.initiative;
+        const has = init.entries.some((e) => e.tokenId === blade.id);
+        if (op.on && !has) {
+          insertInitiativeEntry(init, {
+            id: nanoid(8),
+            name: BLADE_LABEL,
+            initiative: BLADE_INITIATIVE,
+            tokenId: blade.id,
+            isActive: false,
+            hasGone: false,
+            loseTies: true,
+          });
+          markActive(init);
+        } else if (!op.on && has) {
+          this.removeInitEntryFor(blade.id);
+        }
+        return null;
+      }
+      case 'bladeAttack': {
+        const target = this.state.tokens.find((t) => t.id === op.targetTokenId);
+        if (!target) return 'Không tìm thấy token mục tiêu';
+        return this.bladeAttack(target, actor);
+      }
+    }
+    return null;
+  }
+
+  /** Drop a token's initiative entry, keeping the rotation / active marker consistent. */
+  private removeInitEntryFor(tokenId: string): void {
+    const init = this.state.initiative;
+    const idx = init.entries.findIndex((e) => e.tokenId === tokenId);
+    if (idx < 0) return;
+    const [gone] = init.entries.splice(idx, 1);
+    if (init.running && gone.hasGone) init.turnIndex = Math.max(0, init.turnIndex - 1);
+    if (init.entries.length === 0) init.running = false;
+    markActive(init);
+    this.syncTurnAnchors();
+  }
+
+  private removeBladeToken(id: string): void {
+    this.removeInitEntryFor(id);
+    for (const scene of this.state.scenes) {
+      const i = scene.tokens.findIndex((t) => t.id === id);
+      if (i >= 0) scene.tokens.splice(i, 1);
     }
   }
 
@@ -933,6 +1179,7 @@ export class Room {
 
   /** A token's walking speed (ft): linked sheet, else stat block, else 30. Grappled → 0. */
   private tokenSpeed(token: Token): number {
+    if (token.godsBaneBlade) return BLADE_SPEED;
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
     return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token), this.tokenExhaustion(token));
   }
@@ -1106,6 +1353,7 @@ export class Room {
       case 'damage': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới / gây sát thương";
         if (!action.damageParts?.length) return 'Không có nguồn sát thương';
         const dmgParts = [
           ...action.damageParts,
@@ -1124,7 +1372,7 @@ export class Room {
         out.totalFinal = this.baneReduce(target, action.attackerTokenId, out.totalFinal);
         // A plain damage roll against a target is a hit the player resolved themselves.
         this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
-        const took = this.applyDamage(target, out.totalFinal);
+        const took = this.applyDamage(target, out.totalFinal, { godsBane: !!this.godsBane() && isGodsBaneAttack(action.damageParts) });
         const amount = took.applied;
         // "Dealt damage" includes what temp HP soaked up (a hit is a hit even if HP didn't move).
         if (amount + took.absorbed > 0) this.markDealtDamage(action.attackerTokenId);
@@ -1152,7 +1400,7 @@ export class Room {
         {
           const atkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
           const sheetId = action.attackerSheetId ?? (atkTok ? this.linkedSheet(atkTok)?.id : undefined);
-          this.afterBaneAttack(target, sheetId, isGodsBaneAttack(action.damageParts), true, actor);
+          this.afterBaneAttack(target, { sheetId, tokenId: atkTok?.id }, isGodsBaneAttack(action.damageParts), true, actor);
         }
         this.touch();
         break;
@@ -1161,6 +1409,7 @@ export class Room {
       case 'heal': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
         let result: RollResult;
         if (typeof action.external === 'number') {
           result = externalRollResult(action.notation, { total: action.external, faces: [] });
@@ -1188,6 +1437,7 @@ export class Room {
       case 'grantTempHp': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
         let result: RollResult;
         try {
           result =
@@ -1365,6 +1615,19 @@ export class Room {
       case 'attack': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
+        // God's Bane: a divine weapon attacking a creature within 5 ft of the blade has disadvantage.
+        const divineDis = this.divineDisadvantage(target, action.damageParts);
+        let divineNote = '';
+        if (divineDis && !action.external) {
+          const d = withDisadvantage(action.attackNotation);
+          if (d) {
+            action.attackNotation = d.notation;
+            divineNote = d.cancelled
+              ? ' · ⚖ vũ khí thần thánh gần God\'s Bane: bất lợi triệt tiêu lợi thế'
+              : ' · ⬇ vũ khí thần thánh gần God\'s Bane: BẤT LỢI';
+          } else divineNote = ' · ⚠ vũ khí thần thánh gần God\'s Bane: bất lợi (công thức không có d20 — tự xử lý)';
+        }
         // Cover benefit is added to the target's AC automatically (homebrew).
         const baseAc = this.tokenAc(target);
         const cover = target.cover ?? 'none';
@@ -1379,11 +1642,20 @@ export class Room {
             return (err as Error).message;
           }
         }
+        if (divineDis && action.external) {
+          // dddice already rolled: a straight d20 gets a second, server-rolled d20 and keeps the lower.
+          const plain = /^(1?d20)(?![0-9])/i.test(action.attackNotation.trim()) && attackRoll.d20;
+          if (plain && attackRoll.d20) {
+            const second = rollNotation('1d20').total;
+            if (second < attackRoll.d20.natural) attackRoll = forceD20Value(attackRoll, second);
+            divineNote = ` · ⬇ vũ khí thần thánh gần God's Bane: BẤT LỢI (d20 thứ hai ${second})`;
+          } else divineNote = " · ⚠ vũ khí thần thánh gần God's Bane: BẤT LỢI — xúc xắc ngoài có lợi thế, DM tự xử lý";
+        }
         // God's Bane: −N for a rejected wielder, Cleaving Causality on this d20.
         const baneAtkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
         const baneSheetId = action.attackerSheetId ?? (baneAtkTok ? this.linkedSheet(baneAtkTok)?.id : undefined);
         const withGodsBane = isGodsBaneAttack(action.damageParts);
-        let baneNote = '';
+        let baneNote = divineNote;
         const banePenalty = baneAttackPenalty(this.godsBane(), baneSheetId, withGodsBane);
         if (banePenalty) {
           attackRoll = { ...attackRoll, total: attackRoll.total - banePenalty };
@@ -1473,7 +1745,7 @@ export class Room {
         if (damageResult && outcome) {
           const hadTemp = this.tempOf(target);
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
-          const took = this.applyDamage(target, outcome.totalFinal);
+          const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane });
           const applied = took.applied;
           // Temp HP soaking the hit still counts as dealing damage (Booming Blade, Bracers).
           const dealt = applied + took.absorbed;
@@ -1525,7 +1797,7 @@ export class Room {
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
         }
-        this.afterBaneAttack(target, baneSheetId, withGodsBane, res.hit, actor);
+        this.afterBaneAttack(target, { sheetId: baneSheetId, tokenId: baneAtkTok?.id }, withGodsBane, res.hit, actor);
         // Repelling Blast (2024): once on the attacker's own turn, push a hit target straight
         // away along the attacker→target line.
         if (res.hit && action.pushFeetOnHit && action.attackerTokenId) {
@@ -1667,6 +1939,7 @@ export class Room {
         const src = this.state.tokens.find((tk) => tk.id === action.id);
         if (!src) return 'Token không tồn tại';
         if (!isDm && src.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        if (src.godsBaneBlade) return "Chỉ có một God's Bane";
         this.state.tokens.push(
           createToken({
             // a cloned monster gets the next number; a cloned PC/prop keeps its name
@@ -1686,6 +1959,7 @@ export class Room {
             statblock: src.statblock ? JSON.parse(JSON.stringify(src.statblock)) : undefined,
             defenses: src.defenses ? JSON.parse(JSON.stringify(src.defenses)) : undefined,
             baneTag: src.baneTag,
+            undying: src.undying,
           }),
         );
         this.touch();
@@ -1697,6 +1971,7 @@ export class Room {
         if (!token) return 'Token không tồn tại';
         const canMove = isDm || token.controllerId === actor.id;
         if (!canMove) return 'Bạn không điều khiển token này';
+        if (token.godsBaneBlade && !isDm) return "Chỉ DM di chuyển được God's Bane";
         let patch = { ...action.patch };
         if (!isDm) {
           // A player may move and restyle a token they control, and keep its HP / cover; everything the
@@ -1720,7 +1995,16 @@ export class Room {
         const beforeY = token.y;
         const linked = this.linkedSheet(token);
         if (linked) delete patch.armorClass; // derived from the sheet
+        if (token.godsBaneBlade) {
+          // No AC / HP, and it stays the blade.
+          delete patch.currentHp;
+          delete patch.maxHp;
+          delete patch.tempHp;
+          delete patch.armorClass;
+          delete patch.godsBaneBlade;
+        }
         Object.assign(token, patch);
+        if (typeof patch.currentHp === 'number' && patch.currentHp > 0 && !linked) token.downedUndying = undefined;
         if (linked) {
           if (typeof patch.currentHp === 'number') linked.currentHp = patch.currentHp;
           if (typeof patch.maxHp === 'number') linked.maxHp = patch.maxHp;
@@ -1823,6 +2107,7 @@ export class Room {
       case 'applyEffect': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
         const eff = action.effect;
         const ownsSheet =
           eff.sourceSheetId &&
@@ -1923,6 +2208,7 @@ export class Room {
       case 'grapple': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
         const ownsSource =
           (action.sourceSheetId &&
             this.state.sheets.some(
@@ -1966,6 +2252,7 @@ export class Room {
       case 'spellSave': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';
+        if (target.godsBaneBlade) break; // never a target: an area spell just skips the blade
         const ownsSource =
           (action.sourceSheetId &&
             this.state.sheets.some(
@@ -2041,6 +2328,13 @@ export class Room {
             },
           });
           this.maybeBreakConcentration(target, dealt);
+        }
+        if (action.damageOnFail?.length && this.godsBane()) {
+          // People's Will on save-spell damage (a pass that deals nothing counts as a miss).
+          const srcTok = action.sourceTokenId ? this.state.tokens.find((t) => t.id === action.sourceTokenId) : undefined;
+          const srcSheetId = action.sourceSheetId ?? (srcTok ? this.linkedSheet(srcTok)?.id : undefined);
+          const dealtAny = !!takesDamage;
+          this.afterBaneAttack(target, { sheetId: srcSheetId, tokenId: srcTok?.id }, false, dealtAny, actor);
         }
         if (!pass && action.effectOnFail) {
           const effect: ActiveEffect = { ...action.effectOnFail, id: nanoid(8) };
@@ -2121,7 +2415,11 @@ export class Room {
 
       case 'initRollAll': {
         if (!isDm) return 'Chỉ DM được tung initiative';
-        const entries: InitiativeEntry[] = this.state.tokens.map((token) => {
+        const blade = this.bladeToken();
+        const entries: InitiativeEntry[] = this.state.tokens.filter((tk) => !tk.godsBaneBlade || tk === blade).map((token) => {
+          if (token.godsBaneBlade) {
+            return { id: nanoid(8), name: token.label, initiative: BLADE_INITIATIVE, tokenId: token.id, isActive: false, hasGone: false, loseTies: true };
+          }
           const roll = rollNotation(initNotation(this.tokenInitMod(token)));
           return {
             id: nanoid(8),
@@ -2178,7 +2476,7 @@ export class Room {
         if (!isDm) return 'Chỉ DM được tung initiative cho nhóm';
         for (const tokenId of action.tokenIds) {
           const token = this.state.tokens.find((tk) => tk.id === tokenId);
-          if (!token) continue;
+          if (!token || token.godsBaneBlade) continue; // the blade's count is fixed (God's Bane panel)
           // silent: no pushRoll, no dddice
           const total = rollNotation(initNotation(this.tokenInitMod(token))).total;
           this.upsertInitEntry(token.label, total, token.id);
@@ -2400,18 +2698,30 @@ export class Room {
       }
 
       case 'godsBane': {
-        const next = applyGodsBaneOp(this.state.godsBane, action.op, {
+        const op = action.op;
+        if (isGodsBaneRoomOp(op)) {
+          const err = this.godsBaneRoomOp(op, actor);
+          if (err) return err;
+          this.touch();
+          break;
+        }
+        const prev = this.state.godsBane;
+        const next = applyGodsBaneOp(prev, op, {
           isDm,
           ownSheetIds: this.state.sheets.filter((x) => x.ownerId === actor.id).map((x) => x.id),
           initiative: this.state.initiative,
         });
         if (typeof next === 'string') return next;
-        const prev = this.state.godsBane;
         this.state.godsBane = next;
         const name = (id?: string) => this.state.sheets.find((x) => x.id === id)?.name ?? '?';
-        const op = action.op;
-        if (op.op === 'pass') this.systemLog(`🗡 God's Bane được trao từ ${name(prev?.holderSheetId)} sang ${name(op.toSheetId)}`, actor);
-        else if (op.op === 'reject') {
+        if (op.op === 'config' && typeof op.awakened === 'boolean' && op.awakened !== !!prev?.awakened) {
+          if (op.awakened) this.systemLog(`🗡 ${BLADE_LABEL} THỨC TỈNH — có token, hào quang 5 ft và lượt riêng (initiative 20)`, actor);
+          else {
+            // Back to dormant: the blade leaves every map and the initiative order.
+            for (const scene of this.state.scenes) for (const t of scene.tokens.filter((x) => x.godsBaneBlade)) this.removeBladeToken(t.id);
+            this.systemLog(`🗡 ${BLADE_LABEL} trở lại trạng thái ngủ (chỉ còn là vũ khí)`, actor);
+          }
+        } else if (op.op === 'reject') {
           const m = next.members[op.sheetId];
           this.systemLog(
             m?.oathbroken
@@ -2456,6 +2766,7 @@ export class Room {
             statblock: tokenStatblockFrom(sb),
             defenses: sb.defenses ? { ...sb.defenses } : undefined,
             baneTag: sb.baneTag,
+            undying: sb.undying,
           }),
         );
         this.touch();
@@ -2574,7 +2885,17 @@ function damageBreakdownNotes(out: MultiDamageOutcome): string[] | undefined {
 }
 
 function sortInit(entries: InitiativeEntry[]): InitiativeEntry[] {
-  return [...entries].sort((a, b) => b.initiative - a.initiative);
+  return sortInitiative(entries); // ties: `loseTies` entries (the God's Bane blade) act last
+}
+
+/** A roll's d20 replaced by another natural value (disadvantage on an already-rolled d20). */
+function forceD20Value(result: RollResult, natural: number): RollResult {
+  if (!result.d20) return result;
+  return {
+    ...result,
+    total: result.total + (natural - result.d20.natural),
+    d20: { natural, isCrit: natural === 20, isFumble: natural === 1 },
+  };
 }
 
 // Rotation model: entries[0] is the active combatant; ending a turn moves the

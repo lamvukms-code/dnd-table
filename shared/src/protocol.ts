@@ -16,7 +16,7 @@ import type {
   Statblock,
   Token,
 } from './types.js';
-import type { GodsBaneOp } from './godsBane.js';
+import type { GodsBaneOp, GodsBaneRoomOp } from './godsBane.js';
 
 export const PROTOCOL_VERSION = 7;
 
@@ -191,8 +191,8 @@ export type ClientAction =
   // map zones (DM only) — a drawn region on the active scene's map + its read-aloud/DM text
   | { t: 'zoneUpsert'; zone: MapZone }
   | { t: 'zoneRemove'; id: string }
-  /** Homebrew God's Bane party artifact — DM config / membership, blade passing, Cleaving Causality. */
-  | { t: 'godsBane'; op: GodsBaneOp };
+  /** Homebrew God's Bane party artifact — DM config / membership, the blade token, Cleaving Causality. */
+  | { t: 'godsBane'; op: GodsBaneOp | GodsBaneRoomOp };
 
 /** Events sent server -> client. */
 export type ServerEvent =

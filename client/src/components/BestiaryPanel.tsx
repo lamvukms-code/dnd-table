@@ -6,6 +6,8 @@ import {
   findCantrip,
   fmtMod,
   parse5eToolsBestiary,
+  WEAPON_TRAITS,
+  WEAPON_TRAIT_VI,
   type SheetAction,
   type Statblock,
   type TokenSize,
@@ -488,7 +490,12 @@ export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: (
       </details>
 
       <div className="sb-row">
-        <BaneTagSelect value={sb.baneTag} onChange={(t) => set('baneTag', t)} />
+        <BaneTagSelect
+          value={sb.baneTag}
+          onChange={(t) => set('baneTag', t)}
+          undying={sb.undying}
+          onUndying={(v) => set('undying', v)}
+        />
       </div>
 
       <div className="sb-row">
@@ -606,6 +613,25 @@ export function ActionsEditor({
           parts={a.extraDamage}
           onChange={(parts) => upd(a.id, { extraDamage: parts })}
         />
+        {typeof a.attackBonus === 'number' && (
+          <div className="sb-action-traits" title="Tính chất vũ khí của đòn (phép / bạc / moongilded / thần thánh)">
+            {WEAPON_TRAITS.map((tr) => (
+              <label key={tr} className="chk">
+                <input
+                  type="checkbox"
+                  checked={a.weaponTraits?.includes(tr) ?? false}
+                  onChange={(e) => {
+                    const next = new Set(a.weaponTraits ?? []);
+                    if (e.target.checked) next.add(tr);
+                    else next.delete(tr);
+                    upd(a.id, { weaponTraits: next.size ? [...next] : undefined });
+                  }}
+                />
+                {WEAPON_TRAIT_VI[tr]}
+              </label>
+            ))}
+          </div>
+        )}
         </div>
       ))}
       <button

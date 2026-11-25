@@ -116,6 +116,7 @@ function BattleMapImpl() {
   const zones = useStore((s) => s.room?.zones) ?? NO_ZONES;
   const sheets = useStore((s) => s.room?.sheets)!;
   const initiative = useStore((s) => s.room?.initiative)!;
+  const godsBaneAwake = useStore((s) => !!s.room?.godsBane?.enabled && !!s.room?.godsBane?.awakened);
 
   // --- movement tracker (active combatant) ---
   const activeEntry = initiative.running
@@ -924,6 +925,23 @@ function BattleMapImpl() {
           )}
 
           {tokens
+            .filter((t) => t.godsBaneBlade && godsBaneAwake)
+            .map((t) => {
+              // God's Bane aura: the 5 ft ring of squares around the blade.
+              const px = dragPos?.id === t.id ? dragPos.x : t.x;
+              const py = dragPos?.id === t.id ? dragPos.y : t.y;
+              const span = Math.max(1, SIZE_CELLS[t.size]);
+              return (
+                <div
+                  key={`aura-${t.id}`}
+                  className="gb-aura"
+                  title="Hào quang God's Bane (5 ft)"
+                  style={{ left: (px - 1) * CELL, top: (py - 1) * CELL, width: (span + 2) * CELL, height: (span + 2) * CELL }}
+                />
+              );
+            })}
+
+          {tokens
             .filter((t) => isDm || !t.hidden)
             .map((t) => {
               const span = SIZE_CELLS[t.size];
@@ -938,7 +956,9 @@ function BattleMapImpl() {
                     groupSel.has(t.id) ? 'group-sel' : ''
                   } ${t.hidden ? 'hidden' : ''} ${
                     t.cover === 'total' ? 'cover-total' : ''
-                  } ${aoeView?.hitIds.includes(t.id) ? 'aoe-hit' : ''}`}
+                  } ${aoeView?.hitIds.includes(t.id) ? 'aoe-hit' : ''} ${t.godsBaneBlade ? 'tk-blade' : ''} ${
+                    t.baneSlain ? 'tk-slain' : t.downedUndying ? 'tk-downed' : ''
+                  }`}
                   style={{
                     left: px * CELL,
                     top: py * CELL,
@@ -985,6 +1005,14 @@ function BattleMapImpl() {
                     >
                       {t.concentration ? '🧠' : ''}
                       {t.effects?.length ? `✦${t.effects.length}` : ''}
+                    </span>
+                  )}
+                  {(t.downedUndying || t.baneSlain) && (
+                    <span
+                      className="tk-undying"
+                      title={t.baneSlain ? "Chết vĩnh viễn (God's Bane)" : 'Bất diệt — đang gục, hồi lại khi nghỉ dài'}
+                    >
+                      {t.baneSlain ? '☠' : '💀'}
                     </span>
                   )}
                   {(t.baneLayers || t.baneMortal) && (

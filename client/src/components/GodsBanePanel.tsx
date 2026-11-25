@@ -4,8 +4,13 @@ import {
   BANE_TAG_VI,
   baneMemberStatus,
   emptyGodsBane,
+  findBladeToken,
+  inBladeAura,
+  MAX_STRIPS_PER_ROUND,
+  strippedThisRound,
   type BaneTag,
   type GodsBaneOp,
+  type GodsBaneRoomOp,
   type Token,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
@@ -13,9 +18,10 @@ import { useStore } from '../store.js';
 const STATUS_VI = { none: 'Chưa thề', sworn: 'Đã thề', rejected: 'Bị kiếm chối bỏ', oathbroken: 'PHÁ THỀ' } as const;
 
 /**
- * God's Bane (homebrew party artifact): DM config — on/off, People's Will (N), the shared Cleaving
- * Causality pool, sworn members / rejection — plus the player actions (pass the blade, spend Causality).
- * The rules themselves run on the server (`shared/src/godsBane.ts`).
+ * God's Bane (homebrew party artifact): DM config — on/off, awakening, People's Will (N), the shared
+ * Cleaving Causality pool, sworn members / rejection — the blade's token / turn / attack, and the player
+ * view (who stands in the aura, Cleaving Causality). The rules themselves run on the server
+ * (`shared/src/godsBane.ts`).
  */
 export function GodsBanePanel({ onClose }: { onClose: () => void }) {
   const send = useStore((s) => s.send);
@@ -23,15 +29,19 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
   const meId = useStore((s) => s.participantId);
   const gb = useStore((s) => s.room?.godsBane) ?? emptyGodsBane();
   const sheets = useStore((s) => s.room?.sheets ?? []);
+  const tokens = useStore((s) => s.room?.tokens ?? []);
   const initiative = useStore((s) => s.room?.initiative);
-  const op = (o: GodsBaneOp) => send({ t: 'godsBane', op: o });
-  const [passTo, setPassTo] = useState('');
+  const op = (o: GodsBaneOp | GodsBaneRoomOp) => send({ t: 'godsBane', op: o });
+  const [targetId, setTargetId] = useState('');
 
-  const holder = sheets.find((s) => s.id === gb.holderSheetId);
-  const iHold = !!holder && holder.ownerId === meId;
-  const passable = sheets.filter((s) => baneMemberStatus(gb, s.id) === 'sworn' && s.id !== gb.holderSheetId);
-  const passedThisRound = !!initiative?.running && gb.lastPassRound === initiative.round;
   const armedCount = gb.armed?.length ?? 0;
+  const blade = findBladeToken(gb, tokens);
+  const bladeInInit = !!blade && !!initiative?.entries.some((e) => e.tokenId === blade.id);
+  const round = initiative?.running ? initiative.round : undefined;
+  const sheetToken = (tokenId?: string) => (tokenId ? tokens.find((t) => t.id === tokenId) : undefined);
+  const greatOnes = tokens.filter((t) => t.baneTag === 'greatOne' && !t.godsBaneBlade);
+  const targets = tokens.filter((t) => !t.godsBaneBlade && !t.hidden);
+  const downed = tokens.filter((t) => t.downedUndying && !t.baneSlain);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -48,6 +58,18 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
             <label className="chk">
               <input type="checkbox" checked={gb.enabled} onChange={(e) => op({ op: 'config', enabled: e.target.checked })} />
               Bật cho phòng này
+            </label>
+            <label className="chk" title="Trước khi thức tỉnh (chương 1) God's Bane chỉ là vũ khí: không token, không lượt, không hào quang">
+              <input
+                type="checkbox"
+                checked={!!gb.awakened}
+                disabled={!gb.enabled}
+                onChange={(e) =>
+                  (e.target.checked || window.confirm("Cho God's Bane ngủ lại? Token của kiếm sẽ bị gỡ khỏi bản đồ và initiative.")) &&
+                  op({ op: 'config', awakened: e.target.checked })
+                }
+              />
+              Đã thức tỉnh
             </label>
             <label title="Ý chí nhân dân = số cộng đồng đã cứu + đồng minh đã kết giao">
               N (Ý chí nhân dân)
@@ -67,26 +89,91 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
         )}
 
         {!gb.enabled ? (
-          <p className="hint">{isDm ? 'Đang tắt — mọi luật God\'s Bane không chạy.' : "God's Bane chưa được DM bật."}</p>
+          <p className="hint">{isDm ? "Đang tắt — mọi luật God's Bane không chạy." : "God's Bane chưa được DM bật."}</p>
         ) : (
           <>
             <p className="gb-summary">
               <strong>N = {gb.will}</strong> · Cleaving Causality: <strong>{gb.causality}</strong>
-              {armedCount ? ` (${armedCount} đang chuẩn bị)` : ''} · Người cầm kiếm: <strong>{holder?.name ?? '—'}</strong>
-              {passedThisRound ? ' · đã trao vòng này' : ''}
+              {armedCount ? ` (${armedCount} đang chuẩn bị)` : ''} ·{' '}
+              {gb.awakened ? (blade ? 'Kiếm đang ở trên bản đồ' : 'Đã thức tỉnh — chưa đặt token') : 'Chưa thức tỉnh (chỉ là vũ khí)'}
             </p>
             <ul className="hint gb-rules">
-              <li>Người đã thề (không bị chối bỏ) đánh Great One / tay sai / thợ săn sa ngã: +N sát thương Lực, 1 lần/lượt, bỏ qua kháng/miễn. Với Great One: cả khi trượt.</li>
-              <li>Chịu ít hơn N sát thương mỗi lần từ các sinh vật đó; +N cứu chống Mê hoặc / Khiếp sợ (tự cộng khi server tung cứu; tự tung tay thì nhớ cộng).</li>
-              <li>Đòn bằng chính God's Bane vào Great One: +1 tầng thần tính bị bóc (trúng hay trượt); trúng thì phá bất tử.</li>
-              <li>Bị kiếm chối bỏ: −N khi đánh bằng God's Bane, mất mọi lợi ích. Lần chối bỏ thứ 4 → phá thề vĩnh viễn.</li>
+              <li>
+                Người đã thề (không bị chối bỏ) đứng trong <strong>hào quang 5 ft</strong> của kiếm: mọi sát thương gây lên Great One / tay sai / thợ
+                săn sa ngã được +N Lực, 1 lần/lượt, bỏ qua kháng/miễn/DR. Với Great One: cả khi trượt, và bóc 1 tầng thần tính.
+              </li>
+              <li>Chịu ít hơn N sát thương mỗi lần từ các sinh vật đó; +N cứu chống Mê hoặc / Khiếp sợ — không cần đứng gần kiếm.</li>
+              <li>
+                Đòn của chính kiếm (lượt riêng, initiative 20, thua khi hoà): 1d8, tự trúng + N vào sinh vật mang dấu; sinh vật khác phải đánh
+                trúng (+0) và không có N. Cầm vũ khí God's Bane đánh = đòn của kiếm (bóc tầng, phá bất tử, giết vĩnh viễn sinh vật bất diệt).
+              </li>
+              <li>Tối đa {MAX_STRIPS_PER_ROUND} tầng thần tính / vòng / Great One (ngoài initiative không giới hạn).</li>
+              <li>Vũ khí thần thánh đánh sinh vật đứng trong 5 ft của kiếm: bất lợi.</li>
+              <li>Bị kiếm chối bỏ: mất mọi lợi ích; vẫn đánh được bằng vũ khí God's Bane nhưng −N, không tự trúng. Lần thứ 4 → phá thề vĩnh viễn.</li>
             </ul>
+
+            {isDm && gb.awakened && (
+              <div className="gb-blade">
+                <div className="gb-row">
+                  {blade ? (
+                    <>
+                      <button onClick={() => window.confirm("Gỡ token God's Bane khỏi bản đồ?") && op({ op: 'removeBlade' })}>Gỡ kiếm khỏi bản đồ</button>
+                      <button onClick={() => op({ op: 'bladeInit', on: !bladeInInit })}>
+                        {bladeInInit ? 'Bỏ khỏi initiative' : 'Thêm vào initiative (20)'}
+                      </button>
+                    </>
+                  ) : (
+                    <button title="Đặt cạnh người đã thề đầu tiên trên bản đồ (hoặc giữa bản đồ) — kéo thả để di chuyển (tốc độ 30 ft)" onClick={() => op({ op: 'placeBlade' })}>
+                      🗡 Đặt kiếm lên bản đồ
+                    </button>
+                  )}
+                </div>
+                {blade && (
+                  <div className="gb-row">
+                    <label>
+                      Kiếm tấn công
+                      <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+                        <option value="">— mục tiêu —</option>
+                        {targets.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}
+                            {t.baneTag ? ` (${BANE_TAG_VI[t.baneTag]})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button disabled={!targetId} onClick={() => op({ op: 'bladeAttack', targetTokenId: targetId })}>
+                      ⚔ Đánh (1d8)
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isDm && (greatOnes.length > 0 || downed.length > 0) && (
+              <div className="gb-row">
+                {greatOnes.map((t) => (
+                  <span key={t.id} className="gb-chip" title="Tầng thần tính đã bóc · bóc trong vòng này / giới hạn">
+                    {t.label}: {t.baneLayers ?? 0} tầng
+                    {round !== undefined ? ` · vòng này ${strippedThisRound(t, round)}/${MAX_STRIPS_PER_ROUND}` : ''}
+                    {t.baneMortal ? ' · ☠ phàm' : ''}
+                  </span>
+                ))}
+                <button
+                  title="Hồi đầy HP mọi sinh vật bất diệt đang gục (không áp dụng cho kẻ đã bị God's Bane giết)"
+                  onClick={() => op({ op: 'reviveUndying' })}
+                >
+                  🌙 Nghỉ dài: hồi sinh bất diệt{downed.length ? ` (${downed.length})` : ''}
+                </button>
+              </div>
+            )}
 
             <table className="gb-table">
               <thead>
                 <tr>
                   <th>Nhân vật</th>
                   <th>Trạng thái</th>
+                  <th>Hào quang</th>
                   <th>Chối bỏ</th>
                   <th />
                 </tr>
@@ -97,14 +184,15 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
                   const m = gb.members[s.id];
                   const mine = s.ownerId === meId;
                   const armed = gb.armed?.find((a) => a.sheetId === s.id);
+                  const inAura = inBladeAura(gb, tokens, sheetToken(s.tokenId));
                   if (!isDm && st === 'none') return null;
                   return (
                     <tr key={s.id} className={`gb-${st}`}>
-                      <td>
-                        {s.id === gb.holderSheetId ? '🗡 ' : ''}
-                        {s.name}
-                      </td>
+                      <td>{s.name}</td>
                       <td>{STATUS_VI[st]}</td>
+                      <td title={inAura && st !== 'sworn' ? 'Trong 5 ft nhưng không được hưởng (chưa thề / bị chối bỏ)' : undefined}>
+                        {inAura ? (st === 'sworn' ? '✨ trong 5 ft' : '(trong 5 ft)') : blade ? '—' : ''}
+                      </td>
                       <td>{m ? `${m.rejections}/3` : ''}</td>
                       <td className="gb-actions">
                         {isDm && (
@@ -137,11 +225,6 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
                                 Gỡ phá thề
                               </button>
                             )}
-                            {st !== 'none' && s.id !== gb.holderSheetId && (
-                              <button title="DM đặt người cầm kiếm (không tính lượt trao)" onClick={() => op({ op: 'setHolder', sheetId: s.id })}>
-                                Cầm kiếm
-                              </button>
-                            )}
                           </>
                         )}
                         {(mine || isDm) && st === 'sworn' && !armed && gb.causality - armedCount > 0 && (
@@ -165,32 +248,6 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
                 })}
               </tbody>
             </table>
-
-            {(iHold || isDm) && holder && (
-              <div className="gb-row">
-                <label>
-                  Trao kiếm cho
-                  <select value={passTo} onChange={(e) => setPassTo(e.target.value)}>
-                    <option value="">—</option>
-                    {passable.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  disabled={!passTo || passedThisRound}
-                  title="1 lần mỗi vòng khi đang có initiative"
-                  onClick={() => {
-                    op({ op: 'pass', toSheetId: passTo });
-                    setPassTo('');
-                  }}
-                >
-                  🗡 Trao
-                </button>
-              </div>
-            )}
           </>
         )}
       </div>
@@ -198,20 +255,49 @@ export function GodsBanePanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** DM-only God's Bane box in the token inspector: target tag, stripped layers, mortal flag. */
+/** DM-only God's Bane box in the token inspector: target tag, undying, stripped layers, mortal flag — or,
+ *  on the blade's own token, its attack. */
 export function GodsBaneTokenBox({ token }: { token: Token }) {
   const send = useStore((s) => s.send);
   const enabled = useStore((s) => !!s.room?.godsBane?.enabled);
   const linked = useStore((s) => s.room?.sheets.some((x) => x.tokenId === token.id));
+  const tokens = useStore((s) => s.room?.tokens ?? []);
+  const [targetId, setTargetId] = useState('');
   if (!enabled || linked) return null;
   const patch = (p: Partial<Token>) => send({ t: 'updateToken', id: token.id, patch: p });
+  if (token.godsBaneBlade) {
+    return (
+      <details className="def-details" open>
+        <summary>🗡 God's Bane (kiếm) · tốc độ 30 ft · hào quang 5 ft · không AC/HP</summary>
+        <div className="gb-row">
+          <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
+            <option value="">— mục tiêu —</option>
+            {tokens
+              .filter((t) => !t.godsBaneBlade)
+              .map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                  {t.baneTag ? ` (${BANE_TAG_VI[t.baneTag]})` : ''}
+                </option>
+              ))}
+          </select>
+          <button disabled={!targetId} onClick={() => send({ t: 'godsBane', op: { op: 'bladeAttack', targetTokenId: targetId } })}>
+            ⚔ Đánh (1d8)
+          </button>
+        </div>
+      </details>
+    );
+  }
   const layers = token.baneLayers ?? 0;
   return (
-    <details className="def-details" open={!!token.baneTag}>
+    <details className="def-details" open={!!token.baneTag || !!token.undying}>
       <summary>
         🗡 God's Bane{token.baneTag ? ` · ${BANE_TAG_VI[token.baneTag]}` : ''}
+        {token.undying ? ' · bất diệt' : ''}
         {layers ? ` · ${layers} tầng` : ''}
         {token.baneMortal ? ' · ☠ phàm' : ''}
+        {token.downedUndying ? ' · 💀 đang gục' : ''}
+        {token.baneSlain ? ' · ☠ chết vĩnh viễn' : ''}
       </summary>
       <div className="gb-row">
         <label>
@@ -228,6 +314,12 @@ export function GodsBaneTokenBox({ token }: { token: Token }) {
             ))}
           </select>
         </label>
+        <label className="chk" title="Bất diệt: về 0 HP chỉ gục, nghỉ dài hồi lại — chỉ đòn God's Bane mới giết vĩnh viễn">
+          <input type="checkbox" checked={!!token.undying} onChange={(e) => patch({ undying: e.target.checked || undefined })} />
+          Bất diệt
+        </label>
+        {token.downedUndying && <button onClick={() => patch({ downedUndying: undefined })}>Bỏ trạng thái gục</button>}
+        {token.baneSlain && <button onClick={() => window.confirm('Gỡ dấu "chết vĩnh viễn"?') && patch({ baneSlain: undefined })}>Gỡ "chết vĩnh viễn"</button>}
         {token.baneTag === 'greatOne' && (
           <>
             <span title="Tầng thần tính đã bị bóc — DM tự quyết bỏ đặc tính nào (sửa ở mục Phòng thủ / statblock)">
@@ -247,19 +339,37 @@ export function GodsBaneTokenBox({ token }: { token: Token }) {
   );
 }
 
-/** Bestiary editor field: the God's Bane tag copied onto spawned tokens. */
-export function BaneTagSelect({ value, onChange }: { value?: BaneTag; onChange: (t: BaneTag | undefined) => void }) {
+/** Bestiary editor fields: the God's Bane tag and the undying trait, both copied onto spawned tokens. */
+export function BaneTagSelect({
+  value,
+  onChange,
+  undying,
+  onUndying,
+}: {
+  value?: BaneTag;
+  onChange: (t: BaneTag | undefined) => void;
+  undying?: boolean;
+  onUndying?: (v: boolean | undefined) => void;
+}) {
   return (
-    <label title="God's Bane: loại mục tiêu (token spawn ra sẽ mang tag này)">
-      God's Bane
-      <select value={value ?? ''} onChange={(e) => onChange((e.target.value || undefined) as BaneTag | undefined)}>
-        <option value="">— không —</option>
-        {BANE_TAGS.map((t) => (
-          <option key={t} value={t}>
-            {BANE_TAG_VI[t]}
-          </option>
-        ))}
-      </select>
-    </label>
+    <>
+      <label title="God's Bane: loại mục tiêu (token spawn ra sẽ mang tag này)">
+        God's Bane
+        <select value={value ?? ''} onChange={(e) => onChange((e.target.value || undefined) as BaneTag | undefined)}>
+          <option value="">— không —</option>
+          {BANE_TAGS.map((t) => (
+            <option key={t} value={t}>
+              {BANE_TAG_VI[t]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {onUndying && (
+        <label className="chk" title="Bất diệt (God's Bane): về 0 HP chỉ gục, nghỉ dài hồi lại — chỉ đòn God's Bane mới giết vĩnh viễn">
+          <input type="checkbox" checked={!!undying} onChange={(e) => onUndying(e.target.checked || undefined)} />
+          Bất diệt
+        </label>
+      )}
+    </>
   );
 }

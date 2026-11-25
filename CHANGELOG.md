@@ -13,7 +13,21 @@ All notable changes to this project are documented here. Format follows
   that ignores defences (also on a miss vs a `greatOne`), −N damage per instance from tagged creatures,
   +N on charm/fear saves, divinity-layer counter and "mortal" flag on the token, rejection (−N with the
   blade, 4th time = oathbroken), Cleaving Causality pool (arm a natural 20 for your own next d20 or a
-  natural 1 for the next enemy d20), once-per-round blade passing. New `godsBane` op, `GodsBanePanel`.
+  natural 1 for the next enemy d20). New `godsBane` op, `GodsBanePanel`.
+
+### Changed
+
+- **God's Bane reworked** (SRS §2.5): once the DM marks it *awakened* the blade is a DM-moved map token
+  (speed 30 ft, no AC/HP, never a target) with its own initiative turn at 20 (loses ties) and a 5 ft aura
+  (gold ring on the map). People's Will now needs the aura (or the God's Bane weapon item itself), applies
+  to any damage a sworn PC deals (attack, manual damage, save spells) and strips a divinity layer off a
+  Great One; at most 3 layers per round per Great One. The blade's own attack (DM button): 1d8, auto-hit
+  + People's Will vs tagged creatures, a +0 attack roll otherwise; attacks with the weapon item count as
+  the blade's. New `undying` creature trait (bestiary + inspector): down instead of dead unless a God's
+  Bane attack kills it, revived by the panel's long-rest button. New `divine` weapon trait (item picker
+  and bestiary actions): disadvantage against creatures within 5 ft of the blade. Protection is not
+  aura-gated; rejected members lose every buff and swing the item at −N. The blade-holder / pass
+  mechanic is removed (old room state migrates harmlessly).
 
 ## [0.55.0] - 2026-09-22
 
