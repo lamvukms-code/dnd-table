@@ -22,6 +22,8 @@ import {
   type CustomClassDef,
   registerCustomClass,
   registerFeatureDefs,
+  registerFeatDefs,
+  type LocalFeatDef,
   type SubclassFeatureDef,
 } from '@dnd-table/shared';
 
@@ -63,6 +65,16 @@ if (existsSync(SUBCLASSES_FILE)) {
     if (Array.isArray(defs)) registerFeatureDefs(defs as SubclassFeatureDef[]);
   } catch (e) {
     console.warn(`Không đọc được ${SUBCLASSES_FILE}:`, (e as Error).message);
+  }
+}
+// Local feats with mechanics (passives such as AC / resistances must agree with the client).
+const FEATS_FILE = process.env.FEATS_FILE ?? join(__dirname, '..', '..', 'client', 'src', 'data', 'feats.local.json');
+if (existsSync(FEATS_FILE)) {
+  try {
+    const defs = JSON.parse(readFileSync(FEATS_FILE, 'utf8')) as unknown;
+    if (Array.isArray(defs)) registerFeatDefs(defs as LocalFeatDef[]);
+  } catch (e) {
+    console.warn(`Không đọc được ${FEATS_FILE}:`, (e as Error).message);
   }
 }
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h

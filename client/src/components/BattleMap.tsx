@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   attackRangeOf,
+  attackKindOf,
   addCurrency,
   COIN_TYPES,
   computeSpeed,
@@ -1556,6 +1557,7 @@ function TokenInspector({
           targetTokenId: targetId,
           attackerTokenId: token.id,
           attackRange: attackRangeOf(act),
+          attackKind: attackKindOf(act),
         });
       }
     }
@@ -2059,6 +2061,7 @@ function TokenInspector({
                         targetTokenId: sbTargetId,
                         attackerTokenId: token.id,
                         attackRange: attackRangeOf(a),
+                        attackKind: attackKindOf(a),
                       })
                     }
                   >

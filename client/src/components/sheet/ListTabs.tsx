@@ -36,9 +36,10 @@ export function FeatsTab({ draft, commit }: Ctx) {
     key: f.id,
     name: f.name,
     mark: FEAT_CAT[f.category].mark,
-    hint: f.prerequisite ?? FEAT_CAT[f.category].label,
+    hint: [(f as { source?: string }).source, f.prerequisite ?? FEAT_CAT[f.category].label].filter(Boolean).join(' · '),
     detail: f.guidance + (f.prerequisite ? ` (Yêu cầu: ${f.prerequisite})` : ''),
-    tags: [f.category],
+    tags: [f.category, ...((f as { source?: string }).source ? ['setting'] : [])],
+    keywords: [(f as { source?: string }).source ?? ''],
     disabled: have.has(f.name.toLowerCase()),
   }));
 
@@ -75,7 +76,10 @@ export function FeatsTab({ draft, commit }: Ctx) {
       <SearchPicker
         title="+ Thêm feat"
         items={items}
-        chips={(Object.keys(FEAT_CAT) as FeatDef['category'][]).map((c) => ({ value: c, label: FEAT_CAT[c].label }))}
+        chips={[
+          ...(SRD_FEATS_DRAFT.some((f) => (f as { source?: string }).source) ? [{ value: 'setting', label: 'Setting' }] : []),
+          ...(Object.keys(FEAT_CAT) as FeatDef['category'][]).map((c) => ({ value: c, label: FEAT_CAT[c].label })),
+        ]}
         onPick={add}
         footer={
           <button

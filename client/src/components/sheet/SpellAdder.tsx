@@ -64,10 +64,10 @@ export function SpellAdder({ draft, onAdd }: { draft: CharacterSheet; onAdd: (sp
       key: `def:${d.id}`,
       name: d.name,
       mark: d.combat ? '⚔' : '•',
-      hint: `${LEVEL_VI(d.level ?? 0)} · ${d.school}${defHint(d) ? ' · ' + defHint(d) : ''}`,
+      hint: `${d.source ? d.source + ' · ' : ''}${LEVEL_VI(d.level ?? 0)} · ${d.school}${defHint(d) ? ' · ' + defHint(d) : ''}`,
       detail: d.guidance,
       group: mine ? 'Theo nghề của bạn' : 'Nghề khác',
-      keywords: [d.school, ...d.classes, ...(d.aliases ?? [])],
+      keywords: [d.school, ...d.classes, ...(d.aliases ?? []), d.source ?? ''],
       tags: [String(d.level ?? 0)],
       disabled: have.has(d.name.toLowerCase()),
     });

@@ -18,6 +18,7 @@ import {
   spellSaveDc,
   inferAttackRange,
   rangedAtCloseQuarters,
+  passiveNoCloseRangedPenalty,
   gridFeet,
   type AttackRange,
   effectiveArmorClass,
@@ -38,6 +39,11 @@ import {
   type ServerEvent,
   type Spell,
   findCantrip,
+  passiveRangedCover,
+  upcastEffect,
+  burstDice,
+  aoeTokenIds,
+  recastOf,
   economyKindOf,
   spendEconomy as spendEconomyRule,
   spendSpellSlot,
@@ -91,6 +97,8 @@ interface AttackParams {
   attackerTokenId?: string;
   /** Melee / ranged tag of the attack (ranged at ≤5 ft ⇒ Disadvantage). */
   attackRange?: AttackRange;
+  /** Weapon strike or spell attack. Unset = weapon. */
+  attackKind?: 'weapon' | 'spell';
   /** Repelling Blast (2024): on a hit, push the target this many feet from the attacker. */
   pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
@@ -150,8 +158,10 @@ interface StoreState {
   /** Point-click spell casting: arm a spell, then click a token on the map. `castAtLevel`
    *  (Vancian upcast only) picks which slot level to burn — the spell's own effect/damage
    *  is unaffected (still adjusted by hand, per this codebase's spell-math convention). */
-  castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number } | null;
-  beginCast: (sheetId: string, spell: Spell, castAtLevel?: number) => void;
+  castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number; repeat?: boolean } | null;
+  /** `repeat`: re-use a spell that lasts (Call Lightning…) — `spell` is already its `recastForm`;
+   *  only the action economy is paid, no slot, no new concentration. */
+  beginCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean) => void;
   /** Same point-click flow as `castingSpell`, but the caster is a monster token (DM only) — the
    *  fixed spell attack bonus travels with it since a token has no ability scores to derive it from. */
   castingMonsterSpell: { tokenId: string; spell: Spell; spellAttackBonus: number } | null;
@@ -170,7 +180,7 @@ interface StoreState {
   openBestiary: (id: string | null) => void;
   resolveCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean; paid?: boolean }) => Promise<void>;
   /** Spend the action economy + spell slot for one cast (asks before casting without a slot). false = cancelled. */
-  payCast: (sheetId: string, spell: Spell, castAtLevel?: number) => boolean;
+  payCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean) => boolean;
   /** Armed AoE template awaiting placement on the map. */
   aoe: AoeMode | null;
   beginAoe: (mode: AoeMode) => void;
@@ -386,6 +396,7 @@ export const useStore = create<StoreState>((set, get) => {
       attackerSheetId,
       attackerTokenId,
       attackRange,
+      attackKind,
       pushFeetOnHit,
       grappleOnHit,
     }) => {
@@ -409,7 +420,14 @@ export const useStore = create<StoreState>((set, get) => {
         const reasons = [...cm.reasons];
         let mode = cm.mode;
         // Ranged attack made at close quarters (target within 5 ft): Disadvantage.
-        if (attackRange === 'ranged' && atkTok && tgtTok && rangedAtCloseQuarters('ranged', gridFeet(atkTok, tgtTok))) {
+        const atkSheet = attackerSheetId ? room?.sheets.find((s) => s.id === attackerSheetId) : undefined;
+        if (
+          attackRange === 'ranged' &&
+          atkTok &&
+          tgtTok &&
+          rangedAtCloseQuarters('ranged', gridFeet(atkTok, tgtTok)) &&
+          !(atkSheet && passiveNoCloseRangedPenalty(atkSheet)) // feat: no close-range penalty
+        ) {
           mode = combineRollModes(mode, 'disadvantage');
           reasons.push('tầm xa trong tầm cận chiến');
         }
@@ -428,6 +446,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackerSheetId,
           attackerTokenId,
           attackRange,
+          attackKind,
           pushFeetOnHit,
           grappleOnHit,
         });
@@ -449,6 +468,7 @@ export const useStore = create<StoreState>((set, get) => {
           attackerSheetId,
           attackerTokenId,
           attackRange,
+          attackKind,
           pushFeetOnHit,
           grappleOnHit,
           external: { attack },
@@ -456,7 +476,11 @@ export const useStore = create<StoreState>((set, get) => {
       }
       const ac =
         (linked ? effectiveArmorClass(linked, token?.effects).ac : npcArmorClass(token?.armorClass ?? 10, token?.effects)) +
-        coverAcBonus(token?.cover);
+        coverAcBonus(
+          attackRange === 'ranged' && attackKind !== 'spell'
+            ? passiveRangedCover(attackerSheetId ? room?.sheets.find((s) => s.id === attackerSheetId) : undefined, token?.cover ?? 'none')
+            : token?.cover,
+        );
       const def = mergeDefenses(
         token?.defenses,
         linked ? derivedDefenses(linked) : undefined,
@@ -490,6 +514,7 @@ export const useStore = create<StoreState>((set, get) => {
         attackerSheetId,
         attackerTokenId,
         attackRange,
+        attackKind,
         pushFeetOnHit,
         grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },
@@ -559,7 +584,7 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'grantTempHp', targetTokenId: tok.id, notation: String(ww.tempHp), label: 'Rampant Growth (HP tạm)', sourceSheetId: sheet.id });
       return true;
     },
-    beginCast: (sheetId, spell, castAtLevel) => {
+    beginCast: (sheetId, spell, castAtLevel, repeat) => {
       // Save spells with a parseable template: place the area on the map instead of clicking one target.
       const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
       const casterTokenId = get().room?.sheets.find((s) => s.id === sheetId)?.tokenId;
@@ -577,9 +602,9 @@ export const useStore = create<StoreState>((set, get) => {
             onConfirm: (ids, aoeId) => {
               // Pay once for the whole area — cancelling (no slot) or lacking the action must stop
               // the cast for EVERY target, not just the first one.
-              if (!get().payCast(sheetId, spell, castAtLevel)) return;
+              if (!get().payCast(sheetId, spell, castAtLevel, repeat)) return;
               ids.forEach((id, i) => {
-                set({ castingSpell: { sheetId, spell, castAtLevel } });
+                set({ castingSpell: { sheetId, spell, castAtLevel, repeat } });
                 void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0, paid: true });
               });
             },
@@ -587,7 +612,7 @@ export const useStore = create<StoreState>((set, get) => {
         });
         return;
       }
-      set({ castingSpell: { sheetId, spell, castAtLevel } });
+      set({ castingSpell: { sheetId, spell, castAtLevel, repeat } });
     },
     cancelCast: () => set({ castingSpell: null, castingMonsterSpell: null, aoe: null }),
     beginMonsterCast: (tokenId, spell, spellAttackBonus) => {
@@ -632,16 +657,23 @@ export const useStore = create<StoreState>((set, get) => {
     },
     bestiaryFocus: null,
     openBestiary: (id) => set({ bestiaryFocus: id }),
-    payCast: (sheetId, spell, castAtLevel) => {
+    payCast: (sheetId, spell, castAtLevel, repeat) => {
       const sheet = get().room?.sheets.find((s) => s.id === sheetId);
       if (!sheet) return false;
       const econ = economyKindOf(spell.actionType);
       if (econ && !get().spendEconomy(sheet.tokenId, econ)) return false;
+      if (repeat) return true; // re-use of a lasting spell: the first cast paid the slot
       const slot = spendSpellSlot(sheet, spell.level, castAtLevel);
+      // remember the slot level so later recasts roll that level's dice
+      const keepLevel =
+        spell.level > 0 && recastOf(spell)
+          ? { spells: (sheet.spells ?? []).map((s) => (s.id === spell.id ? { ...s, lastCastLevel: castAtLevel ?? spell.level } : s)) }
+          : {};
       if (!slot.available) {
         if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return false;
-      } else if (Object.keys(slot.patch).length > 0) {
-        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch }, base: sheet });
+        if (keepLevel.spells) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...keepLevel }, base: sheet });
+      } else if (Object.keys(slot.patch).length > 0 || keepLevel.spells) {
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch, ...keepLevel }, base: sheet });
       }
       return true;
     },
@@ -656,11 +688,11 @@ export const useStore = create<StoreState>((set, get) => {
       const castAtLevel = cast.castAtLevel && cast.castAtLevel > spell.level ? cast.castAtLevel : undefined;
       const pactLvl = spell.level > 0 && casterTypeOf(sheet) === 'pact' ? sheet.pactSlots?.level : undefined;
       const shownLvl = pactLvl && pactLvl > spell.level ? pactLvl : castAtLevel;
-      const label = `${sheet.name} · ${spell.name}${shownLvl ? ` (ô cấp ${shownLvl})` : ''}`;
+      const label = `${sheet.name} · ${spell.name}${shownLvl ? ` (ô cấp ${shownLvl})` : ''}${cast.repeat ? ' (lặp lại)' : ''}`;
       // An AOE cast resolves once per target hit (see `beginCast`'s aoe.onConfirm) — economy
       // and the spell slot must only be spent once per cast, on the first target.
       const firstTarget = !opts?.skipConc;
-      if (firstTarget && !opts?.paid && !get().payCast(sheetId, spell, cast.castAtLevel)) return;
+      if (firstTarget && !opts?.paid && !get().payCast(sheetId, spell, cast.castAtLevel, cast.repeat)) return;
 
       // Upcast: extra dice per slot level above the spell's own, read from the spell DB's
       // "Nâng ô: +1d6" guidance. Pact Magic always casts at the Pact slot level.
@@ -710,6 +742,27 @@ export const useStore = create<StoreState>((set, get) => {
           targetTokenId,
           { sheetId, tokenId: sheet.tokenId },
         );
+        // …and a save for its rider effect (Electrify: CON or stunned; Graviturgic Smite: STR or slowed)
+        const fs = spell.followSave ?? findCantrip(spell.name)?.followSave;
+        if (fs) {
+          rawSend({
+            t: 'spellSave',
+            targetTokenId,
+            ability: fs.ability,
+            dc,
+            label: `${label} (save)`,
+            sourceSheetId: sheetId,
+            effectOnFail: {
+              id: '',
+              name: fs.effect.name,
+              sourceSheetId: sheetId,
+              concentration: spell.concentration,
+              condition: fs.effect.condition,
+              note: fs.effect.note,
+              expiresRound: fs.effect.expiresInRounds ? (room.initiative.round ?? 1) + fs.effect.expiresInRounds : undefined,
+            },
+          });
+        }
         return;
       }
 
@@ -728,6 +781,12 @@ export const useStore = create<StoreState>((set, get) => {
         return;
       }
       if (spell.castKind === 'save' && spell.save) {
+        // creatures within N ft of the caster save with disadvantage
+        const within = spell.saveDisadvantageWithin ?? findCantrip(spell.name)?.saveDisadvantageWithin;
+        const casterTok = room.tokens.find((t) => t.id === sheet.tokenId);
+        const tgtTok = room.tokens.find((t) => t.id === targetTokenId);
+        const closeDis = within != null && casterTok && tgtTok && tgtTok.id !== casterTok.id && gridFeet(casterTok, tgtTok) <= within;
+        const sfx = spell.effect ? upcastEffect(spell.effect, spell.level, effLevel) : undefined;
         rawSend({
           t: 'spellSave',
           targetTokenId,
@@ -735,6 +794,7 @@ export const useStore = create<StoreState>((set, get) => {
           dc,
           label,
           sourceSheetId: sheetId,
+          rollMode: closeDis ? 'disadvantage' : undefined,
           damageOnFail:
             spellDamage && spellDamage.length
               ? spell.agonizingBlast && castMod
@@ -755,6 +815,8 @@ export const useStore = create<StoreState>((set, get) => {
                   spell.save.repeat && spell.save.repeat !== 'none'
                     ? { ability: spell.save.ability, dc, repeat: spell.save.repeat }
                     : undefined,
+                turnDamage: sfx?.turnDamage,
+                charges: sfx?.charges,
                 expiresRound: spell.effect.expiresInRounds
                   ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds
                   : undefined,
@@ -771,7 +833,11 @@ export const useStore = create<StoreState>((set, get) => {
         // each dealing the per-ray dice, +1 ray per slot level above when the DB says "Nâng ô: +1 tia".
         const guide = spell.level > 0 ? (findCantrip(spell.name)?.guidance ?? '') : '';
         const ray = /(\d+)\s*tia,\s*mỗi tia[^.]*?(\d+d\d+)/i.exec(guide);
-        const rayDamage = ray && spell.damage?.length ? [{ ...spell.damage[0], dice: ray[2] }] : undefined;
+        // "Nâng ô: +2d8 mỗi tia" adds to every ray; "+1 tia" adds rays instead (Scorching Ray)
+        const rayDamage =
+          ray && spell.damage?.length
+            ? [{ ...spell.damage[0], dice: ray[2] }, ...(upPart && !/Nâng ô:\s*\+1 tia/i.test(guide) ? [upPart] : []), ...spell.damage.slice(1)]
+            : undefined;
         const beams = ray
           ? Number(ray[1]) + (/Nâng ô:\s*\+1 tia(?!\s*\()/i.test(guide) ? Math.max(0, effLevel - spell.level) : 0)
           : spell.beams && spell.beams > 1 ? spell.beams : 1;
@@ -785,8 +851,38 @@ export const useStore = create<StoreState>((set, get) => {
             attackerSheetId: sheetId,
             attackerTokenId: sheet.tokenId,
             attackRange: inferAttackRange(spell.range),
+            attackKind: 'spell',
             pushFeetOnHit: spell.repellingBlast ? 10 : undefined,
           });
+        }
+        // burst spells: hit or miss, the area bursts — save-for-half for everyone around the target
+        const burst = spell.burst ?? findCantrip(spell.name)?.burst;
+        const tgt = burst ? get().room?.tokens.find((t) => t.id === targetTokenId) : undefined;
+        if (burst && tgt) {
+          const span = (t: { size: string }) => ({ tiny: 1, small: 1, medium: 1, large: 2, huge: 3, gargantuan: 4 } as Record<string, number>)[t.size] ?? 1;
+          const cur = get().room!;
+          const caught = aoeTokenIds(
+            { shape: 'sphere', size: burst.radiusFt },
+            'point',
+            { x: tgt.x + span(tgt) / 2, y: tgt.y + span(tgt) / 2 },
+            { x: tgt.x + span(tgt) / 2, y: tgt.y + span(tgt) / 2 },
+            cur.tokens.filter((t) => !t.hidden).map((t) => ({ id: t.id, x: t.x, y: t.y, span: span(t) })),
+          );
+          const aoeId = `burst-${Date.now().toString(36)}`;
+          const dice = burstDice(burst, spell.level, effLevel);
+          for (const id of caught) {
+            rawSend({
+              t: 'spellSave',
+              targetTokenId: id,
+              ability: burst.save,
+              dc,
+              label: `${label} (nổ ${burst.radiusFt}ft)`,
+              sourceSheetId: sheetId,
+              damageOnFail: [{ dice, type: burst.type, label: `${spell.name} (nổ)` }],
+              damageHalfOnSave: burst.halfOnSave,
+              aoeId,
+            });
+          }
         }
         return;
       }
@@ -812,7 +908,10 @@ export const useStore = create<StoreState>((set, get) => {
         get().activateWoodWose(sheet, { spendWildShape: true });
       }
       // Spells added before an effect was wired (e.g. Shillelagh) fall back to the DB definition.
-      const fx: Spell['effect'] = spell.effect ?? (spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined);
+      const fx0: Spell['effect'] = spell.effect ?? (spell.name === 'Shillelagh' ? findCantrip('Shillelagh')?.effect : undefined);
+      // scaling effects: dice and charges grow with the slot
+      const fx = fx0 ? upcastEffect(fx0, spell.level, effLevel) : undefined;
+      const fxConc = spell.concentration && !(fx?.upcast?.noConcentrationAt && effLevel >= fx.upcast.noConcentrationAt);
       if (fx) {
         rawSend({
           t: 'applyEffect',
@@ -821,15 +920,20 @@ export const useStore = create<StoreState>((set, get) => {
             id: '',
             name: fx.name || spell.name,
             sourceSheetId: sheetId,
-            concentration: spell.concentration,
+            concentration: fxConc,
             condition: fx.condition,
-            note: fx.note,
+            note: fx.charges != null ? `${fx.note ?? ''} · còn ${fx.charges} lần`.replace(/^ · /, '') : fx.note,
+            charges: fx.charges,
+            turnDamage: fx.turnDamage,
             rollBonus: fx.rollBonus,
             acBonus: fx.acBonus,
             acMin: fx.acMin,
             acBase: fx.acBase,
             retaliate: fx.retaliate,
             weaponImbue: fx.weaponImbue,
+            attackRiders: fx.attackRiders,
+            resist: fx.resist,
+            saveAdvantage: fx.saveAdvantage,
             expiresRound: fx.expiresInRounds
               ? (room.initiative.round ?? 1) + fx.expiresInRounds
               : undefined,
@@ -921,6 +1025,7 @@ export const useStore = create<StoreState>((set, get) => {
           targetTokenId,
           attackerTokenId: tokenId,
           attackRange: inferAttackRange(spell.range),
+          attackKind: 'spell',
         });
         return;
       }

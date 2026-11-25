@@ -86,6 +86,7 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
           attackerSheetId: sheet.id,
           attackerTokenId: self,
           attackRange: a.range ?? 'melee',
+          attackKind: 'weapon',
         });
         if (a.weapon) onWeaponFired?.();
         break;

@@ -109,6 +109,9 @@ import {
   type MadnessTables,
   type CharacterSheet,
   type MadnessTier,
+  effectSaveAdvantage,
+  passiveRangedCover,
+  type RollMode,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -364,6 +367,48 @@ export class Room {
         notes: damageBreakdownNotes(out),
       },
     });
+    if (eff.charges != null) this.spendEffectCharge(target, eff);
+  }
+
+  /** One use of a charged effect; it ends by itself when none are left. */
+  private spendEffectCharge(token: Token, eff: ActiveEffect): void {
+    const live = token.effects?.find((e) => e.id === eff.id);
+    if (!live || live.charges == null) return;
+    live.charges -= 1;
+    if (live.note) live.note = live.note.replace(/còn \d+ lần/, `còn ${live.charges} lần`);
+    if (live.charges > 0) return;
+    token.effects = (token.effects ?? []).filter((e) => e.id !== live.id);
+    this.systemLog(`${token.label}: ${live.name} hết lượt dùng — tự kết thúc`);
+  }
+
+  /** Start-of-turn damage from an effect. */
+  private applyTurnDamage(token: Token, e: ActiveEffect): void {
+    if (!e.turnDamage) return;
+    let rolled: number;
+    try {
+      rolled = rollNotation(e.turnDamage.dice).total;
+    } catch {
+      return;
+    }
+    const out = resolveDamageParts([{ part: { dice: e.turnDamage.dice, type: e.turnDamage.type }, raw: rolled }], this.effectiveDefenses(token));
+    const took = this.applyDamage(token, out.totalFinal);
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `${token.label}: ${e.name} → ${out.totalFinal} ${e.turnDamage.type} đầu lượt`,
+      result: externalRollResult(e.turnDamage.dice, { total: rolled, faces: [] }),
+      damage: {
+        targetTokenId: token.id,
+        targetName: token.label,
+        amount: took.applied,
+        raw: out.totalRaw,
+        damageType: e.turnDamage.type,
+        notes: damageBreakdownNotes(out),
+      },
+    });
+    this.maybeBreakConcentration(token, out.totalFinal);
   }
 
   // ---- God's Bane (homebrew party artifact, see shared/src/godsBane.ts). Every hook below returns early
@@ -974,14 +1019,23 @@ export class Room {
     dc: number,
     withCover = false,
     vsCondition?: ConditionType,
-  ): { d20: number; total: number; pass: boolean; bonus: number } {
+    forced?: RollMode,
+  ): { d20: number; total: number; pass: boolean; bonus: number; modeNote: string } {
     const sheet = this.linkedSheet(token);
     const bonus =
       this.tokenSaveBonus(token, ability) +
       (withCover && ability === 'dex' ? coverDexSaveBonus(token.cover) : 0) +
       // God's Bane: sworn PCs add N against mind-altering conditions.
       baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition);
-    let d20 = 1 + Math.floor(Math.random() * 20);
+    // advantage from the bearer's effects (effect save advantage) and a forced mode
+    // (close-range disadvantage) cancel each other like any 5e advantage/disadvantage
+    const adv = forced === 'advantage' || effectSaveAdvantage(token.effects, ability);
+    const dis = forced === 'disadvantage';
+    const mode: RollMode = adv && !dis ? 'advantage' : dis && !adv ? 'disadvantage' : 'normal';
+    const r1 = 1 + Math.floor(Math.random() * 20);
+    const r2 = 1 + Math.floor(Math.random() * 20);
+    let d20 = mode === 'advantage' ? Math.max(r1, r2) : mode === 'disadvantage' ? Math.min(r1, r2) : r1;
+    const modeNote = mode === 'normal' ? '' : ` (${mode === 'advantage' ? 'lợi thế' : 'bất lợi'} ${r1}/${r2})`;
     const causality = this.causalityD20({ sheetId: sheet?.id, enemy: !sheet });
     if (causality) {
       d20 = causality.natural;
@@ -989,7 +1043,7 @@ export class Room {
     }
     const total = d20 + bonus;
     const pass = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
-    return { d20, total, pass, bonus };
+    return { d20, total, pass, bonus, modeNote };
   }
 
   /** The token id that a rider/effect source resolves to (for concentration). */
@@ -1098,6 +1152,8 @@ export class Room {
     if (phase === 'start-of-turn') {
       // Reconstruction: auto-heal via Hit Die at the start of each of the bearer's turns.
       for (const e of token.effects ?? []) this.applyHitDieHealTick(token, e);
+      // damage at the start of the bearer's turn
+      for (const e of [...(token.effects ?? [])]) this.applyTurnDamage(token, e);
       // Rampant Growth: temp HP at the start of each of the bearer's turns (never stacks)
       for (const e of token.effects ?? []) {
         if (!e.turnTempHp) continue;
@@ -1630,7 +1686,12 @@ export class Room {
         }
         // Cover benefit is added to the target's AC automatically (homebrew).
         const baseAc = this.tokenAc(target);
-        const cover = target.cover ?? 'none';
+        const rawCover = target.cover ?? 'none';
+        // cover-reducing feat: ranged WEAPON attacks ignore half cover, three-quarters counts as half
+        const cover =
+          action.attackRange === 'ranged' && action.attackKind !== 'spell'
+            ? passiveRangedCover(action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : undefined, rawCover)
+            : rawCover;
         const ac = baseAc + coverAcBonus(cover);
         let attackRoll: RollResult;
         if (action.external) {
@@ -1719,11 +1780,11 @@ export class Room {
         }
 
         const coverNote =
-          cover === 'total'
+          (cover === 'total'
             ? ' · ⚠ mục tiêu che hoàn toàn'
             : cover !== 'none'
               ? ` · ${cover === 'half' ? 'nửa che' : '3/4 che'} (+${coverAcBonus(cover)} AC)`
-              : '';
+              : '') + (cover !== rawCover ? ' · feat giảm che chắn' : '');
 
         this.pushRoll({
           id: nanoid(8),
@@ -1796,6 +1857,14 @@ export class Room {
             },
           });
           this.retaliate(target, action.attackerTokenId, hadTemp, retEff, action.attackRange, actor);
+          // charged attack riders spend a use on every hit they added to
+          const atkTok = action.attackerTokenId ? this.state.tokens.find((t) => t.id === action.attackerTokenId) : undefined;
+          if (atkTok && res.hit) {
+            const labels = new Set(dmgParts.map((p) => p.label));
+            for (const e of [...(atkTok.effects ?? [])]) {
+              if (e.charges != null && e.attackRiders?.some((r) => labels.has(r.label))) this.spendEffectCharge(atkTok, e);
+            }
+          }
         }
         this.afterBaneAttack(target, { sheetId: baneSheetId, tokenId: baneAtkTok?.id }, withGodsBane, res.hit, actor);
         // Repelling Blast (2024): once on the attacker's own turn, push a hit target straight
@@ -2262,12 +2331,13 @@ export class Room {
             this.state.tokens.find((t) => t.id === action.sourceTokenId)?.controllerId ===
               actor.id);
         if (!isDm && !ownsSource) return 'Bạn chỉ ra phép từ nhân vật của mình';
-        const { d20, total, pass, bonus } = this.rollTokenSave(
+        const { d20, total, pass, bonus, modeNote } = this.rollTokenSave(
           target,
           action.ability,
           action.dc,
           true,
           action.effectOnFail?.condition,
+          action.rollMode,
         );
         const coverSave = action.ability === 'dex' ? coverDexSaveBonus(target.cover) : 0;
         this.pushRoll({
@@ -2275,7 +2345,7 @@ export class Room {
           ts: Date.now(),
           actorId: actor.id,
           actorName: actor.name,
-          label: `${action.label} → ${target.label}: ${action.ability.toUpperCase()} cứu ${total} vs DC ${action.dc}${
+          label: `${action.label} → ${target.label}: ${action.ability.toUpperCase()} cứu ${total}${modeNote} vs DC ${action.dc}${
             coverSave ? ` (gồm +${coverSave} che chắn)` : ''
           } — ${pass ? 'THOÁT' : 'DÍNH'}`,
           result: externalRollResult(`1d20${bonus >= 0 ? '+' : ''}${bonus}`, {

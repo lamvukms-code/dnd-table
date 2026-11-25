@@ -82,7 +82,11 @@ import {
   type SheetAction,
   type Spell,
   type SpellSlots,
+  type SpellRecast,
   type Token,
+  canRecastNow,
+  recastForm,
+  recastOf,
 } from '@dnd-table/shared';
 import { flashError, useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -105,7 +109,7 @@ import { SpellAdder } from './sheet/SpellAdder.js';
 import { FirearmControls } from './sheet/FirearmControls.js';
 import { MadnessPanel } from './sheet/MadnessPanel.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
-import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, jaegerLevel } from '@dnd-table/shared';
+import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, attackKindOf, featFeatureDefs, featureAttackMod, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
   str: 'STR',
@@ -1082,7 +1086,10 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 // Firearms: an empty / jammed gun can't fire; each shot spends a round from the barrel.
                 const gun = a.id.startsWith('weapon:') ? draft.inventory.find((it) => `weapon:${it.id}` === a.id && it.firearm) : undefined;
                 const commitItem = (it: InventoryItem) => commit({ ...draft, inventory: draft.inventory.map((x) => (x.id === it.id ? it : x)) });
-                const rowAction = gun?.firearm?.steadyArmed ? { ...a, name: `${a.name} (Steady)`, attackBonus: (a.attackBonus ?? 0) + draft.proficiencyBonus } : a;
+                const steady = gun?.firearm?.steadyArmed ? { ...a, name: `${a.name} (Steady)`, attackBonus: (a.attackBonus ?? 0) + draft.proficiencyBonus } : a;
+                // armed feature riders that change the attack roll (e.g. −5 to hit / +10 damage)
+                const atkMod = typeof steady.attackBonus === 'number' ? featureAttackMod(draft, attackKindOf(steady), steady) : 0;
+                const rowAction = atkMod ? { ...steady, name: `${steady.name} (${atkMod > 0 ? '+' : ''}${atkMod})`, attackBonus: steady.attackBonus! + atkMod } : steady;
                 const rowParts = actionDamageParts(draft, a, linkedToken?.effects, { monkFlurryActive: flurryActive });
                 const spendRow = (attack: boolean) => {
                   if (gun && attack) {
@@ -1173,6 +1180,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                               attackerSheetId: draft.id,
                               attackerTokenId: draft.tokenId || undefined,
                               attackRange: attackRangeOf(a),
+                              attackKind: attackKindOf(a),
                               grappleOnHit: { dc: grappleDc(draft) },
                             });
                           },
@@ -1285,6 +1293,7 @@ function ActionRow({
     attackerSheetId?: string;
     attackerTokenId?: string;
     attackRange?: AttackRange;
+    attackKind?: 'weapon' | 'spell';
   }) => Promise<void>;
   damageRoll: (
     label: string,
@@ -1360,6 +1369,7 @@ function ActionRow({
               attackerSheetId: attacker.sheetId,
               attackerTokenId: attacker.tokenId,
               attackRange: attackRangeOf(action),
+              attackKind: attackKindOf(action),
             });
             // Armed riders (Sneak Attack, Booming Blade, Finishers…) are disarmed by the server on a hit.
           }}
@@ -1980,7 +1990,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
 function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
   const used = { ...(sheet.subclassUses ?? {}) };
   let changed = false;
-  for (const f of derivedSubclassFeatures(sheet, SUBCLASS_DEFS)) {
+  for (const f of [...derivedSubclassFeatures(sheet, SUBCLASS_DEFS), ...featFeatureDefs(sheet)]) {
     if (f.uses && (kind === 'long' || f.uses.recharge === 'short') && used[f.id]) {
       delete used[f.id];
       changed = true;
@@ -2156,7 +2166,8 @@ function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
 
 /** Subclass features, from the DM's local subclass data file. Separate from class features. */
 function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: string }) {
-  const feats = derivedSubclassFeatures(draft, SUBCLASS_DEFS);
+  // subclass features + local feats that carry buttons / uses (setting feats…)
+  const feats = [...derivedSubclassFeatures(draft, SUBCLASS_DEFS), ...featFeatureDefs(draft)];
   if (feats.length === 0) return null;
   const used = draft.subclassUses ?? {};
   const setUse = (id: string, n: number) =>
@@ -2165,7 +2176,7 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
   return (
     <details className="class-features subclass-features">
       <summary>
-        ✦ Subclass features
+        ✦ Subclass & feat
         <span className="cf-count">{feats.length}</span>
       </summary>
       <div className="cf-list">
@@ -2363,6 +2374,8 @@ const CAST_KIND_LABEL: Record<Spell['castKind'], string> = {
 
 function SpellsTab({ draft, commit }: EditorCtx) {
   const beginCast = useStore((s) => s.beginCast);
+  // what the linked token concentrates on — lasting spells (Call Lightning…) re-use without a slot while it holds
+  const concOn = useStore((s) => s.room?.tokens.find((t) => t.id === draft.tokenId)?.concentration?.name);
   const casting = useStore((s) => s.castingSpell);
   const caster = casterTypeOf(draft);
   const ability = spellcastingAbilityOf(draft);
@@ -2448,6 +2461,16 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 sp={sp}
                 canCast={caster !== 'none'}
                 onCast={(castAtLevel) => beginCast(draft.id, sp, castAtLevel)}
+                onRecast={
+                  canRecastNow(sp, concOn)
+                    ? () => {
+                        const rc = recastOf(sp)!;
+                        const lvl = sp.lastCastLevel && sp.lastCastLevel > sp.level ? sp.lastCastLevel : undefined;
+                        beginCast(draft.id, recastForm(sp, rc), rc.dice ? undefined : lvl, true);
+                      }
+                    : undefined
+                }
+                recastHint={recastOf(sp)}
                 caster={caster}
                 spellSlots={draft.spellSlots}
                 showAgonizingBlast={wl > 0}
@@ -2478,6 +2501,8 @@ function SpellRow({
   caster,
   spellSlots,
   onCast,
+  onRecast,
+  recastHint,
   onChange,
   onRescale,
   onDelete,
@@ -2494,6 +2519,9 @@ function SpellRow({
   caster?: CasterType;
   spellSlots?: SpellSlots[];
   onCast: (castAtLevel?: number) => void;
+  /** Lasting spell still up (Call Lightning while concentrating): re-use it without a slot. */
+  onRecast?: () => void;
+  recastHint?: SpellRecast;
   onChange: (p: Partial<Spell>) => void;
   onRescale?: () => void;
   onDelete: () => void;
@@ -2605,6 +2633,17 @@ function SpellRow({
             title="Ra phép (chọn mục tiêu)"
           >
             🪄
+          </button>
+        )}
+        {canCast && onRecast && (
+          <button
+            className="roll-btn"
+            onClick={onRecast}
+            title={`Lặp lại phép đang duy trì — không tốn ô phép${
+              recastHint?.economy === 'action' ? ', tốn 1 action' : recastHint?.economy === 'bonus' ? ', tốn 1 bonus action' : ''
+            }${recastHint?.dice ? ` (${recastHint.dice})` : ''}${sp.lastCastLevel && sp.lastCastLevel > sp.level ? `, giữ ô cấp ${sp.lastCastLevel}` : ''}`}
+          >
+            🔁
           </button>
         )}
         <button className="link" onClick={() => setOpen(!open)}>

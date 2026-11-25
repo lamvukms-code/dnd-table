@@ -352,19 +352,20 @@ export function unarmedAction(sheet: CharacterSheet): SheetAction {
   };
 }
 
-/**
- * The kind of attack a `SheetAction` is: a physical/weapon strike or a spell
- * attack. Drives which standing riders and class features (Rage, Sneak Attack)
- * apply. Explicit `action.attackKind` wins; equipped weapons are 'weapon';
- * everything else (manual rows) defaults to 'weapon' too.
- */
 /** The unarmed strike rows: the basic one everyone has, and the Monk's Martial Arts versions
  *  (the Attack-action one, and the Bonus Action one — free strike or Flurry of Blows). */
 export function isUnarmedAction(action: Pick<SheetAction, 'id'>): boolean {
   return action.id === 'unarmed' || action.id === 'monk-unarmed' || action.id === 'monk-unarmed-bonus';
 }
-export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
-  return action.attackKind ?? 'weapon';
+/**
+ * The kind of attack an action is: a physical/weapon strike or a spell attack. Drives which
+ * standing riders and class features (Rage, Sneak Attack, weapon-only feats)
+ * apply. Explicit `attackKind` wins; a description reading "… Spell Attack …" (stat blocks,
+ * pasted rows) is a spell; everything else — equipped weapons, manual rows — is a weapon.
+ */
+export function attackKindOf(action: SheetAction | { attackKind?: 'weapon' | 'spell'; description?: string }): 'weapon' | 'spell' {
+  if (action.attackKind) return action.attackKind;
+  return /Spell Attack/i.test(action.description ?? '') ? 'spell' : 'weapon';
 }
 
 /**

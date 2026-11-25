@@ -1,4 +1,4 @@
-import type {
+import type { SpellBurst, SpellEffectUpcast, SpellRecast,
   Ability,
   CharacterSheet,
   ConditionType,
@@ -64,10 +64,20 @@ export interface CantripDef {
     acBonus?: number;
     acMin?: number;
     acBase?: number;
-    /** Melee attackers take this while the bearer has temp HP (Armor of Agathys). */
-    retaliate?: { dice: string; type: string };
+    /** Melee attackers take this while the bearer has temp HP (Armor of Agathys); `always` = every hit. */
+    retaliate?: { dice: string; type: string; always?: boolean };
     /** Shillelagh: reshape matching weapon attacks (see WeaponImbue). */
     weaponImbue?: WeaponImbue;
+    /** Extra damage on the bearer's own weapon (or `melee`-only) hits while it lasts. */
+    attackRiders?: { dice: string; type: string; label: string; melee?: boolean }[];
+    resist?: string[];
+    saveAdvantage?: Ability[];
+    /** Slot-level scaling of the effect's own dice / charges. */
+    upcast?: SpellEffectUpcast;
+    /** Uses before the effect ends by itself. */
+    charges?: number;
+    /** Damage the bearer takes at the start of each of its turns. */
+    turnDamage?: { dice: string; type: string };
   };
   /** Temp HP granted to the target ('2d4+4', '5'); doesn't stack. */
   tempHp?: string;
@@ -81,6 +91,18 @@ export interface CantripDef {
   aliases?: string[];
   /** Short Vietnamese paraphrase of the SRD mechanic + how the app handles it. */
   guidance: string;
+  /** Book / setting of a spell registered from local data; unset = SRD. */
+  source?: string;
+  /** Damage spells whose hit also forces a save for a rider effect (Electrify: CON or stunned). */
+  followSave?: { ability: Ability; effect: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number } };
+  /** Re-used on later turns without a slot while it lasts (Call Lightning, Witch Bolt…). */
+  recast?: SpellRecast;
+  /** More damage parts of other types after the main one (e.g. radiant + force). */
+  extraDamage?: { dice: string; type: string }[];
+  /** Save spells: targets this close to the caster save with disadvantage. */
+  saveDisadvantageWithin?: number;
+  /** Spell attacks that burst around the target, hit or miss. */
+  burst?: SpellBurst;
 }
 
 /** Cantrip damage multiplier by character level (5e 2024: 1 / 2 / 3 / 4 dice). */
@@ -269,7 +291,8 @@ const L1: CantripDef[] = [
     { combat: true, castKind: 'attack', fixedDamage: '3d8', damageType: 'fire', range: '90ft' }),
   S1('witch-bolt', 'Witch Bolt', 'Evocation', ['sorcerer', 'wizard'],
     'Đòn đánh phép tầm 30ft, 2d12 sét, tập trung. Mỗi lượt sau dùng action gây lại 1d12 (miễn còn trong tầm 30ft). Nâng ô: +1d12 đòn đầu.',
-    { combat: true, castKind: 'attack', fixedDamage: '2d12', damageType: 'lightning', range: '30ft', concentration: true }),
+    { combat: true, castKind: 'attack', fixedDamage: '2d12', damageType: 'lightning', range: '30ft', concentration: true,
+      recast: { economy: 'action', castKind: 'damage', dice: '1d12' } }),
   S1('ray-of-sickness', 'Ray of Sickness', 'Necromancy', ['sorcerer', 'wizard'],
     'Đòn đánh phép tầm 60ft. Trúng: 2d8 độc; mục tiêu chịu save CON (DM/hệ thống qua panel Hiệu ứng), thất bại → Trúng độc tới cuối lượt sau của bạn. Nâng ô: +1d8.',
     { combat: true, castKind: 'attack', fixedDamage: '2d8', damageType: 'poison', range: '60ft',
@@ -487,14 +510,16 @@ const L2: CantripDef[] = [
       effect: { name: 'Acid Arrow (2d4 lượt sau)', note: 'Chịu 2d4 axit vào đầu lượt kế của nó', expiresInRounds: 1 } }),
   S2('spiritual-weapon', 'Spiritual Weapon', 'Evocation', ['cleric'],
     'Bonus action, tạo vũ khí linh hồn tầm 60ft: đòn đánh phép, trúng 1d8 + chỉ số ra phép lực. Bonus action các lượt sau để bay 20ft và đánh lại. Nâng ô: +1d8 mỗi 2 cấp.',
-    { combat: true, castKind: 'attack', fixedDamage: '1d8', addSpellMod: true, damageType: 'force', actionType: 'bonus', range: '60ft' }),
+    { combat: true, castKind: 'attack', fixedDamage: '1d8', addSpellMod: true, damageType: 'force', actionType: 'bonus', range: '60ft',
+      recast: { economy: 'bonus' } }),
   // --- auto-hit ---
   S2('cloud-of-daggers', 'Cloud of Daggers', 'Conjuration', ['bard', 'sorcerer', 'warlock', 'wizard'],
     'Khối 5ft tầm 60ft, tập trung 1 phút: sinh vật vào / bắt đầu lượt trong đó chịu 4d4 chém (không save). Nâng ô: +2d4.',
-    { combat: true, castKind: 'damage', fixedDamage: '4d4', damageType: 'slashing', concentration: true, range: '60ft', area: 'khối 5ft' }),
+    { combat: true, castKind: 'damage', fixedDamage: '4d4', damageType: 'slashing', concentration: true, range: '60ft', area: 'khối 5ft',
+      recast: { economy: 'free' } }),
   S2('heat-metal', 'Heat Metal', 'Transmutation', ['bard', 'druid'],
     'Nung 1 vật kim loại (giáp/vũ khí) tầm 60ft, tập trung 1 phút: 2d8 lửa ngay và mỗi bonus action sau. Ai cầm/mặc save CON hoặc rơi vật / bất lợi tới lượt sau. Nâng ô: +1d8.',
-    { combat: true, castKind: 'damage', fixedDamage: '2d8', damageType: 'fire', concentration: true, range: '60ft',
+    { combat: true, castKind: 'damage', fixedDamage: '2d8', damageType: 'fire', concentration: true, range: '60ft', recast: { economy: 'bonus' },
       effect: { name: 'Heat Metal', note: 'Bonus action lặp 2d8; save CON hoặc rơi vật / bất lợi', expiresInRounds: 10 } }),
   // --- saving throw (half on save) ---
   S2('shatter', 'Shatter', 'Evocation', ['bard', 'sorcerer', 'warlock', 'wizard'],
@@ -502,10 +527,12 @@ const L2: CantripDef[] = [
     { combat: true, castKind: 'save', save: 'con', fixedDamage: '3d8', damageType: 'thunder', halfOnSave: true, range: '60ft', area: 'cầu 10ft' }),
   S2('moonbeam', 'Moonbeam', 'Evocation', ['druid'],
     'Trụ 5ft tầm 120ft, tập trung 1 phút. Sinh vật vào / bắt đầu lượt trong trụ save CON, 2d10 thánh, thành công ăn nửa. Bonus action dời trụ 60ft. Nâng ô: +1d10.',
-    { combat: true, castKind: 'save', save: 'con', fixedDamage: '2d10', damageType: 'radiant', halfOnSave: true, concentration: true, range: '120ft', area: 'trụ tròn bán kính 5ft, cao 40ft' }),
+    { combat: true, castKind: 'save', save: 'con', fixedDamage: '2d10', damageType: 'radiant', halfOnSave: true, concentration: true, range: '120ft', area: 'trụ tròn bán kính 5ft, cao 40ft',
+      recast: { economy: 'free' } }),
   S2('flaming-sphere', 'Flaming Sphere', 'Conjuration', ['druid', 'wizard'],
     'Cầu lửa 5ft tầm 60ft, tập trung 1 phút. Sinh vật kề bên / bị lăn vào save DEX, 2d6 lửa, thành công ăn nửa. Bonus action lăn cầu 30ft. Nâng ô: +1d6.',
-    { combat: true, castKind: 'save', save: 'dex', fixedDamage: '2d6', damageType: 'fire', halfOnSave: true, concentration: true, range: '60ft', area: 'cầu đường kính 5ft (di chuyển được)' }),
+    { combat: true, castKind: 'save', save: 'dex', fixedDamage: '2d6', damageType: 'fire', halfOnSave: true, concentration: true, range: '60ft', area: 'cầu đường kính 5ft (di chuyển được)',
+      recast: { economy: 'bonus' } }),
   // --- saving throw (condition) ---
   S2('hold-person', 'Hold Person', 'Enchantment', ['bard', 'cleric', 'druid', 'sorcerer', 'warlock', 'wizard'],
     'Tầm 60ft, 1 Humanoid, save WIS, tập trung 1 phút. Fail → Tê liệt (Paralyzed); cứu WIS lại cuối mỗi lượt của nó. Đánh trúng trong 5ft = chí mạng.',
@@ -709,7 +736,8 @@ const L3: CantripDef[] = [
     { combat: true, castKind: 'save', save: 'dex', fixedDamage: '8d6', damageType: 'lightning', halfOnSave: true, range: 'Bản thân', area: 'tia dài 100ft, rộng 5ft' }),
   S3('call-lightning', 'Call Lightning', 'Conjuration', ['druid'],
     'Tập trung 10 phút: tạo đám mây bão. Mỗi lượt dùng action gọi 1 tia xuống điểm trong 120ft — sinh vật trong 5ft save DEX, 3d10 sét, nửa khi thành công (+1d10 nếu trời đang bão). Nâng ô: +1d10.',
-    { combat: true, castKind: 'save', save: 'dex', fixedDamage: '3d10', damageType: 'lightning', halfOnSave: true, concentration: true, range: '120ft', area: 'sét đánh: cầu 5ft quanh điểm chọn' }),
+    { combat: true, castKind: 'save', save: 'dex', fixedDamage: '3d10', damageType: 'lightning', halfOnSave: true, concentration: true, range: '120ft', area: 'sét đánh: cầu 5ft quanh điểm chọn',
+      recast: { economy: 'action' } }),
   S3('spirit-guardians', 'Spirit Guardians', 'Conjuration', ['cleric'],
     'Toả 15ft quanh bạn, tập trung 10 phút. Kẻ địch trong vùng: tốc độ giảm nửa; khi vào / bắt đầu lượt trong vùng save WIS, 3d8 thánh (hoặc hoại tử — chọn), nửa khi thành công. Nâng ô: +1d8.',
     { combat: true, castKind: 'save', save: 'wis', fixedDamage: '3d8', damageType: 'radiant', halfOnSave: true, concentration: true, range: 'Bản thân', area: 'toả 15ft',
@@ -729,7 +757,8 @@ const L3: CantripDef[] = [
   // --- damage (auto / đòn đánh) ---
   S3('vampiric-touch', 'Vampiric Touch', 'Necromancy', ['sorcerer', 'warlock', 'wizard'],
     'Đòn đánh phép chạm, tập trung 1 phút. Trúng: 3d6 hoại tử và bạn hồi nửa số đó. Mỗi lượt dùng action đánh lại. Nâng ô: +1d6.',
-    { combat: true, castKind: 'attack', fixedDamage: '3d6', damageType: 'necrotic', concentration: true, range: 'Chạm' }),
+    { combat: true, castKind: 'attack', fixedDamage: '3d6', damageType: 'necrotic', concentration: true, range: 'Chạm',
+      recast: { economy: 'action' } }),
   S3('hunger-of-hadar', 'Hunger of Hadar', 'Conjuration', ['warlock'],
     'Cầu tối 20ft tầm 150ft, tập trung 1 phút: tối hoàn toàn, địa hình khó, sinh vật bên trong bị Mù. Bắt đầu lượt trong đó: 2d6 băng. Kết thúc lượt trong đó: save DEX hoặc 2d6 axit. App: gắn 2d6 băng, ghi chú phần axit.',
     { combat: true, castKind: 'damage', fixedDamage: '2d6', damageType: 'cold', concentration: true, range: '150ft', area: 'cầu 20ft',
@@ -887,6 +916,112 @@ function norm(s: string | undefined): string {
 }
 
 /** Look up a spell definition (cantrip or level-1) by (loose) name. */
+/**
+ * Add spells from the DM's local (git-ignored) data — a setting's own spells, written in the same
+ * shape as the SRD entries — so they show in the spell picker with their automation and are found
+ * by name when cast (upcast dice, rays…). Already-known names are skipped.
+ */
+export function registerExtraSpells(defs: CantripDef[]): void {
+  const have = new Set(SRD_SPELLS.map((d) => norm(d.name)));
+  for (const d of defs) {
+    if (have.has(norm(d.name))) continue;
+    SRD_SPELLS.push(d);
+    have.add(norm(d.name));
+  }
+}
+
+/** How a spell is re-used on later turns, if it is (Call Lightning, Witch Bolt…). Old sheets fall back to the DB. */
+export function recastOf(spell: Spell): SpellRecast | undefined {
+  return spell.recast ?? findCantrip(spell.name)?.recast;
+}
+
+/**
+ * Concentration spells can only be re-used while the caster still concentrates on them; the rest
+ * (Spiritual Weapon) have no tracked duration, so the button stays and the player judges.
+ */
+export function canRecastNow(spell: Spell, concentratingOn: string | undefined): boolean {
+  if (spell.level === 0 || !recastOf(spell)) return false;
+  if (!spell.concentration) return true;
+  return !!concentratingOn && concentratingOn.toLowerCase().includes(spell.name.toLowerCase());
+}
+
+/**
+ * The spell as re-used on a later turn: no slot, no new concentration, effects tied to the
+ * concentration (already on the target from the first cast) not placed again, and the action
+ * economy from the recast. A repeat with its own dice (Witch Bolt 1d12) doesn't upcast: level 0
+ * keeps the upcast parser and Pact slot level out of it.
+ */
+export function recastForm(spell: Spell, rc: SpellRecast): Spell {
+  const out: Spell = {
+    ...spell,
+    concentration: false,
+    actionType: rc.economy,
+    // a changed form never re-places the first cast's reminder effect
+    effect: spell.concentration || rc.castKind ? undefined : spell.effect,
+    burst: undefined,
+  };
+  if (rc.castKind) {
+    out.castKind = rc.castKind;
+    out.save = rc.castKind === 'save' && rc.save ? { ability: rc.save, halfOnSave: rc.halfOnSave || undefined } : rc.castKind === 'save' ? spell.save : undefined;
+  }
+  if (rc.dice) {
+    out.damage = [{ dice: rc.dice, type: rc.type ?? spell.damage?.[0]?.type ?? '', label: spell.name }];
+    if (!rc.upcast) out.level = 0;
+    out.beams = undefined;
+  }
+  return out;
+}
+
+/** "2d4" + "1d4" → "3d4"; different dice are joined ("1d6+1d4"). */
+export function addDice(a: string, b: string): string {
+  if (!b) return a;
+  if (!a) return b;
+  const ma = /^(\d+)d(\d+)$/.exec(a);
+  const mb = /^(\d+)d(\d+)$/.exec(b);
+  if (ma && mb && ma[2] === mb[2]) return `${Number(ma[1]) + Number(mb[1])}d${ma[2]}`;
+  return `${a}+${b}`;
+}
+
+/** `dice` × n ("2d4" × 3 → "6d4"). */
+export function timesDice(dice: string, n: number): string {
+  if (n <= 0) return '';
+  const m = /^(\d+)d(\d+)$/.exec(dice);
+  return m ? `${Number(m[1]) * n}d${m[2]}` : Array.from({ length: n }, () => dice).join('+');
+}
+
+type ScalableEffect = {
+  attackRiders?: { dice: string; type: string; label: string; melee?: boolean }[];
+  retaliate?: { dice: string; type: string; always?: boolean };
+  turnDamage?: { dice: string; type: string };
+  charges?: number;
+  upcast?: SpellEffectUpcast;
+};
+
+/** An effect's dice / charges at the slot level actually used (`base` = the spell's own level). */
+export function upcastEffect<E extends ScalableEffect>(fx: E, base: number, slot: number): E {
+  const up = fx.upcast;
+  if (!up || slot <= base) return fx;
+  const steps = slot - base;
+  let table: string | undefined;
+  if (up.byLevel) {
+    const best = Object.keys(up.byLevel).map(Number).filter((k) => k <= slot).sort((x, y) => y - x)[0];
+    table = best != null ? up.byLevel[String(best)] : undefined;
+  }
+  const scale = (d: string) => addDice(table ?? d, up.perLevel ? timesDice(up.perLevel, steps) : '');
+  return {
+    ...fx,
+    attackRiders: fx.attackRiders?.map((r) => ({ ...r, dice: scale(r.dice) })),
+    retaliate: fx.retaliate ? { ...fx.retaliate, dice: scale(fx.retaliate.dice) } : undefined,
+    turnDamage: fx.turnDamage ? { ...fx.turnDamage, dice: scale(fx.turnDamage.dice) } : undefined,
+    charges: fx.charges != null ? fx.charges + (up.chargesPerLevel ?? 0) * steps : undefined,
+  };
+}
+
+/** The burst's damage at the slot level used. */
+export function burstDice(b: SpellBurst, base: number, slot: number): string {
+  return addDice(b.dice, b.perLevel ? timesDice(b.perLevel, slot - base) : '');
+}
+
 export function findCantrip(name: string): CantripDef | undefined {
   const n = norm(name);
   return SRD_SPELLS.find((c) => norm(c.name) === n);
@@ -961,7 +1096,7 @@ function defDamageParts(def: CantripDef, sheet: CharacterSheet): DamagePart[] | 
     const m = castMod(sheet, { castingClass: castingClassFor(def, sheet) });
     if (m) dice = `${dice}${m > 0 ? '+' : ''}${m}`;
   }
-  return [{ dice, type: def.damageType ?? '', label: def.name }];
+  return [{ dice, type: def.damageType ?? '', label: def.name }, ...(def.extraDamage ?? []).map((p) => ({ ...p, label: def.name }))];
 }
 
 /** Build a ready-to-add spell from a def, damage scaled/fixed for the sheet. */
@@ -993,6 +1128,10 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
         ? { ...def.effect }
         : undefined,
     tempHp: def.tempHp,
+    followSave: def.followSave,
+    recast: def.recast,
+    saveDisadvantageWithin: def.saveDisadvantageWithin,
+    burst: def.burst,
     range: def.range,
     area: def.area,
     notes: def.guidance,

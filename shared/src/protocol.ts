@@ -2,6 +2,7 @@ import type { MadnessTier } from './madness.js';
 import type {
   Ability,
   ActiveEffect,
+  RollMode,
   TurnUsed,
   AttackRange,
   BattleMap,
@@ -54,6 +55,8 @@ export type ClientAction =
       attackerTokenId?: string;
       /** Melee or ranged delivery (drives Armor of Agathys retaliation, ranged-in-melee). */
       attackRange?: AttackRange;
+      /** Weapon strike or spell attack (cover-reducing feats only apply to weapons). Unset = weapon. */
+      attackKind?: 'weapon' | 'spell';
       /** Repelling Blast (2024): on a hit, push the target this many feet straight away from the
        *  attacker. Gated server-side to once per attacker turn via `turnUsed.repellingPush`. */
       pushFeetOnHit?: number;
@@ -112,6 +115,8 @@ export type ClientAction =
       aoeId?: string;
       sourceSheetId?: string;
       sourceTokenId?: string;
+      /** Forced roll mode for this save (e.g. disadvantage within 5 ft); effects' save advantage still applies. */
+      rollMode?: RollMode;
     }
   // heal a target token (adds HP, clamped to its max)
   | {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { featureRiders, subclassUsesMax, type CharacterSheet, type DamageRider } from '@dnd-table/shared';
+import { featFeatureDefs, featureRiders, subclassUsesMax, type CharacterSheet, type DamageRider } from '@dnd-table/shared';
 import { SUBCLASS_DEFS } from '../../subclassData.js';
 import { nanoIdish } from '../../util.js';
 import { DamageTypeSelect } from '../DefensesEditor.js';
@@ -46,7 +46,7 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
     const next = on ? [...armed].filter((x) => x !== id) : [...armed, id];
     let uses = used;
     if (spendsUse) {
-      const def = SUBCLASS_DEFS.find((d) => d.id === featureId);
+      const def = SUBCLASS_DEFS.find((d) => d.id === featureId) ?? featFeatureDefs(sheet).find((d) => d.id === featureId);
       const max = def?.uses ? subclassUsesMax(def.uses.max, sheet) : 0;
       const u = used[featureId] ?? 0;
       if (!on && max && u >= max && !window.confirm(`${def?.name}: đã hết lượt dùng. Vẫn bật?`)) return;
@@ -94,7 +94,8 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
               title={`Năng lực, 1 lần/lượt: bật trước khi tung ${cond}${r.rider.spendsUse ? ' (tốn 1 lượt dùng)' : ''}`}
               onClick={() => toggleFeat(r.id, r.featureId, r.rider.spendsUse)}
             >
-              ⚔ {r.label} +{r.dice}
+              ⚔ {r.label}
+              {r.rider.attackMod ? ` ${r.rider.attackMod > 0 ? '+' : ''}${r.rider.attackMod} trúng /` : ''} +{r.dice}
               {typeText(r.type)}
               <em className="fr-once"> 1 lần</em>
             </button>

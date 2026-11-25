@@ -322,6 +322,10 @@ describe('multi-source damage', () => {
     expect(labels).toEqual([undefined, 'Spl']); // primary + spell rider; no Wpn, no Sneak Attack
     expect(attackKindOf(spellAtk)).toBe('spell');
     expect(attackKindOf({ id: 'y', name: 'Club', actionType: 'action' })).toBe('weapon');
+    // stat-block / pasted rows: "Spell Attack" in the description marks a spell attack
+    expect(attackKindOf({ description: 'Ranged Spell Attack: +5 to hit, range 120 ft.' })).toBe('spell');
+    expect(attackKindOf({ description: 'Melee Weapon Attack: +5 to hit, reach 5 ft.' })).toBe('weapon');
+    expect(attackKindOf({ attackKind: 'weapon', description: 'Spell Attack' })).toBe('weapon');
     expect(riderParts(s, 'weapon').map((p) => p.label)).toEqual(['Wpn']);
   });
 

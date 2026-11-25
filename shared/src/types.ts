@@ -272,6 +272,8 @@ export interface InventoryItem {
   /** Magic items only — common/uncommon/rare/very rare/legendary/artifact (free text). */
   rarity?: string;
   proficient?: boolean;
+  /** Weapon has the Heavy property. Unset = guessed from the SRD weapon name. */
+  heavy?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
 
@@ -536,6 +538,10 @@ export interface ActiveEffect {
   attackRiders?: { dice: string; type: string; label: string; melee?: boolean }[];
   /** Damage types the bearer resists while active (Mighty Trunk). */
   resist?: string[];
+  /** Ends by itself once these uses are spent: each retaliation or attack-rider hit spends one. */
+  charges?: number;
+  /** Damage the bearer takes at the start of each of its turns. */
+  turnDamage?: { dice: string; type: string };
   /** Ends when the bearer drops to 0 HP or gains an incapacitating condition (Wood Wose). */
   endsWhenDown?: boolean;
   /** Auto-spends 1 Hit Die of this size at the start of each of the bearer's turns (and once
@@ -572,6 +578,47 @@ export type CasterType = 'full' | 'half' | 'third' | 'pact' | 'none';
 
 /** How a spell is used when cast at a target. */
 export type SpellCastKind = 'attack' | 'save' | 'rider' | 'utility' | 'heal' | 'damage';
+
+/**
+ * A spell re-used on later turns while it lasts (Call Lightning, Witch Bolt, Spiritual Weapon):
+ * no new spell slot and no new concentration — only the action economy below. `castKind` / `dice`
+ * replace the first cast's form when the repeat is different (Witch Bolt: auto 1d12, no attack roll).
+ */
+export interface SpellRecast {
+  economy: 'action' | 'bonus' | 'free';
+  castKind?: SpellCastKind;
+  dice?: string;
+  /** Damage type of `dice` when the first cast has none. */
+  type?: string;
+  /** The repeat is a save. */
+  save?: Ability;
+  halfOnSave?: boolean;
+  /** `dice` still adds the spell's "Nâng ô: +XdY" for the slot level of the first cast. */
+  upcast?: boolean;
+}
+
+/** How an effect placed by a spell grows with the slot level. */
+export interface SpellEffectUpcast {
+  /** Replacement dice by slot level, highest key ≤ slot. */
+  byLevel?: Record<string, string>;
+  /** Added per slot level above the spell's own. */
+  perLevel?: string;
+  /** Extra charges per slot level above. */
+  chargesPerLevel?: number;
+  /** From this slot level on the effect no longer needs concentration. */
+  noConcentrationAt?: number;
+}
+
+/** A save-for-half area that bursts around the target after a spell attack. */
+export interface SpellBurst {
+  radiusFt: number;
+  save: Ability;
+  dice: string;
+  type: string;
+  halfOnSave?: boolean;
+  /** Added to `dice` per slot level above the spell's own. */
+  perLevel?: string;
+}
 
 /** One class of a (possibly multiclassed) character. */
 export interface ClassEntry {
@@ -632,9 +679,29 @@ export interface Spell {
     acBonus?: number;
     acMin?: number;
     acBase?: number;
-    retaliate?: { dice: string; type: string };
+    retaliate?: { dice: string; type: string; always?: boolean };
     weaponImbue?: WeaponImbue;
+    /** Extra damage on the bearer's own weapon (or `melee`-only) hits while it lasts. */
+    attackRiders?: { dice: string; type: string; label: string; melee?: boolean }[];
+    resist?: string[];
+    saveAdvantage?: Ability[];
+    /** Slot-level scaling of the effect's own dice / charges. */
+    upcast?: SpellEffectUpcast;
+    /** Uses before the effect ends by itself. */
+    charges?: number;
+    /** Damage the bearer takes at the start of each of its turns. */
+    turnDamage?: { dice: string; type: string };
   };
+  /** Damage spells whose hit also forces a save for a rider effect (Electrify: CON or stunned). */
+  followSave?: { ability: Ability; effect: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number } };
+  /** Save spells: targets within this many feet of the caster save with disadvantage. */
+  saveDisadvantageWithin?: number;
+  /** Spell attacks that burst around the target, hit or miss. */
+  burst?: SpellBurst;
+  /** Re-usable on later turns without a slot while it lasts (see SpellRecast). */
+  recast?: SpellRecast;
+  /** Slot level of the last real cast — a recast keeps that level's dice. */
+  lastCastLevel?: number;
   /** Temp HP granted to the target: dice / number ('2d4+4', '5'). Doesn't stack. */
   tempHp?: string;
   range?: string;

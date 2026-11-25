@@ -289,6 +289,14 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                     />
                     Thành thạo
                   </label>
+                  <label className="chk" title="Thuộc tính Heavy (feat chỉ dùng với vũ khí nặng). Để trống thì đoán theo tên vũ khí SRD.">
+                    <input
+                      type="checkbox"
+                      checked={it.heavy ?? /great\s?(sword|axe)|maul|halberd|glaive|pike|heavy crossbow|longbow|lance/i.test(it.name)}
+                      onChange={(e) => setItem(it.id, { heavy: e.target.checked })}
+                    />
+                    Heavy
+                  </label>
                   <label>
                     +đánh phụ
                     <input

@@ -1,6 +1,8 @@
 import type { Ability, CharacterSheet, DamagePart, Defenses, SheetAction } from './types.js';
 import { emptyDefenses } from './types.js';
 import { derivedSubclassFeatures, type SubclassFeatureDef } from './classFeatures.js';
+import { SRD_FEATS_DRAFT, type FeatDef } from './feats.draft.js';
+import type { FeatureAction } from './featureActions.js';
 import { abilityMod, attackRangeOf, classLevelOf, isUnarmedAction } from './rules.js';
 import { resolveFeatureFormula } from './featureActions.js';
 
@@ -34,6 +36,10 @@ export interface FeaturePassive {
   extraAttack?: boolean;
   /** Extra damage on the character's own attacks. */
   riders?: FeatureRider[];
+  /** Ranged attacks with an enemy within 5 ft get no disadvantage. */
+  noCloseRangedPenalty?: boolean;
+  /** Ranged attacks ignore half cover and treat three-quarters cover as half. */
+  rangedCoverReduce?: boolean;
 }
 
 export interface FeatureRider {
@@ -49,6 +55,19 @@ export interface FeatureRider {
   armed?: boolean;
   /** Arming spends one use of the feature's own pool. */
   spendsUse?: boolean;
+  /** Added to the attack roll while armed (e.g. −5 to hit, +10 damage). */
+  attackMod?: number;
+  /** Only with a Heavy weapon the character is proficient with. */
+  heavyOnly?: boolean;
+}
+
+/** A feat from the DM's local data: the picker entry plus optional mechanics (like a subclass feature). */
+export interface LocalFeatDef extends FeatDef {
+  passive?: FeaturePassive;
+  actions?: FeatureAction[];
+  uses?: SubclassFeatureDef['uses'];
+  /** Setting / book name shown in the picker. */
+  source?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,9 +75,36 @@ export interface FeatureRider {
 // ---------------------------------------------------------------------------
 
 let DEFS: SubclassFeatureDef[] = [];
+let FEATS: LocalFeatDef[] = [];
 
 export function registerFeatureDefs(defs: SubclassFeatureDef[]): void {
   DEFS = defs;
+}
+
+/** Register local feats: they join the feat picker, and their passives / buttons / uses apply to
+ *  every sheet that has a feat of that name. */
+export function registerFeatDefs(defs: LocalFeatDef[]): void {
+  FEATS = defs;
+  const have = new Set(SRD_FEATS_DRAFT.map((f) => f.name.toLowerCase()));
+  for (const f of defs) if (!have.has(f.name.toLowerCase())) SRD_FEATS_DRAFT.push(f);
+}
+
+export function localFeatDef(name: string): LocalFeatDef | undefined {
+  const n = name.trim().toLowerCase();
+  return FEATS.find((f) => f.name.toLowerCase() === n);
+}
+
+/** The sheet's local feats that carry mechanics, shaped like subclass features (id "feat:<id>",
+ *  no class: `lvl` in formulas = character level) so the same UI / rest / rider code handles them. */
+export function featFeatureDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
+  if (!FEATS.length) return [];
+  const out: SubclassFeatureDef[] = [];
+  for (const f of sheet.feats ?? []) {
+    const d = localFeatDef(f.name);
+    if (!d || (!d.passive && !d.actions && !d.uses)) continue;
+    out.push({ id: `feat:${d.id}`, class: '', subclass: 'feat', level: 0, name: `${d.name} (feat)`, description: d.guidance, passive: d.passive, actions: d.actions, uses: d.uses });
+  }
+  return out;
 }
 
 export function registeredFeatureDefs(): SubclassFeatureDef[] {
@@ -74,10 +120,36 @@ export interface ActivePassive {
 
 /** The passives the sheet has earned from the registered features. */
 export function activePassives(sheet: CharacterSheet): ActivePassive[] {
-  if (!DEFS.length) return [];
-  return derivedSubclassFeatures(sheet, DEFS)
+  const sub = DEFS.length
+    ? derivedSubclassFeatures(sheet, DEFS)
+        .filter((f) => f.passive)
+        .map((f) => ({ feature: f, passive: f.passive!, classLevel: classLevelOf(sheet, f.class) || sheet.level }))
+    : [];
+  const feats = featFeatureDefs(sheet)
     .filter((f) => f.passive)
-    .map((f) => ({ feature: f, passive: f.passive!, classLevel: classLevelOf(sheet, f.class) || sheet.level }));
+    .map((f) => ({ feature: f, passive: f.passive!, classLevel: sheet.level }));
+  return [...sub, ...feats];
+}
+
+/** Ranged attacks ignore the "enemy within 5 ft" disadvantage. */
+export function passiveNoCloseRangedPenalty(sheet: CharacterSheet): boolean {
+  return activePassives(sheet).some((p) => p.passive.noCloseRangedPenalty);
+}
+
+/** Cover-reducing feat: the target's cover against this sheet's ranged attacks. */
+export function passiveRangedCover<C extends string>(sheet: CharacterSheet | undefined, cover: C): C | 'none' | 'half' {
+  if (!sheet || !activePassives(sheet).some((p) => p.passive.rangedCoverReduce)) return cover;
+  return cover === 'half' ? 'none' : cover === 'threequarters' ? 'half' : cover;
+}
+
+/** SRD weapons with the Heavy property — the fallback when an item doesn't say. */
+const HEAVY_WEAPON = /great\s?(sword|axe)|maul|halberd|glaive|pike|heavy crossbow|longbow|lance/i;
+
+/** Whether this attack row is a proficient Heavy weapon (equipped item behind a `weapon:<id>` row). */
+export function isProficientHeavy(sheet: CharacterSheet, action: Pick<SheetAction, 'id'>): boolean {
+  const it = sheet.inventory?.find((i) => `weapon:${i.id}` === action.id);
+  if (!it || !it.proficient) return false;
+  return it.heavy ?? HEAVY_WEAPON.test(it.name);
 }
 
 /** Pick the value for a class level from a { level: value } table (highest key ≤ level). */
@@ -218,7 +290,13 @@ export function featureRiders(sheet: CharacterSheet): ResolvedRider[] {
   return out;
 }
 
-function riderFits(r: FeatureRider, kind: 'weapon' | 'spell', action: Pick<SheetAction, 'id' | 'attackRange' | 'range' | 'description'>): boolean {
+function riderFits(
+  r: FeatureRider,
+  kind: 'weapon' | 'spell',
+  action: Pick<SheetAction, 'id' | 'attackRange' | 'range' | 'description'>,
+  sheet?: CharacterSheet,
+): boolean {
+  if (r.heavyOnly && (kind !== 'weapon' || !sheet || !isProficientHeavy(sheet, action))) return false;
   const scope = r.scope ?? 'weapon';
   if (scope === 'any') return true;
   if (scope === 'spell') return kind === 'spell';
@@ -238,6 +316,18 @@ export function featureRiderParts(
 ): DamagePart[] {
   const armed = new Set(sheet.featureRidersArmed ?? []);
   return featureRiders(sheet)
-    .filter((r) => (!r.rider.armed || armed.has(r.id)) && (!r.rider.whileRaging || !!sheet.raging) && riderFits(r.rider, kind, action))
+    .filter((r) => (!r.rider.armed || armed.has(r.id)) && (!r.rider.whileRaging || !!sheet.raging) && riderFits(r.rider, kind, action, sheet))
     .map((r) => ({ dice: r.dice, type: r.type === 'same' ? primaryType : r.type, label: r.label }));
+}
+
+/** Attack-roll change from armed riders that fit this attack (e.g. −5). */
+export function featureAttackMod(
+  sheet: CharacterSheet,
+  kind: 'weapon' | 'spell',
+  action: Pick<SheetAction, 'id' | 'attackRange' | 'range' | 'description'>,
+): number {
+  const armed = new Set(sheet.featureRidersArmed ?? []);
+  return featureRiders(sheet)
+    .filter((r) => r.rider.armed && r.rider.attackMod && armed.has(r.id) && (!r.rider.whileRaging || !!sheet.raging) && riderFits(r.rider, kind, action, sheet))
+    .reduce((n, r) => n + (r.rider.attackMod ?? 0), 0);
 }
