@@ -1,3 +1,4 @@
+import type { DeathSaves } from './deathSaves.js';
 import type { MadnessEntry } from './madness.js';
 import type { FirearmProps } from './firearms.js';
 import type { RollResult } from './dice.js';
@@ -312,6 +313,8 @@ export interface CharacterSheet {
   skillExpertise: string[];
   maxHp: number;
   currentHp: number;
+  /** Death saving throws while at 0 HP (server-rolled at the start of the character's turn). */
+  deathSaves?: DeathSaves;
   /** Exhaustion level 0–6 (2024): −2 × level to every d20 test, −5 ft × level Speed; 6 = death. */
   exhaustion?: number;
   /** Active madness effects (see madness.ts), plus `madnessHistory` for the escalation rule. */
@@ -595,6 +598,18 @@ export interface SpellRecast {
   halfOnSave?: boolean;
   /** `dice` still adds the spell's "Nâng ô: +XdY" for the slot level of the first cast. */
   upcast?: boolean;
+  /** The repeat moves a target that fails its save (e.g. pulled next to the caster). */
+  moveOnFail?: SpellForcedMove;
+}
+
+/** Forced movement from a spell. `adjacent` pulls the target to the nearest square next to the caster. */
+export interface SpellForcedMove {
+  feet?: number;
+  dir: 'push' | 'pull' | 'adjacent';
+  /** Attack spells: the move only happens if the target also fails this save. */
+  save?: Ability;
+  /** Large or bigger targets have advantage on that save. */
+  largeAdvantage?: boolean;
 }
 
 /** How an effect placed by a spell grows with the slot level. */
@@ -698,6 +713,12 @@ export interface Spell {
   saveDisadvantageWithin?: number;
   /** Spell attacks that burst around the target, hit or miss. */
   burst?: SpellBurst;
+  /** Spell attacks: on a hit, push the target away / pull it toward the caster (optionally only if it fails a save). */
+  moveOnHit?: SpellForcedMove;
+  /** Save spells: on a failed save, push / pull the target (adjacent = pulled next to the caster). */
+  moveOnFail?: SpellForcedMove;
+  /** Spell attacks: an effect placed on a critical hit (e.g. stunned until your next turn). */
+  critEffect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
   /** Re-usable on later turns without a slot while it lasts (see SpellRecast). */
   recast?: SpellRecast;
   /** Slot level of the last real cast — a recast keeps that level's dice. */
@@ -927,6 +948,8 @@ export interface TurnUsed {
    *  "you can use this benefit only once per turn" — set on the attacker once used. A plain
    *  grapple attempt (no feat) still just spends an attack like any other attack roll. */
   grapplerComboUsed?: boolean;
+  /** The "one more melee attack after a crit / kill" reminder was given this turn. */
+  bonusAttackReminder?: boolean;
 }
 
 export interface BattleMap {
@@ -1134,6 +1157,18 @@ export interface RoomState {
   godsBane?: GodsBaneState;
   /** The setting moon currently in the sky (DM-set). Keys/names come from the local moon data. */
   moon?: SkyMoon | null;
+  /** Open "Opportunity Attack?" offers for the turn in progress (cleared when the turn changes). */
+  oaPrompts?: OaPrompt[];
+}
+
+/** The active combatant left a hostile creature's reach: that creature may use its reaction. */
+export interface OaPrompt {
+  id: string;
+  reactorTokenId: string;
+  reactorName: string;
+  moverTokenId: string;
+  moverName: string;
+  ts: number;
 }
 
 /** A setting moon in the sky: `key` matches an entry of the local moon data (client). */

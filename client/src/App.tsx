@@ -6,7 +6,7 @@ import { BattleMap } from './components/BattleMap.js';
 import { DiceWindow } from './components/DiceWindow.js';
 import { InitiativeBar } from './components/InitiativeBar.js';
 import { MoonChip } from './components/MoonChip.js';
-import { SheetDock } from './components/SheetDock.js';
+import { SheetDock, withSpeciesRest, withSubclassRest } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
 import { NpcPanel } from './components/NpcPanel.js';
@@ -17,9 +17,10 @@ import { HeirloomPanel } from './components/HeirloomPanel.js';
 import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner } from './components/DmPromptBanner.js';
+import { OaPromptBanner } from './components/OaPromptBanner.js';
 import { TopMenu, type TopMenuItem } from './components/TopMenu.js';
 import { PartyBar } from './components/PartyBar.js';
-import { fmtDuration } from '@dnd-table/shared';
+import { applyLongRest, applyShortRest, fmtDuration } from '@dnd-table/shared';
 import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
 
@@ -113,6 +114,28 @@ export function App() {
   const dmItems: TopMenuItem[] = [
     { label: '🗺 Bản đồ & cảnh', title: 'Thư viện bản đồ theo chương', onClick: () => setMapsOpen(true) },
     { label: '👹 Quái (Bestiary)', onClick: () => setBestiaryOpen(true) },
+    ...(['short', 'long'] as const).map((kind) => ({
+      label: kind === 'short' ? '☕ Nghỉ ngắn cả nhóm' : '🌙 Nghỉ dài cả nhóm',
+      title:
+        kind === 'short'
+          ? 'Mọi nhân vật đang có token trong cảnh: hồi tài nguyên nghỉ ngắn (hit dice tự tiêu trên sheet), thời gian trôi 1 giờ'
+          : 'Mọi nhân vật đang có token trong cảnh: hồi đầy HP, ô phép, tài nguyên, −1 exhaustion; thời gian trôi 8 giờ',
+      onClick: () => {
+        const st = useStore.getState().room;
+        const party = (st?.sheets ?? []).filter((s) => s.tokenId && st?.tokens.some((t) => t.id === s.tokenId));
+        if (!party.length) return window.alert('Chưa có nhân vật nào có token trong cảnh.');
+        const what = kind === 'short' ? 'nghỉ ngắn (1 giờ)' : 'nghỉ dài (8 giờ)';
+        if (!window.confirm(`Cho ${party.map((s) => s.name).join(', ')} ${what}?`)) return;
+        for (const s of party) {
+          const next =
+            kind === 'short'
+              ? withSpeciesRest(withSubclassRest(applyShortRest(s), 'short'), 'short')
+              : applyLongRest(s);
+          send({ t: 'upsertSheet', sheet: next, base: s });
+        }
+        send({ t: 'passTime', seconds: kind === 'short' ? 3600 : 8 * 3600 });
+      },
+    })),
     {
       label: '🌀 Madness cả nhóm',
       title: 'Bắt save madness cho mọi nhân vật người chơi đang có token trong cảnh',
@@ -255,6 +278,7 @@ export function App() {
             </div>
           )}
           <DmPromptBanner />
+          <OaPromptBanner />
           {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
           {dockOpen && <SheetDock />}
         </div>

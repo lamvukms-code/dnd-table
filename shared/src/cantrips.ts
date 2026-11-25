@@ -1,4 +1,4 @@
-import type { SpellBurst, SpellEffectUpcast, SpellRecast,
+import type { SpellBurst, SpellForcedMove, SpellEffectUpcast, SpellRecast,
   Ability,
   CharacterSheet,
   ConditionType,
@@ -103,6 +103,12 @@ export interface CantripDef {
   saveDisadvantageWithin?: number;
   /** Spell attacks that burst around the target, hit or miss. */
   burst?: SpellBurst;
+  /** Spell attacks: on a hit, push the target away / pull it toward the caster (optionally only if it fails a save). */
+  moveOnHit?: SpellForcedMove;
+  /** Save spells: on a failed save, push / pull the target (adjacent = pulled next to the caster). */
+  moveOnFail?: SpellForcedMove;
+  /** Spell attacks: an effect placed on a critical hit (e.g. stunned until your next turn). */
+  critEffect?: { name: string; condition?: ConditionType; note?: string; expiresInRounds?: number };
 }
 
 /** Cantrip damage multiplier by character level (5e 2024: 1 / 2 / 3 / 4 dice). */
@@ -932,7 +938,8 @@ export function registerExtraSpells(defs: CantripDef[]): void {
 
 /** How a spell is re-used on later turns, if it is (Call Lightning, Witch Bolt…). Old sheets fall back to the DB. */
 export function recastOf(spell: Spell): SpellRecast | undefined {
-  return spell.recast ?? findCantrip(spell.name)?.recast;
+  // the spell database wins over the copy stored on the sheet (it may predate a data update)
+  return findCantrip(spell.name)?.recast ?? spell.recast;
 }
 
 /**
@@ -959,6 +966,9 @@ export function recastForm(spell: Spell, rc: SpellRecast): Spell {
     // a changed form never re-places the first cast's reminder effect
     effect: spell.concentration || rc.castKind ? undefined : spell.effect,
     burst: undefined,
+    moveOnFail: rc.moveOnFail ?? (rc.castKind ? undefined : spell.moveOnFail),
+    // a repeat with its own form hits the one creature you pick, not the first cast's area
+    area: rc.castKind ? undefined : spell.area,
   };
   if (rc.castKind) {
     out.castKind = rc.castKind;
@@ -1132,6 +1142,9 @@ export function spellFromCantrip(def: CantripDef, sheet: CharacterSheet, id: str
     recast: def.recast,
     saveDisadvantageWithin: def.saveDisadvantageWithin,
     burst: def.burst,
+    moveOnHit: def.moveOnHit,
+    moveOnFail: def.moveOnFail,
+    critEffect: def.critEffect,
     range: def.range,
     area: def.area,
     notes: def.guidance,

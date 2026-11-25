@@ -413,3 +413,21 @@ label { color: var(--muted); }
 .sheet-dock.play .sd-body .bt-ident select:has(option[value='']:checked) { display: none; }
 .sheet-dock.play .bt-name { font-size: 18px; font-weight: 700; }
 .sheet-dock.play .play-keep { background: rgba(255, 253, 247, 0.95) !important; border-color: #8a1c1c !important; }
+
+/* death saves */
+.death-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: #3a1414; color: #fbe9e0; border: 1px solid #8a1c1c; }
+.death-banner strong { font-family: var(--serif); font-size: 15px; }
+.death-banner.stable { background: #24331f; border-color: #4d7a3a; }
+.death-banner.dead { background: #111; border-color: #555; }
+.death-banner .ds-row { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; }
+.sheet-dock .death-banner .ds-pip { width: 24px; height: 24px; padding: 0; border-radius: 50%; background: #241010; color: #c8a99a; border-color: #6e3a3a; }
+.sheet-dock .death-banner .ds-pip.success.on { background: #2f6b3a; color: #fff; }
+.sheet-dock .death-banner .ds-pip.fail.on { background: #8a1c1c; color: #fff; }
+.death-banner .hint { color: #d9b9ab; font-size: 12px; flex-basis: 100%; }
+.sheet-dock .death-banner button.link { color: #ffd7a8; background: none; border: none; text-decoration: underline; }
+
+/* opportunity attack offers */
+.oa-prompts { position: absolute; top: calc(var(--hud-top, 64px) + 6px); left: 50%; transform: translateX(-50%); z-index: 56; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
+.oa-prompt { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; background: #2a1a10; color: #f5e6cc; border: 1px solid #c0392b; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5); font-size: 14px; }
+.oa-prompt b { color: #ffd7a8; }
+.oa-prompt button.link { color: #e8cfa8; }

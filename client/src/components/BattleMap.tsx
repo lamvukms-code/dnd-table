@@ -47,6 +47,7 @@ import {
   actionAvailable,
   failCondition,
   parseMultiattack,
+  economyKindOf,
   exhaustionPenalty,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
@@ -199,6 +200,14 @@ function BattleMapImpl() {
   })();
 
   const [selected, setSelected] = useState<string | null>(null);
+  // A DM-run monster's turn starts: open its card so its attacks are one click away.
+  const activeTokenId = activeEntry?.tokenId;
+  useEffect(() => {
+    if (!isDm || !activeTokenId) return;
+    const t = useStore.getState().room?.tokens.find((x) => x.id === activeTokenId);
+    const room = useStore.getState().room;
+    if (t?.statblock && !t.controllerId && !room?.sheets.some((s) => s.tokenId === t.id)) setSelected(t.id);
+  }, [isDm, activeTokenId]);
   const [groupMode, setGroupMode] = useState(false);
   const [groupSel, setGroupSel] = useState<Set<string>>(new Set());
   const [ghost, setGhost] = useState<{ x: number; y: number } | null>(null);
@@ -1492,6 +1501,26 @@ function TokenInspector({
 
   const sb = token.statblock;
   const canSeeStatblock = sb && (isDm || token.controllerId === meId);
+  // Nearest living, visible player-side creature: preselected as the monster's target (its turn
+  // starting, or the card opening with no target / a downed one). The DM can still pick another.
+  const myTurnNow = !!initiative?.running && initiative.entries.find((e) => e.isActive)?.tokenId === token.id;
+  useEffect(() => {
+    if (!sb) return;
+    const cur = tokens.find((t) => t.id === sbTargetId);
+    if (cur && !(typeof cur.currentHp === 'number' && cur.currentHp <= 0)) return;
+    const foes = tokens.filter(
+      (t) =>
+        t.id !== token.id &&
+        !t.hidden &&
+        !t.godsBaneBlade &&
+        (t.controllerId || sheets.some((s) => s.tokenId === t.id)) &&
+        !(typeof t.currentHp === 'number' && t.currentHp <= 0),
+    );
+    if (!foes.length) return;
+    const near = foes.reduce((a, b) => (gridFeet(token, b) < gridFeet(token, a) ? b : a));
+    setSbTargetId(near.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token.id, myTurnNow, !!sb]);
   const sbTargetName = tokens.find((t) => t.id === sbTargetId)?.label ?? '';
 
   const canControl = isDm || token.controllerId === meId;
@@ -1512,6 +1541,25 @@ function TokenInspector({
     : null;
 
   const beginAoe = useStore((s) => s.beginAoe);
+
+  /**
+   * Monster action economy (same tracker as a character's): an attack row is one swing of the Action —
+   * as many swings as its Multiattack allows (1 without one); Multiattack, a save / area / damage action
+   * or a spell spends the whole Action (or the Bonus Action / Reaction it is). Spending past the limit
+   * asks first, so the DM can still overrule. Legendary / lair actions have their own counters.
+   */
+  const spendEconomy = useStore((s) => s.spendEconomy);
+  const multiTotal = (() => {
+    const m = sb?.actions.find((x) => /^multiattack/i.test(x.name));
+    return m ? parseMultiattack(m.description, sb!.actions).reduce((n, st) => n + st.count, 0) : 0;
+  })();
+  function spendFor(a: { actionType?: SheetAction['actionType']; attackBonus?: number }, whole = false): boolean {
+    if (a.actionType === 'legendary' || a.actionType === 'lair') return true;
+    const k = economyKindOf(a.actionType);
+    if (!k) return true;
+    const swing = !whole && typeof a.attackBonus === 'number' && k !== 'reaction';
+    return spendEconomy(token.id, k, swing ? { attack: true, maxAttacks: k === 'action' ? Math.max(1, multiTotal) : 1 } : undefined);
+  }
 
   /** Limited-use action (Recharge / N per Day): count the use; ask before re-using a spent one. */
   function useLimited(a: NonNullable<Token['statblock']>['actions'][number]): boolean {
@@ -1575,7 +1623,7 @@ function TokenInspector({
     const rangeFeet = Number(/within (\d+) feet/i.exec(desc)?.[1] ?? 0);
     const half = /half (?:as much )?damage/i.test(desc);
     const save = a.save;
-    if (!useLimited(a)) return;
+    if (!spendFor(a, true) || !useLimited(a)) return;
     const effectOnFail = saveEffect(a);
     beginAoe({
       label: base,
@@ -2048,7 +2096,7 @@ function TokenInspector({
                   <button
                     className="roll-btn strong"
                     title={`Tung lần lượt: ${multi.map((m) => `${m.count}× ${m.name}`).join(', ')}`}
-                    onClick={() => void runMultiattack(multi, sbTargetId, sbTargetName)}
+                    onClick={() => spendFor(a, true) && void runMultiattack(multi, sbTargetId, sbTargetName)}
                   >
                     ⚔ {multi.map((m) => `${m.count}×${m.name}`).join(' + ')}
                   </button>
@@ -2057,6 +2105,7 @@ function TokenInspector({
                   <button
                     className="roll-btn strong"
                     onClick={() =>
+                      spendFor(a) &&
                       useLimited(a) &&
                       attackRoll({
                         label: `${base} → ${sbTargetName}${mtag}`,
@@ -2076,7 +2125,7 @@ function TokenInspector({
                 {isAttack && !sbTargetId && (
                   <button
                     className="roll-btn"
-                    onClick={() => rollDice(`${base} (đánh)${mtag}`, sbd20(a.attackBonus!))}
+                    onClick={() => spendFor(a) && rollDice(`${base} (đánh)${mtag}`, sbd20(a.attackBonus!))}
                   >
                     đánh
                   </button>
@@ -2102,7 +2151,7 @@ function TokenInspector({
                     onClick={() =>
                       sbTargetId &&
                       // a rider save after an attack already counted the use on the ⚔ click
-                      (isAttack || useLimited(a)) &&
+                      (isAttack || (spendFor(a, true) && useLimited(a))) &&
                       send({
                         t: 'spellSave',
                         targetTokenId: sbTargetId,
@@ -2123,6 +2172,7 @@ function TokenInspector({
                   <button
                     className="roll-btn"
                     onClick={() =>
+                      spendFor(a, true) &&
                       useLimited(a) &&
                       (sbTargetId
                         ? damageRoll(`${base} → ${sbTargetName}`, parts, sbTargetId, {
@@ -2215,6 +2265,7 @@ function TokenInspector({
                           className="spell-picker-row"
                           onClick={() => {
                             const spell = monsterSpellFrom(def, sb.spellcasting!, `${token.id}-${def.id}-${Date.now()}`);
+                            if (!spendFor(spell, true)) return;
                             beginMonsterCast(token.id, spell, sb.spellcasting!.spellAttackBonus);
                             setSpellPickerOpen(false);
                           }}
@@ -2250,7 +2301,7 @@ function TokenInspector({
                       <button
                         className="roll-btn strong"
                         title="Chọn mục tiêu như người chơi cast từ char sheet"
-                        onClick={() => beginMonsterCast(token.id, spell, sb.spellcasting!.spellAttackBonus)}
+                        onClick={() => spendFor(spell, true) && beginMonsterCast(token.id, spell, sb.spellcasting!.spellAttackBonus)}
                       >
                         🪄 ra phép
                       </button>

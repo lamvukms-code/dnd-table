@@ -57,6 +57,10 @@ export type ClientAction =
       attackRange?: AttackRange;
       /** Weapon strike or spell attack (cover-reducing feats only apply to weapons). Unset = weapon. */
       attackKind?: 'weapon' | 'spell';
+      /** Spell attack forced movement on a hit (`save`: only if the target fails it). */
+      moveOnHit?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; save?: { ability: Ability; dc: number; largeAdvantage?: boolean } };
+      /** Effect placed on the target on a critical hit (stunned until your next turn…). */
+      effectOnCrit?: ActiveEffect;
       /** Repelling Blast (2024): on a hit, push the target this many feet straight away from the
        *  attacker. Gated server-side to once per attacker turn via `turnUsed.repellingPush`. */
       pushFeetOnHit?: number;
@@ -82,6 +86,8 @@ export type ClientAction =
   | { t: 'clearConcentration'; tokenId: string }
   /** DM opens / closes a level-up round (see `RoomState.levelUp`). */
   | { t: 'levelUpOpen' }
+  /** Answer an Opportunity Attack offer (`used` = the reaction was spent on it). */
+  | { t: 'oaResolve'; id: string; used: boolean }
   /** DM: raise a setting moon (null = no moon / it set). */
   | { t: 'setMoon'; moon: { key: string; name: string } | null }
   | { t: 'levelUpClose' }
@@ -119,6 +125,8 @@ export type ClientAction =
       sourceTokenId?: string;
       /** Forced roll mode for this save (e.g. disadvantage within 5 ft); effects' save advantage still applies. */
       rollMode?: RollMode;
+      /** On a failed save: push / pull the target relative to `fromTokenId` (the caster). */
+      moveOnFail?: { feet?: number; dir: 'push' | 'pull' | 'adjacent'; fromTokenId: string };
     }
   // heal a target token (adds HP, clamped to its max)
   | {

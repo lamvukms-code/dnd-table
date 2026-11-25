@@ -99,6 +99,10 @@ interface AttackParams {
   attackRange?: AttackRange;
   /** Weapon strike or spell attack. Unset = weapon. */
   attackKind?: 'weapon' | 'spell';
+  /** Spell attack forced movement on a hit. */
+  moveOnHit?: Extract<ClientAction, { t: 'attack' }>['moveOnHit'];
+  /** Effect placed on a critical hit. */
+  effectOnCrit?: ActiveEffect;
   /** Repelling Blast (2024): on a hit, push the target this many feet from the attacker. */
   pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
@@ -397,6 +401,8 @@ export const useStore = create<StoreState>((set, get) => {
       attackerTokenId,
       attackRange,
       attackKind,
+      moveOnHit,
+      effectOnCrit,
       pushFeetOnHit,
       grappleOnHit,
     }) => {
@@ -447,6 +453,8 @@ export const useStore = create<StoreState>((set, get) => {
           attackerTokenId,
           attackRange,
           attackKind,
+          moveOnHit,
+          effectOnCrit,
           pushFeetOnHit,
           grappleOnHit,
         });
@@ -469,6 +477,8 @@ export const useStore = create<StoreState>((set, get) => {
           attackerTokenId,
           attackRange,
           attackKind,
+          moveOnHit,
+          effectOnCrit,
           pushFeetOnHit,
           grappleOnHit,
           external: { attack },
@@ -515,6 +525,8 @@ export const useStore = create<StoreState>((set, get) => {
         attackerTokenId,
         attackRange,
         attackKind,
+        moveOnHit,
+        effectOnCrit,
         pushFeetOnHit,
         grappleOnHit,
         external: { attack, crit: effectiveCrit, partTotals },
@@ -795,6 +807,10 @@ export const useStore = create<StoreState>((set, get) => {
           label,
           sourceSheetId: sheetId,
           rollMode: closeDis ? 'disadvantage' : undefined,
+          moveOnFail:
+            (spell.moveOnFail ?? findCantrip(spell.name)?.moveOnFail) && casterTok
+              ? { ...(spell.moveOnFail ?? findCantrip(spell.name)!.moveOnFail!), fromTokenId: casterTok.id }
+              : undefined,
           damageOnFail:
             spellDamage && spellDamage.length
               ? spell.agonizingBlast && castMod
@@ -841,6 +857,22 @@ export const useStore = create<StoreState>((set, get) => {
         const beams = ray
           ? Number(ray[1]) + (/Nâng ô:\s*\+1 tia(?!\s*\()/i.test(guide) ? Math.max(0, effLevel - spell.level) : 0)
           : spell.beams && spell.beams > 1 ? spell.beams : 1;
+        // forced movement on a hit (a pull, or a push behind a save) and crit riders
+        const mvDef = spell.moveOnHit ?? findCantrip(spell.name)?.moveOnHit;
+        const mvHit = mvDef
+          ? { feet: mvDef.feet, dir: mvDef.dir, save: mvDef.save ? { ability: mvDef.save, dc, largeAdvantage: mvDef.largeAdvantage } : undefined }
+          : undefined;
+        const critDef = spell.critEffect ?? findCantrip(spell.name)?.critEffect;
+        const critFx: ActiveEffect | undefined = critDef
+          ? {
+              id: '',
+              name: critDef.name,
+              sourceSheetId: sheetId,
+              condition: critDef.condition,
+              note: critDef.note,
+              expiresRound: critDef.expiresInRounds ? (room.initiative.round ?? 1) + critDef.expiresInRounds : undefined,
+            }
+          : undefined;
         for (let i = 0; i < beams; i++) {
           await get().attackRoll({
             label: beams > 1 ? `${label} (phép, tia ${i + 1}/${beams})` : `${label} (phép)`,
@@ -852,6 +884,8 @@ export const useStore = create<StoreState>((set, get) => {
             attackerTokenId: sheet.tokenId,
             attackRange: inferAttackRange(spell.range),
             attackKind: 'spell',
+            moveOnHit: mvHit,
+            effectOnCrit: critFx,
             pushFeetOnHit: spell.repellingBlast ? 10 : undefined,
           });
         }

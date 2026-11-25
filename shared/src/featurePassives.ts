@@ -40,6 +40,8 @@ export interface FeaturePassive {
   noCloseRangedPenalty?: boolean;
   /** Ranged attacks ignore half cover and treat three-quarters cover as half. */
   rangedCoverReduce?: boolean;
+  /** Once per turn, a melee critical hit or dropping a creature to 0 HP grants one extra melee attack (reminder). */
+  extraAttackOnCritOrKill?: boolean;
 }
 
 export interface FeatureRider {
@@ -129,6 +131,11 @@ export function activePassives(sheet: CharacterSheet): ActivePassive[] {
     .filter((f) => f.passive)
     .map((f) => ({ feature: f, passive: f.passive!, classLevel: sheet.level }));
   return [...sub, ...feats];
+}
+
+/** Whether the sheet gets an extra melee attack after a melee crit / a kill (reminder only). */
+export function passiveExtraAttackOnCritOrKill(sheet: CharacterSheet | undefined): boolean {
+  return !!sheet && activePassives(sheet).some((p) => p.passive.extraAttackOnCritOrKill);
 }
 
 /** Ranged attacks ignore the "enemy within 5 ft" disadvantage. */

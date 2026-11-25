@@ -112,6 +112,18 @@ import {
   effectSaveAdvantage,
   passiveRangedCover,
   type RollMode,
+  DOWNED_EFFECT_NAME,
+  freshDeathSaves,
+  onDamageWhileDown,
+  onDrop,
+  rollDeathSave,
+  rollsDeathSaves,
+  type DeathSaves,
+  meleeReach,
+  opportunityReactors,
+  edgeFeet,
+  tokenSpan,
+  passiveExtraAttackOnCritOrKill,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -265,7 +277,7 @@ export class Room {
   }
 
   /** Damage lands on temp HP first, then HP. Sheet-linked tokens are handled on the sheet. */
-  private applyDamage(token: Token, amount: number, opts?: { godsBane?: boolean }): { applied: number; absorbed: number } {
+  private applyDamage(token: Token, amount: number, opts?: { godsBane?: boolean; crit?: boolean }): { applied: number; absorbed: number } {
     if (token.godsBaneBlade) return { applied: 0, absorbed: 0 }; // the blade cannot be damaged
     const sheet = this.linkedSheet(token);
     const hpBefore = sheet ? sheet.currentHp : token.currentHp;
@@ -275,6 +287,23 @@ export class Room {
       sheet.currentHp = r.hp;
       sheet.tempHp = r.temp;
       this.mirrorSheetToToken(sheet);
+      const throughTemp = amount - r.absorbed;
+      if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0) {
+        sheet.deathSaves = onDrop(throughTemp - (hpBefore ?? 0), sheet.maxHp);
+        this.setDowned(token, true);
+        this.pendingBaneLogs.push(
+          sheet.deathSaves.dead
+            ? `☠ ${sheet.name} chết ngay (sát thương dư ≥ HP tối đa)`
+            : `⚠ ${sheet.name} gục xuống 0 HP — bất tỉnh, tự tung death save đầu mỗi lượt`,
+        );
+      } else if ((hpBefore ?? 0) <= 0 && throughTemp > 0 && !sheet.deathSaves?.dead) {
+        sheet.deathSaves = onDamageWhileDown(sheet.deathSaves, throughTemp, sheet.maxHp, !!opts?.crit);
+        this.pendingBaneLogs.push(
+          sheet.deathSaves.dead
+            ? `☠ ${sheet.name} bị đánh khi đang gục — chết`
+            : `${sheet.name} bị đánh khi đang gục → ${opts?.crit ? '2 lần' : '1 lần'} death save thất bại (${this.deathTally(sheet.deathSaves)})`,
+        );
+      }
     } else if (typeof token.currentHp === 'number') {
       r = damageWithTempHp(token.currentHp, token.tempHp ?? 0, amount);
       token.currentHp = r.hp;
@@ -309,12 +338,76 @@ export class Room {
     }
   }
 
+  /** "✓✓○ ✗○○" tally for logs. */
+  private deathTally(ds: DeathSaves | undefined): string {
+    const s = ds?.success ?? 0;
+    const f = ds?.fail ?? 0;
+    return `${'✓'.repeat(s)}${'○'.repeat(3 - s)} ${'✗'.repeat(f)}${'○'.repeat(3 - f)}`;
+  }
+
+  /** Put on / take off the Unconscious "downed" effect of a character at 0 HP. */
+  private setDowned(token: Token, down: boolean): void {
+    const has = token.effects?.some((e) => e.name === DOWNED_EFFECT_NAME);
+    if (down && !has) {
+      token.effects = [
+        ...(token.effects ?? []),
+        { id: nanoid(8), name: DOWNED_EFFECT_NAME, condition: 'unconscious', note: 'Bất tỉnh ở 0 HP — death save đầu mỗi lượt' },
+      ];
+    } else if (!down && has) {
+      token.effects = (token.effects ?? []).filter((e) => e.name !== DOWNED_EFFECT_NAME);
+    }
+  }
+
+  /** After any HP change made outside damage/heal (sheet edit, long rest, token patch): keep the
+   *  downed state and the death-save tally in step with the HP. */
+  private syncDowned(sheet: CharacterSheet): void {
+    const tk = sheet.tokenId ? this.tokenAnywhere(sheet.tokenId) : undefined;
+    if (sheet.currentHp > 0) {
+      if (sheet.deathSaves || tk?.effects?.some((e) => e.name === DOWNED_EFFECT_NAME)) {
+        sheet.deathSaves = undefined;
+        if (tk) this.setDowned(tk, false);
+        this.systemLog(`💗 ${sheet.name} tỉnh lại (${sheet.currentHp} HP)`);
+      }
+    } else if (tk && !tk.effects?.some((e) => e.name === DOWNED_EFFECT_NAME)) {
+      sheet.deathSaves ??= freshDeathSaves();
+      this.setDowned(tk, true);
+    }
+  }
+
+  /** Start of a downed character's turn: the death saving throw. */
+  private deathSaveTick(token: Token): void {
+    const sheet = this.linkedSheet(token);
+    if (!sheet || !rollsDeathSaves(sheet.currentHp, sheet.deathSaves)) return;
+    const d20 = 1 + Math.floor(Math.random() * 20);
+    const r = rollDeathSave(sheet.deathSaves, d20);
+    sheet.deathSaves = r.ds;
+    const what =
+      r.outcome === 'revive'
+        ? 'nat 20 — hồi 1 HP, tỉnh lại!'
+        : r.outcome === 'double-fail'
+          ? 'nat 1 — 2 lần thất bại'
+          : r.outcome === 'success'
+            ? 'thành công'
+            : 'thất bại';
+    const tail = r.ds.dead ? ' → ☠ CHẾT' : r.ds.stable ? ' → ổn định (không tung nữa)' : '';
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `☠ ${sheet.name}: death save ${r.total} — ${what} (${this.deathTally(r.ds)})${tail}`,
+      result: externalRollResult('1d20', { total: r.total, faces: [d20] }),
+    });
+    if (r.outcome === 'revive') this.applyHeal(token, 1);
+  }
+
   private applyHeal(token: Token, heal: number): number {
     const sheet = this.linkedSheet(token);
     if (sheet) {
       const before = sheet.currentHp;
       sheet.currentHp = Math.min(sheet.maxHp, sheet.currentHp + heal);
       this.mirrorSheetToToken(sheet);
+      if (before <= 0 && sheet.currentHp > 0) this.syncDowned(sheet);
       return sheet.currentHp - before;
     }
     if (typeof token.currentHp !== 'number') return 0;
@@ -1150,6 +1243,7 @@ export class Room {
     const INCAPACITATING = ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'];
     if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
     if (phase === 'start-of-turn') {
+      this.deathSaveTick(token);
       // Reconstruction: auto-heal via Hit Die at the start of each of the bearer's turns.
       for (const e of token.effects ?? []) this.applyHitDieHealTick(token, e);
       // damage at the start of the bearer's turn
@@ -1177,6 +1271,37 @@ export class Room {
       }
     }
     if (phase === 'end-of-turn') {
+      // Charged effects (retaliation + uses) also discharge into creatures the bearer is grappling.
+      for (const e of [...(token.effects ?? [])]) {
+        if (e.charges == null || !e.retaliate) continue;
+        const sheetId = this.linkedSheet(token)?.id;
+        const held = this.state.tokens.filter((t) =>
+          t.effects?.some(
+            (g) => (g.condition === 'grappled' || /grapple|bị ghì/i.test(g.name)) && (g.sourceTokenId === token.id || (!!sheetId && g.sourceSheetId === sheetId)),
+          ),
+        );
+        for (const victim of held) {
+          if (!token.effects?.some((x) => x.id === e.id)) break; // spent
+          let rolled = 0;
+          try {
+            rolled = rollNotation(e.retaliate.dice).total;
+          } catch {
+            continue;
+          }
+          const out = resolveDamageParts([{ part: { dice: e.retaliate.dice, type: e.retaliate.type }, raw: rolled }], this.effectiveDefenses(victim));
+          const took = this.applyDamage(victim, out.totalFinal);
+          this.pushRoll({
+            id: nanoid(8),
+            ts: Date.now(),
+            actorId: 'system',
+            actorName: 'Hệ thống',
+            label: `${e.name}: ${token.label} kết thúc lượt khi đang ghì ${victim.label} → ${out.totalFinal} ${e.retaliate.type}`,
+            result: externalRollResult(e.retaliate.dice, { total: rolled, faces: [] }),
+            damage: { targetTokenId: victim.id, targetName: victim.label, amount: took.applied, raw: out.totalRaw, damageType: e.retaliate.type, notes: damageBreakdownNotes(out) },
+          });
+          this.spendEffectCharge(token, e);
+        }
+      }
       // Bracer of Brutality: Necrotic self-damage if the bearer dealt no damage this turn —
       // unreduced (no resistance/immunity applied, straight to HP/temp HP).
       for (const e of token.effects ?? []) {
@@ -1269,6 +1394,7 @@ export class Room {
    * lair check (which can legitimately fire before anyone has acted, if nobody rolled 20+).
    */
   private checkDmPrompts(ctx?: { endingId?: string; prevActiveInit?: number; includeLegendary?: boolean }): void {
+    this.state.oaPrompts = []; // a new turn: last turn's Opportunity Attack offers lapse
     if (this.state.dmPrompt) return; // don't clobber an unanswered prompt
     const init = this.state.initiative;
     if (!init.running) return;
@@ -1317,6 +1443,54 @@ export class Room {
         options: withOptionIds(legendaryToken.statblock?.legendaryActions ?? [], 'leg'),
         round: init.round,
       };
+    }
+  }
+
+  /**
+   * Forced movement along the line from `from` to `target`: push away / pull toward by `feet`, or pull
+   * until adjacent. A pull never goes past the square next to `from`. Returns the feet actually moved.
+   */
+  private forceMove(target: Token, from: Token, dir: 'push' | 'pull' | 'adjacent', feet = 0): number {
+    const dx = target.x - from.x;
+    const dy = target.y - from.y;
+    const dist = Math.max(Math.abs(dx), Math.abs(dy)); // cells (Chebyshev)
+    if (dist < 0.01) return 0;
+    const gap = Math.max(0, edgeFeet(target, tokenSpan(target), from, tokenSpan(from)) / FEET_PER_CELL - 1); // free cells between
+    let cells = dir === 'push' ? feet / FEET_PER_CELL : dir === 'pull' ? Math.min(feet / FEET_PER_CELL, gap) : gap;
+    if (cells <= 0) return 0;
+    const sign = dir === 'push' ? 1 : -1;
+    const ux = dx / dist;
+    const uy = dy / dist;
+    const nx = Math.max(0, Math.min(this.state.map.cols - 1, Math.round(target.x + sign * ux * cells)));
+    const ny = Math.max(0, Math.min(this.state.map.rows - 1, Math.round(target.y + sign * uy * cells)));
+    cells = Math.max(Math.abs(nx - target.x), Math.abs(ny - target.y));
+    target.x = nx;
+    target.y = ny;
+    return Math.round(cells) * FEET_PER_CELL;
+  }
+
+  /** Player side = a token linked to a character sheet or handed to a player; everything else is the DM's. */
+  private isPlayerSide(t: Token): boolean {
+    return !!this.linkedSheet(t) || !!t.controllerId;
+  }
+
+  /** The active combatant moved from `from`: offer an Opportunity Attack to every hostile it left. */
+  private offerOpportunityAttacks(mover: Token, from: { x: number; y: number }): void {
+    const init = this.state.initiative;
+    if (!init.running) return;
+    const active = init.entries.find((e) => e.isActive);
+    if (!active || active.tokenId !== mover.id) return;
+    const reachOf = (t: Token) => {
+      const sh = this.linkedSheet(t);
+      const reachWeapon = !!sh?.inventory.some((it) => it.type === 'weapon' && it.equipped && /glaive|halberd|lance|pike|whip/i.test(it.name));
+      return meleeReach(t, reachWeapon);
+    };
+    const reactors = opportunityReactors(mover, from, mover, this.state.tokens, (t) => this.isPlayerSide(t), reachOf);
+    for (const r of reactors) {
+      const list = (this.state.oaPrompts ??= []);
+      if (list.some((p) => p.reactorTokenId === r.id && p.moverTokenId === mover.id)) continue;
+      list.push({ id: nanoid(8), reactorTokenId: r.id, reactorName: r.label, moverTokenId: mover.id, moverName: mover.label, ts: Date.now() });
+      this.systemLog(`⚔ ${mover.label} rời tầm với của ${r.label} — ${r.label} có thể đánh Opportunity Attack (nếu ${mover.label} không Disengage)`);
     }
   }
 
@@ -1536,6 +1710,20 @@ export class Room {
           label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'oaResolve': {
+        const list = this.state.oaPrompts ?? [];
+        const p = list.find((x) => x.id === action.id);
+        if (!p) return null;
+        const reactor = this.state.tokens.find((t) => t.id === p.reactorTokenId);
+        const sheet = reactor ? this.linkedSheet(reactor) : undefined;
+        if (!isDm && reactor?.controllerId !== actor.id && sheet?.ownerId !== actor.id) return 'Không phải lượt phản ứng của bạn';
+        this.state.oaPrompts = list.filter((x) => x.id !== p.id);
+        if (action.used && reactor) reactor.turnUsed = { ...(reactor.turnUsed ?? {}), reaction: true };
+        if (!action.used) this.systemLog(`${p.reactorName} bỏ qua Opportunity Attack lên ${p.moverName}`);
         this.touch();
         break;
       }
@@ -1825,7 +2013,7 @@ export class Room {
         if (damageResult && outcome) {
           const hadTemp = this.tempOf(target);
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
-          const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane });
+          const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane, crit: effectiveCrit });
           const applied = took.applied;
           // Temp HP soaking the hit still counts as dealing damage (Booming Blade, Bracers).
           const dealt = applied + took.absorbed;
@@ -1908,6 +2096,45 @@ export class Room {
                 result: externalRollResult('', { total: 0, faces: [] }),
               });
             }
+          }
+        }
+        // Spell attacks that move the target on a hit (pull toward / push away, maybe behind a save).
+        if (res.hit && action.moveOnHit && action.attackerTokenId) {
+          const from = this.state.tokens.find((tk) => tk.id === action.attackerTokenId);
+          const mv = action.moveOnHit;
+          let moves = !!from;
+          let saveNote = '';
+          if (from && mv.save) {
+            const large = ['large', 'huge', 'gargantuan'].includes(target.size);
+            const s = this.rollTokenSave(target, mv.save.ability, mv.save.dc, false, undefined, mv.save.largeAdvantage && large ? 'advantage' : undefined);
+            moves = !s.pass;
+            saveNote = ` · ${mv.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${mv.save.dc} ${s.pass ? '✔' : '✘'}`;
+          }
+          const ft = moves && from ? this.forceMove(target, from, mv.dir, mv.feet) : 0;
+          this.systemLog(
+            `${action.label || 'Attack'}${saveNote} — ${ft > 0 ? `${mv.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft` : `${target.label} không bị dời`}`,
+          );
+        }
+        // An effect placed on a critical hit (stunned until the caster's next turn…).
+        if (effectiveCrit && action.effectOnCrit) {
+          target.effects = [...(target.effects ?? []), { ...action.effectOnCrit, id: nanoid(8) }];
+          this.systemLog(`💥 Chí mạng — ${target.label}: ${action.effectOnCrit.name}`);
+        }
+        // Once per turn: a melee crit or a kill earns one more melee attack (feat reminder).
+        {
+          const atkSheet = action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : undefined;
+          const atkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
+          const dropped = typeof target.currentHp === 'number' && target.currentHp <= 0;
+          if (
+            res.hit &&
+            action.attackRange === 'melee' &&
+            (effectiveCrit || dropped) &&
+            atkTok &&
+            !atkTok.turnUsed?.bonusAttackReminder &&
+            passiveExtraAttackOnCritOrKill(atkSheet)
+          ) {
+            atkTok.turnUsed = { ...(atkTok.turnUsed ?? {}), bonusAttackReminder: true };
+            this.systemLog(`⚔ ${atkSheet?.name ?? atkTok.label} ${effectiveCrit ? 'chí mạng' : 'hạ gục mục tiêu'} — được đánh thêm 1 đòn cận chiến (không tốn action, 1 lần/lượt)`);
           }
         }
         // Grappler feat "Punch and Grab" (2024): damage + grapple on the same hit.
@@ -2097,7 +2324,9 @@ export class Room {
           if (typeof patch.currentHp === 'number') linked.currentHp = patch.currentHp;
           if (typeof patch.maxHp === 'number') linked.maxHp = patch.maxHp;
           if (typeof patch.tempHp === 'number') linked.tempHp = patch.tempHp;
+          if (typeof patch.currentHp === 'number') this.syncDowned(linked);
         }
+        if (movingPos && (token.x !== beforeX || token.y !== beforeY)) this.offerOpportunityAttacks(token, { x: beforeX, y: beforeY });
         // Booming Blade: this token actually changed position (a simplification of "willingly
         // moves" — see the field's doc comment) while primed from an earlier hit.
         if (movingPos && (token.x !== beforeX || token.y !== beforeY)) {
@@ -2437,6 +2666,11 @@ export class Room {
           }
           target.effects = [...(target.effects ?? []), effect];
         }
+        if (!pass && action.moveOnFail) {
+          const from = this.state.tokens.find((tk) => tk.id === action.moveOnFail!.fromTokenId);
+          const ft = from ? this.forceMove(target, from, action.moveOnFail.dir, action.moveOnFail.feet) : 0;
+          if (ft > 0) this.systemLog(`${action.label} — ${action.moveOnFail.dir === 'push' ? 'đẩy' : 'kéo'} ${target.label} ${ft}ft`);
+        }
         this.touch();
         break;
       }
@@ -2722,6 +2956,7 @@ export class Room {
           ? this.state.sheets.map((s) => (s.id === incoming.id ? incoming : s))
           : [...this.state.sheets, incoming];
         this.mirrorSheetToToken(incoming);
+        this.syncDowned(incoming);
         this.touch();
         break;
       }

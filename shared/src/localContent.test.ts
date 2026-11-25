@@ -111,6 +111,16 @@ describe('local-content mechanics', () => {
     expect(r).toMatchObject({ castKind: 'save', level: 2, save: { ability: 'dex' }, damage: [{ dice: '1d6', type: 'piercing' }] });
     expect(r.effect).toBeUndefined();
   });
+  it('a recast can pull the target next to the caster; spell attacks carry forced moves and crit effects', () => {
+    const sp = { id: 'x', name: 'Tail2', level: 2, prepared: true, castKind: 'utility', concentration: false, effect: { name: 'Tail2' } } as Spell;
+    expect(recastForm(sp, { economy: 'free', castKind: 'save', save: 'dex', dice: '1d6', moveOnFail: { dir: 'adjacent' } }).moveOnFail).toEqual({ dir: 'adjacent' });
+    expect(recastForm({ ...sp, area: 'toả 20ft' }, { economy: 'free', castKind: 'save', save: 'dex' }).area).toBeUndefined();
+    registerExtraSpells([{ id: 't-pull', name: 'Test Pull', school: 'Evocation', classes: ['wizard'], level: 1, combat: true, castKind: 'attack', fixedDamage: '1d8', damageType: 'force', guidance: 'x',
+      moveOnHit: { feet: 10, dir: 'pull' }, critEffect: { name: 'Dazed', condition: 'stunned', expiresInRounds: 1 } } as CantripDef]);
+    const pull = spellFromCantrip(findCantrip('Test Pull')!, sheet([]), 'x');
+    expect(pull.moveOnHit).toEqual({ feet: 10, dir: 'pull' });
+    expect(pull.critEffect?.condition).toBe('stunned');
+  });
   it('heavy-only rider on proficient heavy weapons; cover-reducing feat', () => {
     registerFeatDefs([
       { id: 't-gwa', name: 'T GWA', category: 'general', guidance: '', passive: { riders: [{ label: 'GWA', dice: '10', type: 'same', scope: 'melee', armed: true, attackMod: -5, heavyOnly: true }] } },

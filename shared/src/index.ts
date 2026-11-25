@@ -28,3 +28,5 @@ export * from './featureActions.js';
 export * from './featurePassives.js';
 export * from './firearms.js';
 export * from './madness.js';
+export * from './deathSaves.js';
+export * from './opportunity.js';

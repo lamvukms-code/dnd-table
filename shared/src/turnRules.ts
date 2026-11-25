@@ -58,7 +58,7 @@ export function spendEconomy(
     const n = (cur.attacks ?? 0) + 1;
     const max = opts.maxAttacks ?? 1;
     if (cur.action && !cur.attacks) warning = 'Action lượt này đã dùng cho việc khác';
-    else if (n > max) warning = `Đã đủ ${max} đòn từ hành động Attack (Extra Attack)`;
+    else if (n > max) warning = `Đã đủ ${max} đòn từ hành động Attack (Extra Attack / Multiattack)`;
     cur.attacks = n;
     cur.action = true;
     return { used: cur, warning };

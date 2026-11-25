@@ -1419,6 +1419,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     ...sheet,
     currentHp: sheet.maxHp,
     tempHp: 0,
+    deathSaves: undefined,
     exhaustion: Math.max(0, (sheet.exhaustion ?? 0) - 1), // a long rest removes one level
     resources: sheet.resources.map((r) => (r.recharge === 'other' ? r : { ...r, used: 0 })),
     spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })),

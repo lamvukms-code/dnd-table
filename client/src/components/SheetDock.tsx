@@ -564,6 +564,40 @@ function SheetEditor({ sheet, sub }: { sheet: CharacterSheet; sub: SubTab }) {
   );
 }
 
+/** Shown while the character is at 0 HP: the server rolls the death saves at the start of each
+ *  turn; the tally can be nudged by hand (Spare the Dying, a Medicine check, DM rulings). */
+function DeathSaveBanner({ draft, commit }: EditorCtx) {
+  const ds = draft.deathSaves ?? { success: 0, fail: 0 };
+  const set = (patch: Partial<typeof ds>) => commit({ ...draft, deathSaves: { ...ds, ...patch } });
+  const pips = (n: number, key: 'success' | 'fail', mark: string) =>
+    [0, 1, 2].map((i) => (
+      <button
+        key={i}
+        className={`ds-pip ${key} ${i < n ? 'on' : ''}`}
+        title="Bấm để chỉnh tay"
+        onClick={() => {
+          const v = i < n ? i : i + 1;
+          set(key === 'fail' ? { fail: v, dead: v >= 3 || undefined } : { success: v, stable: v >= 3 || undefined });
+        }}
+      >
+        {i < n ? mark : '○'}
+      </button>
+    ));
+  return (
+    <div className={`death-banner ${ds.dead ? 'dead' : ds.stable ? 'stable' : ''}`}>
+      <strong>{ds.dead ? '☠ Đã chết' : ds.stable ? '😮‍💨 Ổn định (0 HP)' : '☠ Đang hấp hối'}</strong>
+      <span className="ds-row">Thành công {pips(ds.success, 'success', '✓')}</span>
+      <span className="ds-row">Thất bại {pips(ds.fail, 'fail', '✗')}</span>
+      {!ds.dead && !ds.stable && (
+        <button className="link" title="Spare the Dying, Medicine DC 10 của đồng đội…" onClick={() => set({ stable: true })}>
+          Ổn định
+        </button>
+      )}
+      <span className="hint">Tự tung death save đầu mỗi lượt · hồi máu bất kỳ là tỉnh lại</span>
+    </div>
+  );
+}
+
 export interface EditorCtx {
   draft: CharacterSheet;
   commit: (next: CharacterSheet) => void;
@@ -861,6 +895,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
         </button>
       </div>
 
+      {draft.currentHp <= 0 && <DeathSaveBanner draft={draft} commit={commit} />}
       <div className="bt-rollmode">
         <span>Kiểu tung d20:</span>
         <RollModeToggle mode={rollMode} onChange={setRollMode} />
@@ -2056,7 +2091,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
 }
 
 /** Reset subclass-feature use pools that recharge on the given rest. */
-function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
+export function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
   const used = { ...(sheet.subclassUses ?? {}) };
   let changed = false;
   for (const f of [...derivedSubclassFeatures(sheet, SUBCLASS_DEFS), ...featFeatureDefs(sheet)]) {
@@ -2098,7 +2133,7 @@ function HitDice({ draft }: { draft: CharacterSheet }) {
 }
 
 /** Reset species-trait use pools that recharge on the given rest. */
-function withSpeciesRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
+export function withSpeciesRest(sheet: CharacterSheet, kind: 'short' | 'long'): CharacterSheet {
   const def = findSpecies(SPECIES_DEFS, sheet.species);
   if (!def) return sheet;
   const used = { ...(sheet.speciesUses ?? {}) };
