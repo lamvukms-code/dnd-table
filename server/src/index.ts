@@ -21,6 +21,8 @@ import {
   type ServerEvent,
   type CustomClassDef,
   registerCustomClass,
+  registerFeatureDefs,
+  type SubclassFeatureDef,
 } from '@dnd-table/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -48,6 +50,19 @@ if (existsSync(CLASSES_FILE)) {
     for (const c of Array.isArray(file.classes) ? file.classes : []) registerCustomClass(c);
   } catch (e) {
     console.warn(`Không đọc được ${CLASSES_FILE}:`, (e as Error).message);
+  }
+}
+// Same for subclass features: their passive mechanics (AC formulas, resistances, damage riders,
+// speed) feed the AC / defences / speed the server computes for attacks and movement.
+const SUBCLASSES_FILE =
+  process.env.SUBCLASSES_FILE ??
+  join(__dirname, '..', '..', 'client', 'src', 'data', 'subclasses.local.json');
+if (existsSync(SUBCLASSES_FILE)) {
+  try {
+    const defs = JSON.parse(readFileSync(SUBCLASSES_FILE, 'utf8')) as unknown;
+    if (Array.isArray(defs)) registerFeatureDefs(defs as SubclassFeatureDef[]);
+  } catch (e) {
+    console.warn(`Không đọc được ${SUBCLASSES_FILE}:`, (e as Error).message);
   }
 }
 const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h

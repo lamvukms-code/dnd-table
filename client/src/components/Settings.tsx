@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import { getSfxVolume, setSfxVolume } from '../sound.js';
-import {
-  createGuestKey,
-  createRoom,
-  getLocalThemeOverride,
-  listRooms,
-  listThemes,
-  setLocalThemeOverride,
-  type DddiceRoom,
-  type DddiceTheme,
-} from '../dddice.js';
+import { createRoom, listRooms, type DddiceRoom } from '../dddice.js';
+import { DddiceAccount } from './DddiceAccount.js';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const isDm = useStore((s) => s.isDm());
@@ -26,49 +18,28 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const [keyInput, setKeyInput] = useState(dddiceKey ?? '');
   const [slugInput, setSlugInput] = useState(dddice.roomSlug ?? '');
-  const [themeInput, setThemeInput] = useState(getLocalThemeOverride() ?? dddice.theme ?? '');
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [themes, setThemes] = useState<DddiceTheme[] | null>(null);
   const [rooms, setRooms] = useState<DddiceRoom[] | null>(null);
 
-  // When a key is present, load which themes/rooms it can actually use.
+  // DM: rooms this key can already use, to pick the table's shared room from.
   useEffect(() => {
     const key = dddiceKey?.trim();
-    if (!key) {
-      setThemes(null);
+    if (!key || !isDm) {
       setRooms(null);
       return;
     }
     let cancelled = false;
-    listThemes(key)
-      .then((t) => !cancelled && setThemes(t))
-      .catch(() => !cancelled && setThemes([]));
     listRooms(key)
       .then((r) => !cancelled && setRooms(r))
       .catch(() => !cancelled && setRooms([]));
     return () => {
       cancelled = true;
     };
-  }, [dddiceKey]);
+  }, [dddiceKey, isDm]);
 
   function patchDddice(patch: Record<string, unknown>) {
     send({ t: 'updateDddice', patch });
-  }
-
-  async function makeGuestKey() {
-    setBusy('guest');
-    setNote(null);
-    try {
-      const key = await createGuestKey();
-      setKeyInput(key);
-      setDddiceKey(key);
-      setNote('Đã tạo guest key và lưu vào trình duyệt này.');
-    } catch (e) {
-      setNote(`Lỗi tạo guest key: ${(e as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
   }
 
   async function makeRoom() {
@@ -140,9 +111,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </span>
           </h3>
           <p className="hint">
-            Khi bật, mọi nút tung xúc xắc (bảng xúc xắc, character sheet, đòn tấn công) sẽ
-            chạy qua dddice và hiện xúc xắc 3D ngay trên battle map cho tất cả mọi người.
-            Kết quả dddice là kết quả chính thức; server vẫn tự so AC và tính chí mạng.
+            Khi DM bật và chọn phòng chung, mỗi người tự kết nối tài khoản dddice của mình (hoặc vào
+            dạng khách) và tung bằng skin trong dice box của chính họ; ai chưa kết nối thì tung bằng
+            server. Xúc xắc 3D hiện trên battle map cho cả bàn. Kết quả dddice là kết quả chính thức;
+            server vẫn tự so AC và tính chí mạng.
           </p>
 
           <label className="row">
@@ -155,8 +127,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             />
           </label>
 
-          <label>
-            API key của bạn (lưu riêng trên máy này)
+          <h4>Tài khoản dddice của bạn</h4>
+          <DddiceAccount />
+          <details className="dda-manual">
+            <summary>Dán API key thủ công</summary>
             <input
               type="password"
               value={keyInput}
@@ -164,10 +138,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setKeyInput(e.target.value)}
               onBlur={() => setDddiceKey(keyInput.trim() || null)}
             />
-          </label>
-          <button disabled={busy === 'guest'} onClick={makeGuestKey}>
-            {busy === 'guest' ? 'Đang tạo…' : 'Tạo guest key (không cần tài khoản)'}
-          </button>
+          </details>
 
           <label>
             Room slug chung {isDm ? '' : '(chỉ DM sửa)'}
@@ -204,44 +175,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {busy === 'room' ? 'Đang tạo…' : 'Tạo room dddice mới'}
             </button>
           )}
-
-          <label>
-            Theme xúc xắc
-            {themes && themes.length > 0 ? (
-              <select
-                value={themeInput}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setThemeInput(v);
-                  setLocalThemeOverride(v || null);
-                  if (isDm && v) patchDddice({ theme: v });
-                }}
-              >
-                <option value="">— mặc định —</option>
-                {themes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                value={themeInput}
-                placeholder="theme slug"
-                onChange={(e) => setThemeInput(e.target.value)}
-                onBlur={() => {
-                  const v = themeInput.trim();
-                  setLocalThemeOverride(v || null);
-                  if (isDm && v) patchDddice({ theme: v });
-                }}
-              />
-            )}
-          </label>
-          <p className="hint">
-            {themes && themes.length === 0
-              ? 'Không lấy được danh sách theme — nhập slug thủ công. Tài khoản free không dùng được theme “dddice-standard”.'
-              : 'Chọn theme mà API key của bạn được phép dùng.'}
-          </p>
 
           {note && <p className="note">{note}</p>}
         </section>

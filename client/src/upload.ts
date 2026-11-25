@@ -8,10 +8,15 @@ export async function uploadImage(file: File): Promise<string> {
     r.onerror = () => reject(new Error('Đọc file lỗi'));
     r.readAsDataURL(file);
   });
+  return uploadDataUrl(dataUrl, file.name);
+}
+
+/** Upload an already-encoded image (e.g. a token rendered on a canvas); returns its URL. */
+export async function uploadDataUrl(dataUrl: string, name: string): Promise<string> {
   const res = await fetch('/upload', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ dataUrl, name: file.name }),
+    body: JSON.stringify({ dataUrl, name }),
   });
   const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
   if (!res.ok || !body.url) throw new Error(body.error || `Upload lỗi (${res.status})`);

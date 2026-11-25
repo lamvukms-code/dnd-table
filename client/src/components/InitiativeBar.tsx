@@ -3,7 +3,7 @@ import { nanoIdish } from '../util.js';
 import type { InitiativeEntry } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 
-/** Thin horizontal initiative strip pinned to the top of the battle map. */
+/** Initiative strip: a pill in the top HUD row, between the action icons and the party. */
 function InitiativeBarImpl() {
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());

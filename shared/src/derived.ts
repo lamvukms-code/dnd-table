@@ -1,6 +1,7 @@
 import type { ActiveEffect, CharacterSheet } from './types.js';
 import { abilityMod, computeArmorClass, sheetClasses, type AcResult } from './rules.js';
 import { classDefaults } from './classDefaults.js';
+import { passiveAcMin, passiveSpeedBonus } from './featurePassives.js';
 
 /**
  * Derived combat numbers that used to be typed in by hand: effective AC (armor / unarmored
@@ -39,6 +40,11 @@ export function effectiveArmorClass(sheet: CharacterSheet, effects: ActiveEffect
       ac = e.acMin;
       notes.push(e.name);
     }
+  }
+  const featMin = passiveAcMin(sheet); // an always-on barkskin (Nature's Wrath)
+  if (featMin && ac < featMin.min) {
+    ac = featMin.min;
+    notes.push(featMin.source);
   }
   return { ac, source: notes.length ? `${base.source} · ${notes.join(', ')}` : base.source };
 }
@@ -86,7 +92,8 @@ export function computeSpeed(sheet: CharacterSheet): { speed: number; notes: str
       }
     }
   }
-  return { speed, notes };
+  const feat = passiveSpeedBonus(sheet); // subclass movement (Unencumbered Movement…)
+  return { speed: speed + feat.bonus, notes: [...notes, ...feat.notes] };
 }
 
 // ---------------------------------------------------------------------------

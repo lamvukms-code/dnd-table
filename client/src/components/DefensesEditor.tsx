@@ -3,12 +3,10 @@ import {
   DAMAGE_TYPE_VI,
   emptyDefenses,
   type DamagePart,
-  type DamageRider,
   type DamageType,
   type Defenses,
   WEAPON_TRAIT_VI,
 } from '@dnd-table/shared';
-import { nanoIdish } from '../util.js';
 import { FormulaHint } from './FormulaHint.js';
 
 /** A damage-type <select> (13 5e types + free text passthrough). */
@@ -82,70 +80,6 @@ export function ExtraDamageEditor({
         onClick={() => onChange([...list, { dice: '1d6', type: 'fire' }])}
       >
         + nguồn sát thương
-      </button>
-    </div>
-  );
-}
-
-/** Editor for standing damage riders on a character sheet (magic ring, feature…). */
-export function DamageRidersEditor({
-  riders,
-  onChange,
-}: {
-  riders: DamageRider[];
-  onChange: (r: DamageRider[]) => void;
-}) {
-  const upd = (id: string, patch: Partial<DamageRider>) =>
-    onChange(riders.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-  return (
-    <div className="riders">
-      {riders.map((r) => (
-        <div key={r.id} className="rider-row">
-          <input
-            type="checkbox"
-            checked={r.enabled}
-            title="Bật/tắt"
-            onChange={(e) => upd(r.id, { enabled: e.target.checked })}
-          />
-          <input
-            className="rider-name"
-            placeholder="Tên (Ring of fire…)"
-            value={r.name}
-            onChange={(e) => upd(r.id, { name: e.target.value })}
-          />
-          <input
-            className="xd-dice"
-            placeholder="1d4"
-            value={r.dice}
-            onChange={(e) => upd(r.id, { dice: e.target.value })}
-          />
-          <DamageTypeSelect value={r.type} onChange={(v) => upd(r.id, { type: v ?? '' })} />
-          <select
-            className="rider-scope"
-            value={r.scope ?? 'weapon'}
-            title="Đòn nào được cộng: vũ khí, phép, hay cả hai"
-            onChange={(e) => upd(r.id, { scope: e.target.value as DamageRider['scope'] })}
-          >
-            <option value="weapon">đòn vũ khí</option>
-            <option value="unarmed">đánh tay không</option>
-            <option value="spell">đòn phép</option>
-            <option value="any">cả hai</option>
-          </select>
-          <button className="link" onClick={() => onChange(riders.filter((x) => x.id !== r.id))}>
-            ✕
-          </button>
-        </div>
-      ))}
-      <button
-        className="rider-add"
-        onClick={() =>
-          onChange([
-            ...riders,
-            { id: nanoIdish(), name: 'Nguồn mới', dice: '1d4', type: 'fire', enabled: true },
-          ])
-        }
-      >
-        + rider
       </button>
     </div>
   );

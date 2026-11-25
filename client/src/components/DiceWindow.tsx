@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { d20Check, type RollLogEntry } from '@dnd-table/shared';
 import { useStore } from '../store.js';
+import { DddiceAccount } from './DddiceAccount.js';
 
 const QUICK = [20, 12, 10, 8, 6, 4, 100];
 const OPEN_KEY = 'dnd-table.diceOpen';
@@ -20,15 +21,17 @@ function outcome(e: RollLogEntry): { text: string; cls: 'hit' | 'miss' | '' } {
   return { text: `${e.actorName} · ${e.label}: ${e.result.total}`, cls: '' };
 }
 
-/** Small floating window, bottom-left of the map: roll history (newest first) + manual rolls.
- *  Starts collapsed (remembered per browser) so it doesn't cover the map; while collapsed, new
- *  results pop up as short toasts so attack hits/misses and damage are still seen. */
+/** Dice tray in the top-left action bar (like dddice in Owlbear): the 🎲 button shows the last
+ *  result and drops down the tray — quick dice and notation on top, history (newest first) under.
+ *  Open state is remembered per browser; while closed, new results pop up as toasts at the bottom
+ *  centre of the map so hits/misses and damage are still seen. */
 function DiceWindowImpl() {
   const send = useStore((s) => s.send);
   const rollDice = useStore((s) => s.rollDice);
   const isDm = useStore((s) => s.isDm());
   const log = useStore((s) => s.room?.rollLog ?? []);
   const dddiceActive = useStore((s) => s.dddiceActive());
+  const dddiceOn = useStore((s) => s.room?.dddice.enabled ?? false);
   const [open, setOpenState] = useState(() => {
     try {
       return localStorage.getItem(OPEN_KEY) === '1';
@@ -44,6 +47,18 @@ function DiceWindowImpl() {
       /* ignore */
     }
   };
+  // Picking another toolbar control (a menu, a tool flyout) closes the tray so the two never stack.
+  // Clicks on the map or the sheet leave it open, so rolls can be watched while playing.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t?.closest || t.closest('.hud-dice')) return;
+      if (t.closest('.map-tools, .hud-actions')) setOpen(false);
+    };
+    window.addEventListener('pointerdown', away);
+    return () => window.removeEventListener('pointerdown', away);
+  }, [open]);
   const [notation, setNotation] = useState('1d20');
   const [mode, setMode] = useState<'normal' | 'advantage' | 'disadvantage'>('normal');
   const [priv, setPriv] = useState(false);
@@ -74,45 +89,79 @@ function DiceWindowImpl() {
     void rollDice(label, n, { private: priv });
   }
 
-  if (!open) {
-    const last = entries[0] ? outcome(entries[0]) : null;
-    return (
-      <>
-        {toasts.length > 0 && (
-          <div className="roll-toasts" onClick={() => setOpen(true)} title="Bấm để mở lịch sử">
-            {toasts.map((e) => {
-              const o = outcome(e);
-              return (
-                <div key={e.id} className={`roll-toast ${o.cls}`}>
-                  {o.text}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <button className="dice-window-fab" title="Mở xúc xắc và lịch sử roll" onClick={() => setOpen(true)}>
-          🎲
-          {last && (
-            <span className={`fab-last ${last.cls}`}>
-              {entries[0].attack ? (entries[0].attack.hit ? '✔ ' : '✘ ') : ''}
-              {entries[0].result.total}
-            </span>
-          )}
-        </button>
-      </>
-    );
-  }
-
+  const last = entries[0] ? outcome(entries[0]) : null;
   return (
+    <div className="hud-dice">
+      <button
+        className={open ? 'on' : ''}
+        title={open ? 'Đóng khay xúc xắc' : 'Mở khay xúc xắc và lịch sử roll'}
+        onClick={() => setOpen(!open)}
+      >
+        🎲
+        {last && (
+          <span className={`fab-last ${last.cls}`}>
+            {entries[0].attack ? (entries[0].attack.hit ? '✔ ' : '✘ ') : ''}
+            {entries[0].result.total}
+          </span>
+        )}
+      </button>
+      {!open && toasts.length > 0 && (
+        <div className="roll-toasts" onClick={() => setOpen(true)} title="Bấm để mở lịch sử">
+          {toasts.map((e) => {
+            const o = outcome(e);
+            return (
+              <div key={e.id} className={`roll-toast ${o.cls}`}>
+                {o.text}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {open && (
     <div className="dice-window">
       <div className="dw-head">
         <span>🎲 Xúc xắc{dddiceActive ? ' · 3D' : ''}</span>
-        <button className="link" onClick={() => setOpen(false)} title="Thu gọn">
-          –
+        <button className="link" onClick={() => setOpen(false)} title="Đóng">
+          ✕
         </button>
       </div>
 
+      {dddiceOn && <DddiceAccount compact />}
       <div className="dw-body">
+        <div className="dw-controls">
+          <div className="quick-dice">
+            {QUICK.map((d) => (
+              <button key={d} onClick={() => roll(`1d${d}`, `d${d}`)}>
+                d{d}
+              </button>
+            ))}
+          </div>
+
+          <div className="roll-form">
+            <input
+              value={notation}
+              onChange={(e) => setNotation(e.target.value)}
+              placeholder="vd 2d6+8, 4d6kh3"
+              onKeyDown={(e) => e.key === 'Enter' && roll(notation, notation)}
+            />
+            <button onClick={() => roll(notation, notation)}>Tung</button>
+          </div>
+
+          <div className="d20-check">
+            <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+              <option value="normal">Thường</option>
+              <option value="advantage">Lợi thế</option>
+              <option value="disadvantage">Bất lợi</option>
+            </select>
+            <button onClick={() => roll(d20Check(0, mode), `d20 (${mode})`)}>d20</button>
+            {isDm && (
+              <label className="priv-toggle" title="Roll riêng (chỉ DM thấy)">
+                <input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} />
+                riêng
+              </label>
+            )}
+          </div>
+        </div>
         <div className="log-head">
           <h4>Lịch sử (mới nhất trên cùng)</h4>
           {isDm && (
@@ -192,41 +241,9 @@ function DiceWindowImpl() {
           ))}
           {entries.length === 0 && <li className="empty">Chưa có roll nào.</li>}
         </ul>
-        <div className="dw-controls">
-          <div className="quick-dice">
-            {QUICK.map((d) => (
-              <button key={d} onClick={() => roll(`1d${d}`, `d${d}`)}>
-                d{d}
-              </button>
-            ))}
-          </div>
-
-          <div className="roll-form">
-            <input
-              value={notation}
-              onChange={(e) => setNotation(e.target.value)}
-              placeholder="vd 2d6+8, 4d6kh3"
-              onKeyDown={(e) => e.key === 'Enter' && roll(notation, notation)}
-            />
-            <button onClick={() => roll(notation, notation)}>Tung</button>
-          </div>
-
-          <div className="d20-check">
-            <select value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
-              <option value="normal">Thường</option>
-              <option value="advantage">Lợi thế</option>
-              <option value="disadvantage">Bất lợi</option>
-            </select>
-            <button onClick={() => roll(d20Check(0, mode), `d20 (${mode})`)}>d20</button>
-            {isDm && (
-              <label className="priv-toggle" title="Roll riêng (chỉ DM thấy)">
-                <input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} />
-                riêng
-              </label>
-            )}
-          </div>
-        </div>
       </div>
+    </div>
+      )}
     </div>
   );
 }

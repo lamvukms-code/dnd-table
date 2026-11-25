@@ -7,8 +7,21 @@ export interface TopMenuItem {
   onClick: () => void;
 }
 
-/** Topbar drop-down: click to open (works on touch — no hover), closes on pick, outside tap, Esc. */
-export function TopMenu({ label, items, title }: { label: ReactNode; items: TopMenuItem[]; title?: string }) {
+/** HUD drop-down: click to open (works on touch — no hover), closes on pick, outside tap, Esc. */
+export function TopMenu({
+  label,
+  items,
+  title,
+  header,
+  caret = true,
+}: {
+  label: ReactNode;
+  items: TopMenuItem[];
+  title?: string;
+  /** Non-clickable lines shown above the items (e.g. room name + who you are). */
+  header?: ReactNode;
+  caret?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,10 +41,12 @@ export function TopMenu({ label, items, title }: { label: ReactNode; items: TopM
   return (
     <div className="top-menu" ref={ref}>
       <button className={open ? 'on' : ''} title={title} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {label} ▾
+        {label}
+        {caret && ' ▾'}
       </button>
       {open && (
         <div className="top-menu-list" role="menu">
+          {header && <div className="top-menu-header">{header}</div>}
           {items.map((it, i) => (
             <button
               key={i}

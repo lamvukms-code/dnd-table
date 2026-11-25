@@ -1,4 +1,4 @@
-import type { SubclassFeatureDef } from '@dnd-table/shared';
+import { registerFeatureDefs, type SubclassFeatureDef } from '@dnd-table/shared';
 
 /**
  * Subclass feature definitions.
@@ -14,3 +14,6 @@ export const SUBCLASS_DEFS: SubclassFeatureDef[] = Object.values(mods).flatMap((
   const arr = (m as { default?: unknown }).default;
   return Array.isArray(arr) ? (arr as SubclassFeatureDef[]) : [];
 });
+
+// Passive feature mechanics (AC, riders, resistances…) are computed in shared code: hand it the data.
+registerFeatureDefs(SUBCLASS_DEFS);

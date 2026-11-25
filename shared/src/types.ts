@@ -99,8 +99,11 @@ export interface DamageRider {
   type: string;
   enabled: boolean;
   /** Which attacks it rides. 'weapon' (default) = weapon / manual attack rows;
-   *  'spell' = spell attacks only; 'any' = both; 'unarmed' = unarmed strikes only. */
-  scope?: 'weapon' | 'spell' | 'any' | 'unarmed';
+   *  'melee' / 'ranged' = only melee / ranged weapon attacks; 'spell' = spell attacks only;
+   *  'any' = both; 'unarmed' = unarmed strikes only. */
+  scope?: 'weapon' | 'melee' | 'ranged' | 'spell' | 'any' | 'unarmed';
+  /** One-shot (Divine Smite, a once-per-turn item): switched off after the next attack's damage roll. */
+  once?: boolean;
 }
 
 /** An entry in the action economy: an attack, a utility roll, or just a note. */
@@ -345,6 +348,9 @@ export interface CharacterSheet {
   rageUsed?: number;
   /** Rogue: Sneak Attack "armed" for the next attack (one-shot). */
   sneakAttackArmed?: boolean;
+  /** Feature damage riders armed for the next attack (once per turn / spend a use) — ids from
+   *  `featureRiders`; cleared once that attack's damage is rolled. */
+  featureRidersArmed?: string[];
   /** Booming Blade "armed" for the next melee weapon attack (one-shot) — same idea as
    *  `sneakAttackArmed`: gated on knowing the cantrip, not on class. */
   boomingBladeArmed?: boolean;

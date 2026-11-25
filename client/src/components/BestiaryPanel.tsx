@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ImageField } from './ImageField.js';
 import {
   ABILITIES,
   abilityMod,
@@ -514,10 +515,12 @@ export function StatblockEditor({ sb, onDeleted }: { sb: Statblock; onDeleted: (
             }
           />
         </label>
-        <label>
-          Ảnh (URL)
-          <input value={sb.imageUrl ?? ''} onChange={(e) => set('imageUrl', e.target.value || undefined)} />
-        </label>
+        <ImageField
+          label="Ảnh token"
+          token={sb.tags.includes('npc') ? 'teal' : 'crimson'}
+          value={sb.imageUrl}
+          onChange={(url) => set('imageUrl', url)}
+        />
       </div>
 
       <label>

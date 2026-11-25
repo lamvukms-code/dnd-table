@@ -49,7 +49,8 @@ import {
   exhaustionPenalty,
 } from '@dnd-table/shared';
 import { useStore } from '../store.js';
-import { uploadImage } from '../upload.js';
+import { ImageField } from './ImageField.js';
+import { TokenMaker } from './TokenMaker.js';
 import { statblockFromToken } from '../statblock.js';
 import { nanoIdish } from '../util.js';
 import { DddiceCanvas } from './DddiceCanvas.js';
@@ -93,6 +94,9 @@ const SIZE_CELLS: Record<TokenSize, number> = {
   huge: 3,
   gargantuan: 4,
 };
+
+/** Left tool column flyouts share one <details name>, so opening one closes the others. */
+const MT_GROUP = { name: 'map-tool' } as Record<string, string>;
 
 function BattleMapImpl() {
   // Narrow selectors (not the whole `room`): with structural sharing in the store, a sheet/log/homebrew
@@ -227,6 +231,18 @@ function BattleMapImpl() {
   // --- DM zone tool: click-drag on empty board to draw a room/area rectangle, click an
   //     existing one to view its read-aloud/DM text (see ZonePopup). ---
   const [zoneDraw, setZoneDraw] = useState(false);
+  const [makerFile, setMakerFile] = useState<File | null>(null);
+  // A tap anywhere outside the tool column closes its open flyout (Owlbear-style popovers).
+  const toolsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (e: PointerEvent) => {
+      const root = toolsRef.current;
+      if (!root || root.contains(e.target as Node)) return;
+      root.querySelectorAll('details[open]').forEach((d) => d.removeAttribute('open'));
+    };
+    window.addEventListener('pointerdown', away);
+    return () => window.removeEventListener('pointerdown', away);
+  }, []);
   const [drawRect, setDrawRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const zoneDragStart = useRef<{ x: number; y: number } | null>(null);
   const [zonePopup, setZonePopup] = useState<ZonePopupState>(null);
@@ -598,67 +614,113 @@ function BattleMapImpl() {
 
   return (
     <div className="battlemap">
-      <div className="map-top-controls">
-        <button className="add-token-fab" onClick={addToken} title="Thêm token">
-          + Token
+      {/* Owlbear-style tool column down the left edge: icon buttons, drag trays open as flyouts
+          to their right (one at a time; a tap elsewhere closes them). */}
+      <div className="map-tools" ref={toolsRef}>
+        <button className="mt-btn" onClick={addToken} title="Thêm token">
+          ＋
         </button>
-        {isDm && (
-          <button
-            className={`add-token-fab ${groupMode ? 'on' : ''}`}
-            onClick={() => (groupMode ? exitGroup() : setGroupMode(true))}
-            title="Chọn nhiều token để tung initiative"
-          >
-            {groupMode ? '✓ Đang chọn nhóm' : '⊕ Chọn nhóm init'}
-          </button>
+        <label className="mt-btn" title="Tạo token từ ảnh: chọn ảnh → căn khung tròn → lưu (tự đổi sang WebP) và đặt lên bản đồ">
+          🖼
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) setMakerFile(f);
+            }}
+          />
+        </label>
+        {makerFile && (
+          <TokenMaker
+            file={makerFile}
+            defaultFrame={isDm ? 'crimson' : 'gold'}
+            onClose={() => setMakerFile(null)}
+            onSave={(url, name) => {
+              setMakerFile(null);
+              send({
+                t: 'addToken',
+                token: {
+                  label: name || (isDm ? 'Token' : (me?.name ?? 'Token')),
+                  x: Math.floor(map.cols / 2),
+                  y: Math.floor(map.rows / 2),
+                  color: me?.color,
+                  imageUrl: url,
+                },
+              });
+            }}
+          />
+        )}
+        <CharacterPalette />
+        {isDm && <BestiaryPalette />}
+        {isDm && <NpcPalette />}
+        {tokens.length > 0 && (
+          <details className="mt-item" {...MT_GROUP}>
+            <summary className="mt-btn" title="Kéo token để nhân bản">
+              ⧉
+            </summary>
+            <div className="token-palette mt-flyout">
+              <div className="mt-flyout-title">⧉ Kéo để nhân bản</div>
+              <div className="tp-list">
+                {tokens
+                  .filter((t) => isDm || !t.hidden)
+                  .map((t) => (
+                    <div
+                      key={t.id}
+                      className="tp-chip"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/token-id', t.id);
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      title={`Kéo "${t.label}" vào bản đồ để tạo bản sao`}
+                    >
+                      <span
+                        className="tp-dot"
+                        style={t.imageUrl ? { background: `center/cover url(${t.imageUrl})` } : { background: t.color }}
+                      />
+                      {t.label}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </details>
         )}
         {isDm && (
-          <button
-            className={`add-token-fab ${zoneDraw ? 'on' : ''}`}
-            onClick={() => setZoneDraw((v) => !v)}
-            title="Bấm-kéo lên bản đồ để vẽ 1 vùng phòng/khu vực; bấm vào vùng đã vẽ (khi tắt chế độ này) để xem mô tả"
-          >
-            {zoneDraw ? '✓ Đang vẽ vùng' : '📐 Vẽ vùng'}
-          </button>
+          <>
+            <span className="mt-sep" />
+            <button
+              className={`mt-btn ${groupMode ? 'on' : ''}`}
+              onClick={() => (groupMode ? exitGroup() : setGroupMode(true))}
+              title={groupMode ? 'Đang chọn nhóm init — bấm để thoát' : 'Chọn nhiều token để tung initiative'}
+            >
+              ⊕
+            </button>
+            <button
+              className={`mt-btn ${zoneDraw ? 'on' : ''}`}
+              onClick={() => setZoneDraw((v) => !v)}
+              title={
+                zoneDraw
+                  ? 'Đang vẽ vùng — bấm để tắt'
+                  : 'Vẽ vùng: bấm-kéo lên bản đồ để vẽ 1 phòng/khu vực; bấm vào vùng đã vẽ (khi tắt chế độ này) để xem mô tả'
+              }
+            >
+              📐
+            </button>
+            <details className="mt-item" {...MT_GROUP}>
+              <summary className="mt-btn" title="Bản đồ & cảnh: lưới, ảnh nền, sương mù…">
+                ⚙
+              </summary>
+              <div className="map-toolbar-wrap mt-flyout">
+                <div className="mt-flyout-title">⚙ Bản đồ &amp; cảnh</div>
+                <SceneBar />
+                <MapToolbar />
+              </div>
+            </details>
+          </>
         )}
-      </div>
-
-      {/* One flowing row of drag trays (they used to be absolutely placed on top of each other). */}
-      <div className="map-trays">
-      <CharacterPalette />
-      {isDm && <BestiaryPalette />}
-      {isDm && <NpcPalette />}
-
-      {tokens.length > 0 && (
-        <details className="token-palette">
-          <summary>⧉ Kéo để nhân bản</summary>
-          <div className="tp-list">
-            {tokens
-              .filter((t) => isDm || !t.hidden)
-              .map((t) => (
-                <div
-                  key={t.id}
-                  className="tp-chip"
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData('text/token-id', t.id);
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }}
-                  title={`Kéo "${t.label}" vào bản đồ để tạo bản sao`}
-                >
-                  <span
-                    className="tp-dot"
-                    style={
-                      t.imageUrl
-                        ? { background: `center/cover url(${t.imageUrl})` }
-                        : { background: t.color }
-                    }
-                  />
-                  {t.label}
-                </div>
-              ))}
-          </div>
-        </details>
-      )}
       </div>
 
       {aoe && aoeView && (
@@ -723,14 +785,6 @@ function BattleMapImpl() {
             Bỏ chọn
           </button>
         </div>
-      )}
-
-      {isDm && (
-        <details className="map-toolbar-wrap">
-          <summary>⚙ Bản đồ &amp; cảnh</summary>
-          <SceneBar />
-          <MapToolbar />
-        </details>
       )}
 
       <div
@@ -1216,74 +1270,6 @@ function MapToolbar() {
           📥 Nạp {missingRooms.length} mã vùng có sẵn cho bản đồ này
         </button>
       )}
-    </div>
-  );
-}
-
-/** Image picker: upload a file to the server, or paste a URL. */
-function ImageField({
-  value,
-  onChange,
-  label = 'Ảnh',
-}: {
-  value: string | undefined;
-  onChange: (url: string | undefined) => void;
-  label?: string;
-}) {
-  const [url, setUrl] = useState(value ?? '');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
-
-  async function pick(file: File | undefined) {
-    if (!file) return;
-    setBusy(true);
-    setErr('');
-    try {
-      const u = await uploadImage(file);
-      setUrl(u);
-      onChange(u);
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="image-field">
-      <span className="if-label">{label}</span>
-      <div className="if-row">
-        {value && <span className="if-thumb" style={{ backgroundImage: `url(${value})` }} />}
-        <label className="if-upload">
-          {busy ? '…' : '⬆ Tải lên'}
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp,image/gif"
-            hidden
-            disabled={busy}
-            onChange={(e) => pick(e.target.files?.[0])}
-          />
-        </label>
-        <input
-          className="if-url"
-          value={url}
-          placeholder="hoặc dán URL"
-          onChange={(e) => setUrl(e.target.value)}
-          onBlur={() => onChange(url || undefined)}
-        />
-        {value && (
-          <button
-            className="link"
-            onClick={() => {
-              setUrl('');
-              onChange(undefined);
-            }}
-          >
-            ✕
-          </button>
-        )}
-      </div>
-      {err && <span className="if-err">{err}</span>}
     </div>
   );
 }
@@ -1834,6 +1820,7 @@ function TokenInspector({
         </label>
         <ImageField
           label="Ảnh token"
+          token={token.statblock ? 'crimson' : 'gold'}
           value={token.imageUrl}
           onChange={(url) => patch({ imageUrl: url })}
         />
@@ -2332,8 +2319,12 @@ function BestiaryPalette() {
     .filter((s) => !term || `${s.name} ${s.cr} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(term))
     .slice(0, 40);
   return (
-    <details className="token-palette bestiary-palette">
-      <summary>⚔ Kéo quái vào bản đồ ({bestiary.length})</summary>
+    <details className="mt-item" {...MT_GROUP}>
+      <summary className="mt-btn" title={`Kéo quái vào bản đồ (${bestiary.length})`}>
+        👹<span className="mt-count">{bestiary.length}</span>
+      </summary>
+      <div className="token-palette bestiary-palette mt-flyout">
+      <div className="mt-flyout-title">👹 Kéo quái vào bản đồ</div>
       <input
         className="bp-search"
         value={q}
@@ -2362,6 +2353,7 @@ function BestiaryPalette() {
         ))}
         {list.length === 0 && <span className="hint">Không thấy.</span>}
       </div>
+      </div>
     </details>
   );
 }
@@ -2379,8 +2371,12 @@ function NpcPalette() {
     .filter((s) => !term || `${s.name} ${s.cr} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(term))
     .slice(0, 40);
   return (
-    <details className="token-palette npc-palette">
-      <summary>🧑‍🤝‍🧑 Kéo NPC vào bản đồ ({npcs.length})</summary>
+    <details className="mt-item" {...MT_GROUP}>
+      <summary className="mt-btn" title={`Kéo NPC vào bản đồ (${npcs.length})`}>
+        🧑‍🤝‍🧑<span className="mt-count">{npcs.length}</span>
+      </summary>
+      <div className="token-palette npc-palette mt-flyout">
+      <div className="mt-flyout-title">🧑‍🤝‍🧑 Kéo NPC vào bản đồ</div>
       <input
         className="bp-search"
         value={q}
@@ -2409,6 +2405,7 @@ function NpcPalette() {
         ))}
         {list.length === 0 && <span className="hint">Không thấy.</span>}
       </div>
+      </div>
     </details>
   );
 }
@@ -2423,8 +2420,12 @@ function CharacterPalette() {
   const list = sheets.filter((s) => isDm || s.ownerId === meId);
   if (list.length === 0) return null;
   return (
-    <details className="token-palette" open>
-      <summary>🧑 Kéo nhân vật vào bản đồ ({list.length})</summary>
+    <details className="mt-item" {...MT_GROUP}>
+      <summary className="mt-btn" title={`Kéo nhân vật vào bản đồ (${list.length})`}>
+        🧑<span className="mt-count">{list.length}</span>
+      </summary>
+      <div className="token-palette mt-flyout">
+      <div className="mt-flyout-title">🧑 Kéo nhân vật vào bản đồ</div>
       <div className="tp-list">
         {list.map((s) => (
           <div
@@ -2441,6 +2442,7 @@ function CharacterPalette() {
             {s.name}
           </div>
         ))}
+      </div>
       </div>
     </details>
   );

@@ -1,6 +1,8 @@
 // Thin wrapper around dddice-js: one shared 3D engine bound to a canvas, plus
-// helpers to create a guest key / room and to roll an equation and read back the
-// resolved values. API keys live only in this browser (localStorage).
+// helpers to log in (activation code or guest), join the table's room and roll an
+// equation. Works like the dddice extension for Owlbear Rodeo: every player uses
+// their OWN dddice account and rolls with a theme from their own dice box; the DM
+// only picks the shared room. API keys live only in this browser (localStorage).
 // dddice-js pulls in three.js (~1 MB) — load it lazily so the base app stays light.
 import type { ThreeDDice as ThreeDDiceType } from 'dddice-js';
 import { normalizeNotation, type ExternalRoll } from '@dnd-table/shared';
@@ -51,7 +53,13 @@ interface EngineState {
   canvas: HTMLCanvasElement;
   apiKey: string;
   roomSlug: string;
-  theme: string;
+  /** First theme in this player's dice box: used when they haven't picked one. */
+  boxTheme?: string;
+}
+
+export interface TablePresence {
+  name: string;
+  color?: string;
 }
 
 let current: EngineState | null = null;
@@ -69,25 +77,27 @@ export async function connect(
   canvas: HTMLCanvasElement,
   apiKey: string,
   roomSlug: string,
-  theme: string,
+  me?: TablePresence,
 ): Promise<boolean> {
-  if (
-    current &&
-    current.canvas === canvas &&
-    current.apiKey === apiKey &&
-    current.roomSlug === roomSlug
-  ) {
-    if (current.theme !== theme) current.theme = theme;
+  if (current && current.canvas === canvas && current.apiKey === apiKey && current.roomSlug === roomSlug) {
     return true;
   }
   teardown();
   try {
     const { ThreeDDice } = await loadModule();
+    // Become a participant of the table's room first (a fresh account/guest isn't one yet),
+    // under this player's table name + colour so their dice are labelled/outlined as them.
+    await joinRoom(apiKey, roomSlug, me);
     sizeCanvas(canvas);
     const engine = new ThreeDDice(canvas, apiKey, { autoClear: 3 } as never);
     engine.start();
     engine.connect(roomSlug);
-    current = { engine, canvas, apiKey, roomSlug, theme };
+    current = { engine, canvas, apiKey, roomSlug };
+    listThemes(apiKey)
+      .then((t) => {
+        if (current?.apiKey === apiKey) current.boxTheme = t[0]?.id;
+      })
+      .catch(() => {});
     return true;
   } catch (err) {
     console.error('dddice connect failed', err);
@@ -135,7 +145,8 @@ function toNumber(v: unknown): number {
 export async function rollEquation(notation: string): Promise<ExternalRoll> {
   if (!current) throw new Error('dddice chưa kết nối');
   const { parseRollEquation } = await loadModule();
-  const theme = getLocalThemeOverride() || current.theme || 'dddice-standard';
+  // Always this player's own dice: their pick, else the first theme in their dice box.
+  const theme = getLocalThemeOverride() || current.boxTheme || 'dddice-standard';
   const { dice, operator } = parseRollEquation(normalizeNotation(notation), theme);
   const res = await current.engine.roll(dice, { operator });
   const roll = (res as { data: unknown }).data as {
@@ -164,6 +175,55 @@ export async function createGuestKey(): Promise<string> {
   const api = new ThreeDDiceAPI(undefined, 'dnd-table');
   const res = await api.user.guest();
   return (res as { data: string }).data;
+}
+
+export interface Activation {
+  code: string;
+  expiresAt: string;
+  /** Resolves with the new API key once the player approves the code on dddice.com. */
+  apiKey: Promise<string | undefined>;
+}
+
+/** Log in with a dddice account, like the Owlbear extension: show `code`, the player enters
+ *  it at https://dddice.com/activate, and `apiKey` resolves (dddice-js polls every 5 s). */
+export async function startActivation(): Promise<Activation> {
+  const { ThreeDDiceAPI } = await loadModule();
+  const api = new ThreeDDiceAPI(undefined, 'dnd-table');
+  const res = await api.user.activate();
+  return { code: res.code, expiresAt: res.expiresAt, apiKey: res.apiKey as Promise<string | undefined> };
+}
+
+/** Who this key belongs to (for the "đã kết nối: …" line). */
+export async function whoAmI(apiKey: string): Promise<{ name: string; guest: boolean }> {
+  const json = await apiGet<{ data: { name?: string; username?: string; has_external_accounts?: boolean } }>('/user', apiKey);
+  const u = json.data ?? {};
+  const name = u.username || u.name || '?';
+  return { name, guest: /^guest/i.test(name) || /^guest/i.test(u.name ?? '') };
+}
+
+/** Join the room (no-op error if already in it), then set our name/colour there. */
+export async function joinRoom(apiKey: string, slug: string, me?: TablePresence): Promise<void> {
+  const { ThreeDDiceAPI } = await loadModule();
+  const api = new ThreeDDiceAPI(apiKey, 'dnd-table');
+  let room: { participants?: { id: number; user?: { uuid: string } }[] } | undefined;
+  try {
+    room = ((await api.room.join(slug)) as { data: typeof room }).data;
+  } catch {
+    try {
+      room = ((await api.room.get(slug)) as { data: typeof room }).data;
+    } catch (err) {
+      console.warn('dddice: could not join room', slug, err);
+      return;
+    }
+  }
+  if (!me || !room?.participants) return;
+  try {
+    const user = ((await api.user.get()) as { data: { uuid: string } }).data;
+    const p = room.participants.find((x) => x.user?.uuid === user.uuid);
+    if (p) await api.room.updateParticipant(slug, p.id, { username: me.name, ...(me.color ? { color: me.color } : {}) });
+  } catch {
+    /* cosmetic only */
+  }
 }
 
 /** Create a fresh dddice room with the given key; returns its slug. */

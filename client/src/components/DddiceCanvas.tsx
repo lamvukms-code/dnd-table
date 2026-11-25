@@ -8,7 +8,8 @@ export function DddiceCanvas() {
   const ref = useRef<HTMLCanvasElement>(null);
   const enabled = useStore((s) => s.room?.dddice.enabled ?? false);
   const slug = useStore((s) => s.room?.dddice.roomSlug);
-  const theme = useStore((s) => s.room?.dddice.theme ?? 'dddice-standard');
+  const meName = useStore((s) => s.me()?.name);
+  const meColor = useStore((s) => s.me()?.color);
   const key = useStore((s) => s.dddiceKey);
   const setConnected = useStore((s) => s.setDddiceConnected);
 
@@ -20,7 +21,7 @@ export function DddiceCanvas() {
       return;
     }
     let cancelled = false;
-    connect(canvas, key, slug, theme).then((ok) => {
+    connect(canvas, key, slug, meName ? { name: meName, color: meColor } : undefined).then((ok) => {
       if (!cancelled) setConnected(ok);
     });
     const onResize = () => resizeCurrent();
@@ -29,7 +30,7 @@ export function DddiceCanvas() {
       cancelled = true;
       window.removeEventListener('resize', onResize);
     };
-  }, [enabled, key, slug, theme, setConnected]);
+  }, [enabled, key, slug, meName, meColor, setConnected]);
 
   useEffect(() => () => teardown(), []);
 

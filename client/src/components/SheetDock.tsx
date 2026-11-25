@@ -20,15 +20,10 @@ import {
   emptyCurrency,
   fmtMod,
   initiativeBonus,
-  cantripsForSheet,
-  l1SpellsForSheet,
-  l2SpellsForSheet,
-  l3SpellsForSheet,
   casterTypeForClass,
   casterTypeOf,
   CONDITION_VI,
   rescaleCantripSpell,
-  spellFromCantrip,
   CONDITIONS,
   derivedSubclassFeatures,
   druidLevel,
@@ -88,10 +83,6 @@ import {
   type Spell,
   type SpellSlots,
   type Token,
-  WARLOCK_INVOCATIONS_DRAFT,
-  type InvocationDef,
-  SRD_FEATS_DRAFT,
-  type FeatDef,
 } from '@dnd-table/shared';
 import { flashError, useStore } from '../store.js';
 import { nanoIdish } from '../util.js';
@@ -99,7 +90,7 @@ import { SUBCLASS_DEFS } from '../subclassData.js';
 import { SPECIES_DEFS } from '../speciesData.js';
 import { BACKGROUND_DEFS } from '../backgroundData.js';
 import { FormulaHint } from './FormulaHint.js';
-import { DamageRidersEditor, DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
+import { DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
 import { ClassSetup } from './sheet/ClassSetup.js';
 import { JaegerFeatures } from './sheet/JaegerFeatures.js';
@@ -108,6 +99,9 @@ import { mapViewCenterCell } from '../mapView.js';
 import { useWideLayout } from '../useMediaQuery.js';
 import { ExhaustionStepper } from './Exhaustion.js';
 import { FeatureActions } from './sheet/FeatureActions.js';
+import { FeatureRiderBar } from './sheet/FeatureRiderBar.js';
+import { AbilitiesTab, FeatsTab } from './sheet/ListTabs.js';
+import { SpellAdder } from './sheet/SpellAdder.js';
 import { FirearmControls } from './sheet/FirearmControls.js';
 import { MadnessPanel } from './sheet/MadnessPanel.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
@@ -247,8 +241,8 @@ function SheetDockImpl() {
     }
   }
 
-  // Wide screens (≥1000px, incl. iPad landscape): the sheet is a right-hand column with its own width; narrower
-  // (iPad portrait): it docks under the map with its own height. Each size is remembered.
+  // Wide screens (≥1000px, incl. iPad landscape): the sheet floats as a right-hand panel with its own width;
+  // narrower (iPad portrait): it floats along the bottom of the map with its own height. Each size is remembered.
   // 260px is the shortest height that still fits the ability strip + AC/HP row without
   // clipping CHA (the last ability cell) — see the "CHA bị AC/HP đè" bug: a saved dock
   // height below this, from an older/narrower layout, silently clips the last ability cell.
@@ -263,6 +257,17 @@ function SheetDockImpl() {
     const v = Number(localStorage.getItem(DOCK_W_KEY));
     return v >= MIN_DOCK_W && v <= 900 ? v : 400;
   });
+  // The dock floats over the map (Owlbear-style panel). Publish how much of the map it covers so
+  // the zoom bar, token inspector, roll toasts and lookup panel can sit beside it.
+  useEffect(() => {
+    const root = document.documentElement.style;
+    root.setProperty('--sheet-right', wide ? `${width + 16}px` : '0px');
+    root.setProperty('--sheet-bottom', wide ? '0px' : `${height + 16}px`);
+    return () => {
+      root.removeProperty('--sheet-right');
+      root.removeProperty('--sheet-bottom');
+    };
+  }, [wide, width, height]);
   const drag = (e: React.PointerEvent) => {
     e.preventDefault();
     const startX = e.clientX;
@@ -1052,6 +1057,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
           );
         })()}
 
+        <FeatureRiderBar sheet={draft} commit={commit} />
         <EconomyBar token={linkedToken} sheet={draft} />
 
         {(['action', 'bonus', 'reaction'] as ActionType[]).map((type) => {
@@ -1111,9 +1117,14 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   damageRoll={damageRoll}
                   onFired={() => {
                     const jaegerArmed = !!draft.jaeger?.armedFinisher;
-                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed && !jaegerArmed) return;
+                    const featArmed = (draft.featureRidersArmed ?? []).length > 0;
+                    const onceOn = draft.damageRiders.some((r) => r.once && r.enabled);
+                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed && !jaegerArmed && !featArmed && !onceOn) return;
                     commit({
                       ...draft,
+                      featureRidersArmed: [],
+                      // one-shot riders (Smite…) switch off once their damage has been rolled
+                      damageRiders: draft.damageRiders.map((r) => (r.once && r.enabled ? { ...r, enabled: false } : r)),
                       sneakAttackArmed: false,
                       boomingBladeArmed: false,
                       // an armed Jaeger Finisher expends all Momentum dice once its damage is rolled
@@ -1219,19 +1230,6 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
         <ActionEditor draft={draft} commit={commit} />
 
-        <details className="rider-details">
-          <summary>
-            Nguồn sát thương thêm — rider ({draft.damageRiders.filter((r) => r.enabled).length})
-          </summary>
-          <p className="hint">
-            Hiệu ứng cộng dmg không thuộc vũ khí nào (vd nhẫn +1d4 lửa). Chọn loại đòn được cộng: “đòn vũ
-            khí” (gồm cả đánh tay không), “đánh tay không” (chỉ đòn tay không), “đòn phép” hoặc “cả hai”.
-          </p>
-          <DamageRidersEditor
-            riders={draft.damageRiders}
-            onChange={(r) => set('damageRiders', r)}
-          />
-        </details>
       </div>
 
       {/* reference text — class/species/background/subclass; collapsed by default below the
@@ -2192,6 +2190,14 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
                     featureName={f.name}
                     actions={f.actions}
                     targetId={targetId}
+                    onWeaponFired={() => {
+                      if (!(draft.featureRidersArmed ?? []).length && !draft.damageRiders.some((r) => r.once && r.enabled)) return;
+                      commit({
+                        ...draft,
+                        featureRidersArmed: [],
+                        damageRiders: draft.damageRiders.map((r) => (r.once && r.enabled ? { ...r, enabled: false } : r)),
+                      });
+                    }}
                     spendUse={
                       f.uses
                         ? () => {
@@ -2337,150 +2343,6 @@ function SkillsTab({ draft, commit }: EditorCtx) {
   );
 }
 
-function FeatsTab({ draft, commit }: EditorCtx) {
-  return (
-    <div className="list-tab">
-      {draft.feats.map((f) => (
-        <div key={f.id} className="lt-row">
-          <input
-            className="lt-name"
-            value={f.name}
-            placeholder="Tên feat"
-            onChange={(e) =>
-              commit({
-                ...draft,
-                feats: draft.feats.map((x) => (x.id === f.id ? { ...x, name: e.target.value } : x)),
-              })
-            }
-          />
-          <textarea
-            value={f.description}
-            placeholder="Mô tả"
-            rows={2}
-            onChange={(e) =>
-              commit({
-                ...draft,
-                feats: draft.feats.map((x) =>
-                  x.id === f.id ? { ...x, description: e.target.value } : x,
-                ),
-              })
-            }
-          />
-          <button
-            className="link"
-            title="Xóa feat này"
-            onClick={() => {
-              if (!window.confirm(`Xóa feat "${f.name || 'chưa đặt tên'}"? Không hoàn tác được.`)) return;
-              commit({ ...draft, feats: draft.feats.filter((x) => x.id !== f.id) });
-            }}
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-      <button
-        onClick={() =>
-          commit({
-            ...draft,
-            feats: [...draft.feats, { id: nanoIdish(), name: 'Feat mới', description: '' }],
-          })
-        }
-      >
-        + Thêm feat
-      </button>
-      {draft.feats.length === 0 && <p className="empty">Chưa có feat.</p>}
-      <FeatPicker draft={draft} commit={commit} />
-    </div>
-  );
-}
-
-const FEAT_CATEGORY_LABEL: Record<FeatDef['category'], string> = {
-  origin: 'Origin',
-  general: 'General',
-  'fighting-style': 'Fighting Style',
-  'epic-boon': 'Epic Boon',
-};
-const FEAT_CATEGORY_MARK: Record<FeatDef['category'], string> = {
-  origin: '◆',
-  general: '•',
-  'fighting-style': '⚔',
-  'epic-boon': '✦',
-};
-
-/**
- * Search/pick from the full 2024 PHB feat list (all 4 categories) and add it as a
- * plain Feat entry (name + prerequisite-aware description). Mirrors
- * `InvocationPicker`'s search/list UI.
- */
-function FeatPicker({ draft, commit }: EditorCtx) {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const have = new Set(draft.feats.map((f) => f.name.toLowerCase()));
-  const term = q.trim().toLowerCase();
-  const list = SRD_FEATS_DRAFT.filter(
-    (f) => !have.has(f.name.toLowerCase()) && (!term || f.name.toLowerCase().includes(term)),
-  );
-
-  function pick(f: FeatDef) {
-    commit({
-      ...draft,
-      feats: [
-        ...draft.feats,
-        {
-          id: nanoIdish(),
-          name: f.name,
-          description: f.prerequisite ? `${f.guidance} (Yêu cầu: ${f.prerequisite})` : f.guidance,
-        },
-      ],
-    });
-    setQ('');
-    setOpen(false);
-  }
-
-  return (
-    <div className="spell-picker">
-      <span className="sp-label">+ Feat (PHB 2024)</span>
-      <input
-        value={q}
-        placeholder={`Tìm hoặc chọn… (${SRD_FEATS_DRAFT.length})`}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
-          if (e.key === 'Enter') {
-            const first = list[0];
-            if (first) pick(first);
-          }
-        }}
-      />
-      {open && (
-        <ul className="sp-list">
-          {list.length === 0 && <li className="sp-empty">Không thấy feat nào.</li>}
-          {list.map((f) => (
-            <li key={f.id}>
-              <button
-                type="button"
-                className="sp-opt"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(f)}
-                title={f.guidance}
-              >
-                <span className="sp-mark">{FEAT_CATEGORY_MARK[f.category]}</span>
-                <span className="sp-name">{f.name}</span>
-                <span className="sp-hint">{f.prerequisite ?? FEAT_CATEGORY_LABEL[f.category]}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ Spells */
 
 const CASTER_LABEL: Record<CasterType, string> = {
@@ -2602,161 +2464,8 @@ function SpellsTab({ draft, commit }: EditorCtx) {
           </div>
         ))}
 
-      <SpellDefPicker
-        draft={draft}
-        spells={spells}
-        onAdd={(sp) => set({ spells: [...spells, sp] })}
-        list={cantripsForSheet(draft)}
-        label="+ Cantrip SRD (5e 2024)"
-      />
-      <SpellDefPicker
-        draft={draft}
-        spells={spells}
-        onAdd={(sp) => set({ spells: [...spells, sp] })}
-        list={l1SpellsForSheet(draft)}
-        label="+ Phép cấp 1 SRD"
-      />
-      <SpellDefPicker
-        draft={draft}
-        spells={spells}
-        onAdd={(sp) => set({ spells: [...spells, sp] })}
-        list={l2SpellsForSheet(draft)}
-        label="+ Phép cấp 2 SRD"
-      />
-      <SpellDefPicker
-        draft={draft}
-        spells={spells}
-        onAdd={(sp) => set({ spells: [...spells, sp] })}
-        list={l3SpellsForSheet(draft)}
-        label="+ Phép cấp 3 SRD"
-      />
-
-      <button
-        onClick={() =>
-          set({
-            spells: [
-              ...spells,
-              {
-                id: nanoIdish(),
-                name: 'Phép mới',
-                level: 1,
-                prepared: false,
-                castKind: 'save',
-                concentration: false,
-                save: { ability: 'wis' },
-                effect: { name: 'Phép mới' },
-              },
-            ],
-          })
-        }
-      >
-        + Thêm phép
-      </button>
+      <SpellAdder draft={draft} onAdd={(sp) => set({ spells: [...spells, sp] })} />
       {spells.length === 0 && <p className="empty">Chưa có phép nào.</p>}
-    </div>
-  );
-}
-
-const SPELL_DEF_HINT = (c: {
-  castKind: Spell['castKind'];
-  damageDie?: string;
-  fixedDamage?: string;
-  heal?: string;
-  damageType?: string;
-  rider?: { dice: string; type: string };
-  save?: string;
-  area?: string;
-}) => {
-  const aoe = c.area ? ` · ${c.area}` : '';
-  if (c.castKind === 'heal') return `${c.heal ? ` (hồi ${c.heal}+mod)` : ''}${aoe}`;
-  if (c.castKind === 'rider' && c.rider) return ` (+${c.rider.dice} ${c.rider.type})`;
-  const dmg = c.fixedDamage ?? c.damageDie;
-  if (dmg) return ` (${dmg}${c.damageType ? ' ' + c.damageType : ''})${aoe}`;
-  return `${c.save ? ` (save ${c.save.toUpperCase()})` : ''}${aoe}`;
-};
-
-/**
- * Searchable spell dropdown for ONE spell level (cantrip / 1 / 2 / 3): type to filter, click or
- * press Enter to add. Spells of other levels never appear here, mirroring the per-level boxes
- * of the paper character sheet. The caster's own class list is shown first.
- */
-function SpellDefPicker({
-  draft,
-  spells,
-  onAdd,
-  list,
-  label,
-}: {
-  draft: CharacterSheet;
-  spells: Spell[];
-  onAdd: (sp: Spell) => void;
-  list: ReturnType<typeof cantripsForSheet>;
-  label: string;
-}) {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const have = new Set(spells.map((s) => s.name.toLowerCase()));
-  const term = q.trim().toLowerCase();
-  const match = (c: (typeof list.own)[number]) =>
-    !have.has(c.name.toLowerCase()) &&
-    (!term ||
-      [c.name, ...(c.aliases ?? []), c.school, ...c.classes].some((x) => x.toLowerCase().includes(term)));
-  const own = list.own.filter(match);
-  const others = list.others.filter(match);
-  const total = own.length + others.length;
-
-  function pick(c: (typeof own)[number]) {
-    onAdd(spellFromCantrip(c, draft, nanoIdish()));
-    setQ('');
-    setOpen(false);
-  }
-  const item = (c: (typeof own)[number]) => (
-    <li key={c.id}>
-      <button
-        type="button"
-        className="sp-opt"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => pick(c)}
-        title={c.guidance}
-      >
-        <span className="sp-mark">{c.combat ? '⚔' : '•'}</span>
-        <span className="sp-name">{c.name}</span>
-        <span className="sp-hint">
-          {c.school}
-          {SPELL_DEF_HINT(c)}
-        </span>
-      </button>
-    </li>
-  );
-  return (
-    <div className="spell-picker">
-      <span className="sp-label">{label}</span>
-      <input
-        value={q}
-        placeholder={`Tìm hoặc chọn… (${list.own.length + list.others.length})`}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
-          if (e.key === 'Enter') {
-            const first = own[0] ?? others[0];
-            if (first) pick(first);
-          }
-        }}
-      />
-      {open && (
-        <ul className="sp-list">
-          {total === 0 && <li className="sp-empty">Không thấy phép nào.</li>}
-          {own.length > 0 && <li className="sp-group">Theo nghề của bạn</li>}
-          {own.map(item)}
-          {others.length > 0 && <li className="sp-group">Nghề khác</li>}
-          {others.map(item)}
-        </ul>
-      )}
     </div>
   );
 }
@@ -3108,189 +2817,6 @@ function SpellRow({
             />
           </label>
         </div>
-      )}
-    </div>
-  );
-}
-
-function AbilitiesTab({ draft, commit }: EditorCtx) {
-  const wl = warlockLevel(draft);
-  function upd(id: string, patch: Partial<CharacterSheet['features'][number]>) {
-    commit({
-      ...draft,
-      features: draft.features.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    });
-  }
-  return (
-    <div className="list-tab">
-      {draft.features.map((f) => (
-        <div key={f.id} className="lt-row">
-          <div className="lt-line">
-            <input
-              className="lt-name"
-              value={f.name}
-              placeholder="Tên năng lực"
-              onChange={(e) => upd(f.id, { name: e.target.value })}
-            />
-            <input
-              className="lt-src"
-              value={f.source}
-              placeholder="Nguồn (Fighter 3…)"
-              onChange={(e) => upd(f.id, { source: e.target.value })}
-            />
-            {f.uses ? (
-              <span className="lt-uses">
-                <Pips
-                  max={f.uses.max}
-                  used={f.uses.used}
-                  onChange={(u) =>
-                    upd(f.id, {
-                      uses: { ...f.uses!, used: Math.max(0, Math.min(f.uses!.max, u)) },
-                    })
-                  }
-                />
-                <input
-                  type="number"
-                  className="res-max"
-                  value={f.uses.max}
-                  onChange={(e) => upd(f.id, { uses: { ...f.uses!, max: Number(e.target.value) } })}
-                />
-                <select
-                  value={f.uses.recharge}
-                  onChange={(e) =>
-                    upd(f.id, { uses: { ...f.uses!, recharge: e.target.value as never } })
-                  }
-                >
-                  <option value="short">ngắn</option>
-                  <option value="long">dài</option>
-                  <option value="other">khác</option>
-                </select>
-                <button
-                  className="link"
-                  title="Bỏ lượt dùng (năng lực dùng không giới hạn)"
-                  onClick={() => upd(f.id, { uses: undefined })}
-                >
-                  bỏ lượt dùng
-                </button>
-              </span>
-            ) : (
-              <button
-                className="link"
-                onClick={() => upd(f.id, { uses: { max: 1, used: 0, recharge: 'long' } })}
-              >
-                + lượt dùng
-              </button>
-            )}
-            <button
-              className="link"
-              title="Xóa năng lực này"
-              onClick={() => {
-                if (!window.confirm(`Xóa năng lực "${f.name || 'chưa đặt tên'}"? Không hoàn tác được.`))
-                  return;
-                commit({ ...draft, features: draft.features.filter((x) => x.id !== f.id) });
-              }}
-            >
-              ✕
-            </button>
-          </div>
-          <textarea
-            value={f.description}
-            placeholder="Mô tả"
-            rows={2}
-            onChange={(e) => upd(f.id, { description: e.target.value })}
-          />
-        </div>
-      ))}
-      <button
-        onClick={() =>
-          commit({
-            ...draft,
-            features: [
-              ...draft.features,
-              { id: nanoIdish(), name: 'Năng lực mới', source: '', description: '' },
-            ],
-          })
-        }
-      >
-        + Thêm năng lực
-      </button>
-      {draft.features.length === 0 && <p className="empty">Chưa có năng lực.</p>}
-      {wl > 0 && <InvocationPicker draft={draft} commit={commit} />}
-    </div>
-  );
-}
-
-/**
- * Search/pick from the full 2024 PHB Eldritch Invocation list and add it as a plain
- * Feature entry (name + prerequisite-aware description, no `uses` tracker — most
- * invocations are unlimited-use). Mirrors `SpellDefPicker`'s search/list UI. Only shown
- * for sheets with Warlock levels.
- */
-function InvocationPicker({ draft, commit }: EditorCtx) {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
-  const have = new Set(draft.features.map((f) => f.name.toLowerCase()));
-  const term = q.trim().toLowerCase();
-  const list = WARLOCK_INVOCATIONS_DRAFT.filter(
-    (inv) => !have.has(inv.name.toLowerCase()) && (!term || inv.name.toLowerCase().includes(term)),
-  );
-
-  function pick(inv: InvocationDef) {
-    commit({
-      ...draft,
-      features: [
-        ...draft.features,
-        {
-          id: nanoIdish(),
-          name: inv.name,
-          source: 'Eldritch Invocation',
-          description: inv.prerequisite ? `${inv.guidance} (Yêu cầu: ${inv.prerequisite})` : inv.guidance,
-        },
-      ],
-    });
-    setQ('');
-    setOpen(false);
-  }
-
-  return (
-    <div className="spell-picker">
-      <span className="sp-label">+ Eldritch Invocation (PHB 2024)</span>
-      <input
-        value={q}
-        placeholder={`Tìm hoặc chọn… (${WARLOCK_INVOCATIONS_DRAFT.length})`}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false);
-          if (e.key === 'Enter') {
-            const first = list[0];
-            if (first) pick(first);
-          }
-        }}
-      />
-      {open && (
-        <ul className="sp-list">
-          {list.length === 0 && <li className="sp-empty">Không thấy invocation nào.</li>}
-          {list.map((inv) => (
-            <li key={inv.id}>
-              <button
-                type="button"
-                className="sp-opt"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(inv)}
-                title={inv.guidance}
-              >
-                <span className="sp-mark">✦</span>
-                <span className="sp-name">{inv.name}</span>
-                <span className="sp-hint">{inv.prerequisite ?? 'Không yêu cầu'}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
       )}
     </div>
   );

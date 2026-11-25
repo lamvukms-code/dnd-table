@@ -1,12 +1,15 @@
 import {
+  actionDamageParts,
+  buildFeatureEffect,
   defaultAnchor,
+  featureActionDice,
   parseArea,
   resolveFeatureAttack,
   resolveFeatureDc,
-  resolveFeatureFormula,
-  type ActiveEffect,
+  resolveFeatureNumber,
   type CharacterSheet,
   type FeatureAction,
+  type SheetAction,
 } from '@dnd-table/shared';
 import { useStore } from '../../store.js';
 
@@ -20,10 +23,12 @@ interface Props {
   targetId?: string;
   /** Spend one use of the feature's own pool; false = cancelled (no use left and the player declined). */
   spendUse?: () => boolean;
+  /** A weapon-style feature attack was rolled (armed riders it carried are now spent). */
+  onWeaponFired?: () => void;
 }
 
 /** Buttons a feature declares in local data, run through the app's usual attack / save / area flows. */
-export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse }: Props) {
+export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, onWeaponFired }: Props) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
@@ -37,12 +42,12 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
   function run(a: FeatureAction) {
     const self = sheet.tokenId;
     const tgt = a.target === 'self' ? self : targetId || undefined;
-    const needsTarget = a.kind === 'attack' || a.kind === 'damage' || a.kind === 'save' || ((a.kind === 'effect' || a.kind === 'heal' || a.kind === 'tempHp') && a.target !== 'self');
+    const needsTarget = a.kind !== 'summon' && (a.kind === 'attack' || a.kind === 'damage' || a.kind === 'save' || ((a.kind === 'effect' || a.kind === 'heal' || a.kind === 'tempHp') && a.target !== 'self'));
     if (needsTarget && !tgt) {
       useStore.setState({ error: 'Chọn mục tiêu ở ô 🎯 Mục tiêu trước.' });
       return;
     }
-    if (a.kind !== 'aoe' && !self && (a.kind === 'attack' || a.target === 'self')) {
+    if (a.kind !== 'aoe' && !self && (a.kind === 'attack' || a.kind === 'summon' || a.target === 'self')) {
       useStore.setState({ error: 'Nhân vật chưa có token trên bản đồ.' });
       return;
     }
@@ -51,38 +56,58 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
 
     const label = `${sheet.name} · ${a.label}`;
     const tgtName = tokens.find((t) => t.id === tgt)?.label;
-    const dice = a.dice ? resolveFeatureFormula(a.dice, sheet, classKey) : '';
+    const dice = featureActionDice(a, sheet, classKey);
     const parts = dice ? [{ dice, type: a.type ?? '' }] : [];
-    const effect = (): ActiveEffect | undefined =>
-      a.effect
-        ? {
-            id: '',
-            name: a.effect.name ?? a.label,
-            sourceSheetId: sheet.id,
-            condition: a.effect.condition,
-            note: a.effect.note ?? `${featureName}`,
-            acBonus: a.effect.acBonus,
-            expiresRound: a.effect.rounds ? round + a.effect.rounds : undefined,
-            save:
-              a.effect.repeat && a.save
-                ? { ability: a.save.ability, dc: resolveFeatureDc(a.save.dc, sheet), repeat: a.effect.repeat }
-                : undefined,
-          }
-        : undefined;
+    const effect = () => buildFeatureEffect(a, sheet, classKey, round, featureName);
+    const selfToken = tokens.find((t) => t.id === self);
 
     switch (a.kind) {
-      case 'attack':
+      case 'attack': {
+        const bonus = resolveFeatureAttack(a.attack, sheet);
+        // A weapon-style strike (claws, mutated arms…) picks up Rage, feature riders and armed riders
+        // exactly like an equipped weapon row does.
+        const row: SheetAction = {
+          id: `feat:${a.label}`,
+          name: a.label,
+          actionType: a.cost === 'bonus' ? 'bonus' : 'action',
+          attackBonus: bonus,
+          damage: dice,
+          damageType: a.type ?? '',
+          attackKind: 'weapon',
+          attackRange: a.range ?? 'melee',
+          source: 'weapon',
+        } as SheetAction;
         void attackRoll({
           label: `${label}${tgtName ? ` → ${tgtName}` : ''}`,
-          attackBonus: resolveFeatureAttack(a.attack, sheet),
+          attackBonus: bonus,
           rollMode: 'normal',
-          damageParts: parts,
+          damageParts: a.weapon ? actionDamageParts(sheet, row, selfToken?.effects) : parts,
           targetTokenId: tgt!,
           attackerSheetId: sheet.id,
           attackerTokenId: self,
           attackRange: a.range ?? 'melee',
         });
+        if (a.weapon) onWeaponFired?.();
         break;
+      }
+      case 'summon': {
+        const s = a.summon;
+        if (!s) return;
+        const hp = Math.max(1, resolveFeatureNumber(s.hp, sheet, classKey));
+        send({
+          t: 'addToken',
+          token: {
+            label: s.label,
+            x: (selfToken?.x ?? 0) + 1,
+            y: selfToken?.y ?? 0,
+            color: s.color ?? '#d8c27a',
+            armorClass: resolveFeatureNumber(s.ac, sheet, classKey),
+            maxHp: hp,
+            currentHp: hp,
+          },
+        });
+        break;
+      }
       case 'damage':
         void damageRoll(`${label}${tgtName ? ` → ${tgtName}` : ''}`, parts, tgt!, { sheetId: sheet.id, tokenId: self });
         break;
@@ -155,10 +180,10 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
         <button
           key={i}
           className="roll-btn sm"
-          title={[a.cost ? `tốn ${a.cost === 'action' ? 'action' : a.cost === 'bonus' ? 'bonus action' : 'reaction'}` : '', a.dice ? resolveFeatureFormula(a.dice, sheet, classKey) + (a.type ? ` ${a.type}` : '') : '', a.save ? `${a.save.ability.toUpperCase()} save DC ${resolveFeatureDc(a.save.dc, sheet)}` : ''].filter(Boolean).join(' · ')}
+          title={[a.cost ? `tốn ${a.cost === 'action' ? 'action' : a.cost === 'bonus' ? 'bonus action' : 'reaction'}` : '', featureActionDice(a, sheet, classKey) ? featureActionDice(a, sheet, classKey) + (a.type ? ` ${a.type}` : '') : '', a.summon ? `AC ${resolveFeatureNumber(a.summon.ac, sheet, classKey)}, HP ${resolveFeatureNumber(a.summon.hp, sheet, classKey)}` : '', a.save ? `${a.save.ability.toUpperCase()} save DC ${resolveFeatureDc(a.save.dc, sheet)}` : ''].filter(Boolean).join(' · ')}
           onClick={() => run(a)}
         >
-          {a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : '✦'} {a.label}
+          {a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : a.kind === 'summon' ? '👼' : '✦'} {a.label}
         </button>
       ))}
     </span>

@@ -29,6 +29,15 @@ import { regainHitDice } from './derived.js';
 import { magicItemActive } from './magicItems.js';
 import { jaegerAfterRest, jaegerDamageParts } from './jaeger.js';
 import { customExtraAttack } from './classDefaults.js';
+import {
+  activePassives,
+  featureRiderParts,
+  passiveCheckBonus,
+  passiveDefenses,
+  passiveMediumArmorMod,
+  passiveUnarmedDie,
+  passiveUnarmoredAc,
+} from './featurePassives.js';
 
 /** Guess melee vs ranged from a range text: "5 ft", "Chạm", "reach 10 ft" → melee; "80/320 ft", "60ft" → ranged. */
 export function inferAttackRange(range: string | undefined): AttackRange {
@@ -78,7 +87,7 @@ export function skillBonus(sheet: CharacterSheet, skill: string): number {
   let bonus = base;
   if (sheet.skillExpertise.includes(skill)) bonus += sheet.proficiencyBonus * 2;
   else if (sheet.skillProficiencies.includes(skill)) bonus += sheet.proficiencyBonus;
-  return bonus + exhaustionPenalty(sheet.exhaustion);
+  return bonus + passiveCheckBonus(sheet, ability, skill) + exhaustionPenalty(sheet.exhaustion);
 }
 
 export function initiativeBonus(sheet: CharacterSheet): number {
@@ -312,6 +321,22 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
  */
 export function unarmedAction(sheet: CharacterSheet): SheetAction {
   const strMod = abilityMod(sheet.abilities.str);
+  const feat = passiveUnarmedDie(sheet);
+  if (feat) {
+    return {
+      id: 'unarmed',
+      name: 'Đòn không vũ khí',
+      actionType: 'action',
+      attackBonus: strMod + sheet.proficiencyBonus,
+      damage: strMod ? `${feat.die}${strMod > 0 ? '+' : ''}${strMod}` : feat.die,
+      damageType: feat.type ?? 'bludgeoning',
+      range: '5 ft',
+      source: 'weapon',
+      attackKind: 'weapon',
+      attackRange: 'melee',
+      description: `${feat.source}: ${feat.die} + STR.`,
+    };
+  }
   return {
     id: 'unarmed',
     name: 'Đòn không vũ khí',
@@ -351,7 +376,7 @@ export function attackKindOf(action: SheetAction): 'weapon' | 'spell' {
 export function riderParts(
   sheet: CharacterSheet,
   kind: 'weapon' | 'spell',
-  opts?: { unarmed?: boolean },
+  opts?: { unarmed?: boolean; range?: AttackRange; primaryType?: string },
 ): DamagePart[] {
   return (sheet.damageRiders ?? [])
     .filter((r) => {
@@ -360,9 +385,11 @@ export function riderParts(
       // 'unarmed' riders ride unarmed strikes only; an unarmed strike is a weapon-kind attack, so it also
       // still gets the ordinary 'weapon' / 'any' riders (no double counting: one rider, one scope)
       if (sc === 'unarmed') return kind === 'weapon' && !!opts?.unarmed;
+      if (sc === 'melee' || sc === 'ranged') return kind === 'weapon' && (opts?.range ?? 'melee') === sc;
       return sc === 'any' || sc === kind;
     })
-    .map((r) => ({ dice: r.dice, type: r.type, label: r.name }));
+    // type 'same' = the attack's own damage type (a +1d6 on whatever the weapon deals)
+    .map((r) => ({ dice: r.dice, type: r.type === 'same' ? opts?.primaryType ?? '' : r.type, label: r.name }));
 }
 
 /**
@@ -404,7 +431,9 @@ export function actionDamageParts(
   const kind = attackKindOf(action);
   const primaryType = action.damageType || parts[0]?.type || '';
 
-  for (const p of riderParts(sheet, kind, { unarmed: isUnarmedAction(action) })) parts.push(p);
+  for (const p of riderParts(sheet, kind, { unarmed: isUnarmedAction(action), range: attackRangeOf(action), primaryType })) parts.push(p);
+  // class/subclass feature riders (standing ones, plus the once-per-turn ones the player armed)
+  for (const p of featureRiderParts(sheet, kind, action, primaryType)) parts.push(p);
   // effect-borne extra damage on the bearer's own attacks (Wood Wose · Gnarled Thorns)
   for (const p of effectAttackRiders(effects, action)) parts.push({ dice: p.dice, type: p.type, label: p.label });
 
@@ -459,6 +488,10 @@ function withAttackTraits(parts: DamagePart[], action: SheetAction): DamagePart[
  * sheet grants nothing, so it can be merged with a token's own `defenses`.
  */
 export function derivedDefenses(sheet: CharacterSheet): Defenses | undefined {
+  return mergeDefenses(baseDerivedDefenses(sheet), passiveDefenses(sheet));
+}
+
+function baseDerivedDefenses(sheet: CharacterSheet): Defenses | undefined {
   const critImmune = sheet.inventory.some((it) => it.equipped && it.grantsCritImmune);
   // Barbarian: resistance to bludgeoning / piercing / slashing while raging.
   const raging = !!sheet.raging && barbarianLevel(sheet) > 0;
@@ -507,6 +540,7 @@ export function spellAttackParts(
   spell?: Pick<Spell, 'agonizingBlast' | 'castingClass'>,
 ): DamagePart[] {
   const parts = [...(spellDamage ?? []).map((p) => ({ ...p })), ...spellRiderParts(sheet)];
+  parts.push(...featureRiderParts(sheet, 'spell', { id: 'spell' }, spellDamage?.[0]?.type ?? ''));
   if (spell?.agonizingBlast && spellDamage?.length) {
     const ab = spellcastingAbilityOf(sheet, spell);
     const mod = ab ? abilityMod(sheet.abilities[ab]) : 0;
@@ -844,6 +878,8 @@ export function extraAttackClasses(sheet: CharacterSheet): string[] {
     .filter((c) => {
       const key = (c.name ?? '').trim().toLowerCase();
       if (c.level >= 5 && EXTRA_ATTACK_CLASSES.includes(key)) return true;
+      // a subclass feature granting Extra Attack (Circle of Symbiosis lv 6)
+      if (activePassives(sheet).some((p) => p.passive.extraAttack && key.includes(p.feature.class))) return true;
       return customExtraAttack(key).some(([lvl, n]) => n >= 2 && c.level >= lvl);
     })
     .map((c) => c.name);
@@ -1417,6 +1453,12 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
     // Unarmored Defense: Barbarian 10 + DEX + CON (shield allowed), Monk 10 + DEX + WIS (no shield).
     let ac = 10 + dexMod + shieldBonus;
     let source = shield ? 'không giáp + khiên' : 'không giáp';
+    // subclass unarmored formulas (Living Nightmare: 11 + DEX + CON)
+    const feat = passiveUnarmoredAc(sheet, shieldBonus);
+    if (feat && feat.ac > ac) {
+      ac = feat.ac;
+      source = feat.source;
+    }
     for (const c of sheetClasses(sheet)) {
       const name = (c.name ?? '').trim().toLowerCase();
       if (name === 'barbarian') {
@@ -1437,10 +1479,18 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
   }
   const base = armor.armorBase ?? 10;
   let dexPart = dexMod;
-  if (armor.armorCategory === 'medium') dexPart = Math.min(dexMod, 2);
+  let swap = '';
+  if (armor.armorCategory === 'medium') {
+    dexPart = Math.min(dexMod, 2);
+    const alt = passiveMediumArmorMod(sheet); // Marauder Momentum: CON (max +2) instead of DEX
+    if (alt && alt.mod > dexPart) {
+      dexPart = alt.mod;
+      swap = ` (${alt.source})`;
+    }
+  }
   else if (armor.armorCategory === 'heavy') dexPart = 0;
   return {
     ac: base + dexPart + shieldBonus,
-    source: shield ? `${armor.name} + khiên` : armor.name,
+    source: (shield ? `${armor.name} + khiên` : armor.name) + swap,
   };
 }

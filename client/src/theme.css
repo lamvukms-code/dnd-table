@@ -27,9 +27,12 @@ body {
 /* dark chrome */
 .topbar { background: linear-gradient(#251c13, #1b140d); border-bottom: 1px solid #6b5637; }
 .topbar > strong { font-family: var(--serif); letter-spacing: 0.06em; font-size: 17px; color: #e9d7ae; }
-.topbar button, .init-bar button { background: #2f2418; border-color: #665238; color: #e9dcc3; }
-.topbar button:hover, .init-bar button:hover { border-color: var(--accent); color: #fff3d6; }
-.topbar button.on, .init-bar button.on { background: #6b2320; border-color: #a5342e; color: #fbe9d0; }
+.hud-pill, .map-tools, .init-bar { background: linear-gradient(#251c13, #1b140d); border-color: #6b5637; }
+.topbar button, .init-bar button, .hud-pill button, .map-tools .mt-btn { background: #2f2418; border-color: #665238; color: #e9dcc3; }
+.topbar button:hover, .init-bar button:hover, .hud-pill button:hover, .map-tools .mt-btn:hover { border-color: var(--accent); color: #fff3d6; }
+.topbar button.on, .init-bar button.on, .hud-pill button.on, .map-tools .mt-btn.on,
+.map-tools .mt-item[open] > .mt-btn { background: #6b2320; border-color: #a5342e; color: #fbe9d0; }
+.top-menu-header strong { font-family: var(--serif); letter-spacing: 0.05em; color: #e9d7ae; }
 button.primary { background: #8a1c1c; border-color: #b23a32; color: #fbeedb; }
 button.on { background: #6b2320; border-color: #a5342e; color: #fbe9d0; }
 button { border-radius: 4px; }

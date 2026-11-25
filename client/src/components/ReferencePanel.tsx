@@ -42,7 +42,8 @@ export function ReferencePanel({ onClose }: { onClose: () => void }) {
     const startW = width;
     let lastW = width; // `width` in this closure is stale once dragging starts
     const move = (ev: PointerEvent) => {
-      lastW = Math.max(240, Math.min(900, startW + (startX - ev.clientX)));
+      // panel floats on the left now, so its grip is the right edge
+      lastW = Math.max(240, Math.min(900, startW + (ev.clientX - startX)));
       setWidth(lastW);
     };
     const up = () => {
