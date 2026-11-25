@@ -227,6 +227,9 @@ export type ClientAction =
   | { t: 'homebrewUpsert'; entry: HomebrewEntry }
   | { t: 'homebrewRemove'; id: string }
   | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean }
+  /** A monster's summon action: roll `count`, place that many of the stat block around it and
+   *  (in combat) give them the summoner's initiative, acting right after it. DM only. */
+  | { t: 'summon'; tokenId: string; statblockId: string; count: string; label?: string; hidden?: boolean }
   /** Drag a character sheet's chip onto the map: reuses its existing token if that token is
    *  already on the active scene, otherwise spawns a fresh one there (e.g. after switching maps)
    *  and re-links the sheet to it. DM or the sheet's own owner only. */

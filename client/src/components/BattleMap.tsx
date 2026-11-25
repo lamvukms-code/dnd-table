@@ -47,6 +47,11 @@ import {
   actionAvailable,
   failCondition,
   parseMultiattack,
+  multiattackOptions,
+  multiTargetSpec,
+  summonSpec,
+  parseSpellList,
+  type MonsterSpellEntry,
   mechanicsOfKind,
   automatedFeatures,
   monsterMechanics,
@@ -1532,6 +1537,9 @@ function TokenInspector({
   const [sbRollMode, setSbRollMode] = useState<RollMode>('normal');
   const [spellPickerOpen, setSpellPickerOpen] = useState(false);
   const [spellSearch, setSpellSearch] = useState('');
+  // Multiattack planner (per swing: which attack, which target) and the multi-target picker
+  const [plan, setPlan] = useState<{ actionId: string; rows: { actionId: string; targetId: string }[] } | null>(null);
+  const [multiPick, setMultiPick] = useState<{ actionId: string; ids: string[] } | null>(null);
   const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
   const [lootTargetSheetId, setLootTargetSheetId] = useState('');
   // monster d20 tests carry the token's Exhaustion (PCs get it through their sheet bonuses)
@@ -1672,6 +1680,79 @@ function TokenInspector({
       }
     }
   }
+
+  /** One stat-block action against one target (an attack roll, its save, or plain damage) — no economy spend. */
+  async function runOne(act: SheetAction, targetId: string, tag: string) {
+    const tName = tokens.find((t) => t.id === targetId)?.label ?? '';
+    const parts = statblockDamageParts(act, sb!);
+    const label = `${sb!.name} · ${act.name} → ${tName}${tag}`;
+    if (typeof act.attackBonus === 'number') {
+      await attackRoll({
+        label,
+        attackBonus: act.attackBonus,
+        rollMode: sbRollMode,
+        damageParts: parts,
+        targetTokenId: targetId,
+        attackerTokenId: token.id,
+        attackRange: attackRangeOf(act),
+        attackKind: attackKindOf(act),
+        rangeText: act.range ?? act.description,
+        actionName: act.name,
+      });
+    } else if (act.save) {
+      send({
+        t: 'spellSave',
+        targetTokenId: targetId,
+        ability: act.save.ability,
+        dc: act.save.dc,
+        label,
+        damageOnFail: saveFailParts(act, parts),
+        damageHalfOnSave: /half (?:as much )?damage/i.test(act.description ?? ''),
+        sourceTokenId: token.id,
+        actionName: act.name,
+        effectOnFail: saveEffect(act),
+      });
+    } else if (parts.length) {
+      await damageRoll(label, parts, targetId, { tokenId: token.id });
+    }
+  }
+  function openPlan(a: SheetAction) {
+    const steps = parseMultiattack(a.description, sb!.actions);
+    const rows = steps.flatMap((st) => Array.from({ length: st.count }, () => ({ actionId: st.actionId, targetId: sbTargetId })));
+    setPlan(plan?.actionId === a.id ? null : { actionId: a.id, rows });
+  }
+  async function runPlan(a: SheetAction) {
+    if (!plan || !spendFor(a, true)) return;
+    const rows = plan.rows.filter((r) => r.targetId);
+    setPlan(null);
+    for (let i = 0; i < rows.length; i++) {
+      const act = sb!.actions.find((x) => x.id === rows[i].actionId);
+      if (act) await runOne(act, rows[i].targetId, ` (Multiattack ${i + 1}/${rows.length})`);
+    }
+  }
+  async function runMultiTarget(a: SheetAction, attack: SheetAction) {
+    if (!multiPick || !spendFor(a, true) || !useLimited(a)) return;
+    const ids = multiPick.ids;
+    setMultiPick(null);
+    for (const id of ids) await runOne(attack, id, ` (${a.name})`);
+  }
+  /** Use one spell from a Spellcasting list: counts its per-day use / its level's slot. */
+  function useSpellEntry(e: MonsterSpellEntry): boolean {
+    const key = e.slotLevel ? `slot:${e.slotLevel}` : e.perDay ? `spell:${e.name.toLowerCase()}` : '';
+    if (!key) return true;
+    const max = e.slotLevel ? (e.slots ?? 0) : (e.perDay ?? 0);
+    const used = token.actionUses?.[key] ?? 0;
+    if (used >= max && !window.confirm(`${e.name}: đã dùng hết ${max}${e.slotLevel ? ` slot cấp ${e.slotLevel}` : '/ngày'}. Vẫn dùng?`)) return false;
+    send({ t: 'updateToken', id: token.id, patch: { actionUses: { ...(token.actionUses ?? {}), [key]: used + 1 } } });
+    return true;
+  }
+  // Spell lists written in Spellcasting traits / actions ("At Will: …, 1/Day Each: …", "1st level (4 slots): …")
+  const spellBlocks = (sb && !linkedSheet ? [...sb.traits, ...sb.actions] : [])
+    .filter((x) => /^(?:innate )?spellcasting/i.test(x.name))
+    .map((x) => ({ from: x, parsed: parseSpellList(x.description, (n) => !!findCantrip(n)) }))
+    .filter((b) => b.parsed.entries.length > 0);
+  const spellActionIds = new Set(spellBlocks.map((b) => (b.from as { id?: string }).id).filter(Boolean));
+  const bestiaryNames = bestiary.map((s) => s.name);
 
   function startActionAoe(
     a: NonNullable<Token['statblock']>['actions'][number],
@@ -2130,6 +2211,17 @@ function TokenInspector({
             const used = token.actionUses?.[a.id] ?? 0;
             const spent = !actionAvailable(lim, used);
             const multi = /^multiattack/i.test(a.name) ? parseMultiattack(a.description, sb.actions) : [];
+            const opts = multi.length ? multiattackOptions(a.description, sb.actions) : { swaps: [], pre: [] };
+            const mt = multiTargetSpec(a, sb.actions);
+            const sm = isDm ? summonSpec(a, bestiaryNames) : null;
+            if (spellActionIds.has(a.id)) {
+              return (
+                <div key={a.id} className="sb-act">
+                  <span className="sb-act-name" title={a.description}>{a.name}</span>
+                  <span className="sb-act-detail">danh sách phép ở mục 🔮 bên dưới</span>
+                </div>
+              );
+            }
             const dmgLabel = parts
               .map((p) => `${p.dice}${p.type ? ' ' + p.type : ''}`)
               .join(' + ');
@@ -2170,6 +2262,104 @@ function TokenInspector({
                   >
                     ⚔ {multi.map((m) => `${m.count}×${m.name}`).join(' + ')}
                   </button>
+                )}
+                {multi.length > 0 && (
+                  <button
+                    className="roll-btn"
+                    title={`Chia từng đòn: chọn đòn (kể cả đòn thay thế${opts.swaps.length ? ': ' + opts.swaps.map((x) => x.name).join(', ') : ''}) và mục tiêu cho mỗi lượt`}
+                    onClick={() => openPlan(a)}
+                  >
+                    📝 chia đòn
+                  </button>
+                )}
+                {mt && (
+                  <button
+                    className="roll-btn strong"
+                    title={`${mt.attack.name} vào tối đa ${mt.max} mục tiêu khác nhau`}
+                    onClick={() => setMultiPick(multiPick?.actionId === a.id ? null : { actionId: a.id, ids: sbTargetId ? [sbTargetId] : [] })}
+                  >
+                    ⚔ ≤{mt.max} mục tiêu
+                  </button>
+                )}
+                {sm && (
+                  <button
+                    className="roll-btn strong"
+                    title={`Đặt ${sm.count} ${sm.name} quanh ${token.label}; đang combat thì chung initiative, đi ngay sau`}
+                    onClick={() => {
+                      const target = bestiary.find((s) => s.name === sm.name);
+                      if (!target || !spendFor(a, true) || !useLimited(a)) return;
+                      send({ t: 'summon', tokenId: token.id, statblockId: target.id, count: sm.count, label: a.name });
+                    }}
+                  >
+                    ✨ {sm.count}× {sm.name}
+                  </button>
+                )}
+                {plan?.actionId === a.id && (
+                  <div className="sb-plan">
+                    {opts.pre.length > 0 && (
+                      <p className="hint">Trước đó: {opts.pre.map((x) => x.name).join(', ')} (bấm ở dòng của nó)</p>
+                    )}
+                    {plan.rows.map((r, i) => {
+                      const choices = [...new Set([...multi.map((m) => m.actionId), ...opts.swaps.map((x) => x.id)])];
+                      return (
+                        <div key={i} className="sb-plan-row">
+                          <span>{i + 1}.</span>
+                          <select
+                            value={r.actionId}
+                            onChange={(e) => setPlan({ ...plan, rows: plan.rows.map((x, j) => (j === i ? { ...x, actionId: e.target.value } : x)) })}
+                          >
+                            {choices.map((id) => (
+                              <option key={id} value={id}>
+                                {sb.actions.find((x) => x.id === id)?.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={r.targetId}
+                            onChange={(e) => setPlan({ ...plan, rows: plan.rows.map((x, j) => (j === i ? { ...x, targetId: e.target.value } : x)) })}
+                          >
+                            <option value="">— bỏ —</option>
+                            {tokens
+                              .filter((t) => t.id !== token.id)
+                              .map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.label} ({gridFeet(token, t)} ft)
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                    <button className="roll-btn strong" disabled={!plan.rows.some((r) => r.targetId)} onClick={() => void runPlan(a)}>
+                      ⚔ Tung {plan.rows.filter((r) => r.targetId).length} đòn
+                    </button>
+                  </div>
+                )}
+                {mt && multiPick?.actionId === a.id && (
+                  <div className="sb-plan">
+                    {tokens
+                      .filter((t) => t.id !== token.id && !t.godsBaneBlade)
+                      .sort((x, y) => gridFeet(token, x) - gridFeet(token, y))
+                      .map((t) => {
+                        const on = multiPick.ids.includes(t.id);
+                        return (
+                          <label key={t.id} className="sb-plan-row">
+                            <input
+                              type="checkbox"
+                              checked={on}
+                              disabled={!on && multiPick.ids.length >= mt.max}
+                              onChange={() =>
+                                setMultiPick({ ...multiPick, ids: on ? multiPick.ids.filter((x) => x !== t.id) : [...multiPick.ids, t.id] })
+                              }
+                            />
+                            {t.label} <em>({gridFeet(token, t)} ft)</em>
+                          </label>
+                        );
+                      })}
+                    <button className="roll-btn strong" disabled={!multiPick.ids.length} onClick={() => void runMultiTarget(a, mt.attack)}>
+                      ⚔ {mt.attack.name} × {multiPick.ids.length}
+                    </button>
+                  </div>
                 )}
                 {isAttack && sbTargetId && (
                   <button
@@ -2391,7 +2581,7 @@ function TokenInspector({
                   </div>
                 </div>
               )}
-              {sb.spellcasting.spellNames.map((name) => {
+              {!spellBlocks.length && sb.spellcasting.spellNames.map((name) => {
                 const def = findCantrip(name);
                 if (!def) return <p key={name} className="hint">{name} — không tìm thấy trong database</p>;
                 const spell = monsterSpellFrom(def, sb.spellcasting!, `${token.id}-${def.id}`);
@@ -2417,13 +2607,85 @@ function TokenInspector({
                   </div>
                 );
               })}
-              {sb.spellcasting.spellNames.length === 0 && (
+              {!spellBlocks.length && sb.spellcasting.spellNames.length === 0 && (
                 <p className="hint">
                   Chưa gán tên phép cố định — bấm "🔍 tìm phép khác" để tra SRD và cast trực tiếp.
                 </p>
               )}
             </details>
           )}
+          {spellBlocks.map(({ from, parsed }) => {
+            const sc = sb.spellcasting ?? { spellSaveDc: parsed.dc ?? 10, spellAttackBonus: parsed.attack ?? 0, spellNames: [] };
+            const dc = parsed.dc ?? sc.spellSaveDc;
+            const atk = parsed.attack ?? sc.spellAttackBonus;
+            const cast = { ...sc, spellSaveDc: dc, spellAttackBonus: atk };
+            const groups: { label: string; key?: string; max?: number; list: MonsterSpellEntry[] }[] = [];
+            for (const e of parsed.entries) {
+              const label = e.slotLevel ? `Cấp ${e.slotLevel}` : e.perDay ? `${e.perDay}/ngày` : 'Tùy ý';
+              let g = groups.find((x) => x.label === label);
+              if (!g) groups.push((g = { label, key: e.slotLevel ? `slot:${e.slotLevel}` : undefined, max: e.slotLevel ? e.slots : undefined, list: [] }));
+              g.list.push(e);
+            }
+            return (
+              <details key={from.name} className="sb-traits-view" open>
+                <summary>
+                  🔮 {from.name} (DC {dc} · {fmtMod(atk)} đánh)
+                </summary>
+                {groups.map((g) => (
+                  <div key={g.label} className="sb-spell-group">
+                    <p className="hint">
+                      {g.label}
+                      {g.key && ` · còn ${Math.max(0, (g.max ?? 0) - (token.actionUses?.[g.key] ?? 0))}/${g.max} slot`}
+                    </p>
+                    {g.list.map((e) => {
+                      const def = findCantrip(e.name);
+                      const k = e.perDay && !e.slotLevel ? `spell:${e.name.toLowerCase()}` : '';
+                      const used = k ? (token.actionUses?.[k] ?? 0) : 0;
+                      const spell = def ? monsterSpellFrom(def, cast, `${token.id}-${def.id}`) : undefined;
+                      return (
+                        <div key={e.name} className="sb-act">
+                          <span className="sb-act-name" title={spell?.notes ?? 'Không có trong database phép — chỉ đếm lượt dùng'}>
+                            {spell?.name ?? e.name}
+                            {spell && <em> · lv{spell.level}</em>}
+                            {k && (
+                              <span className={`sb-limit ${used >= (e.perDay ?? 0) ? 'spent' : ''}`}> · còn {Math.max(0, (e.perDay ?? 0) - used)}/{e.perDay}</span>
+                            )}
+                          </span>
+                          <span className="sb-act-detail">{spell ? `${spell.range ?? ''}${spell.area ? ` · ${spell.area}` : ''}` : 'homebrew'}</span>
+                          {isDm && (
+                            <button
+                              className={`roll-btn ${spell ? 'strong' : ''}`}
+                              onClick={() => {
+                                if (spell) {
+                                  if (!spendFor(spell, true) || !useSpellEntry(e)) return;
+                                  beginMonsterCast(token.id, spell, atk);
+                                } else useSpellEntry(e);
+                              }}
+                            >
+                              {spell ? '🪄 ra phép' : '✓ dùng'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                {isDm && parsed.entries.some((e) => e.perDay || e.slotLevel) && (
+                  <button
+                    className="link"
+                    title="Đặt lại lượt phép/ngày và slot (nghỉ dài)"
+                    onClick={() => {
+                      const next = { ...(token.actionUses ?? {}) };
+                      for (const key of Object.keys(next)) if (/^(spell|slot):/.test(key)) delete next[key];
+                      send({ t: 'updateToken', id: token.id, patch: { actionUses: next } });
+                    }}
+                  >
+                    ↺ hồi phép
+                  </button>
+                )}
+              </details>
+            );
+          })}
           {sb.notes && <p className="hint">{sb.notes}</p>}
         </div>
       )}

@@ -89,6 +89,13 @@ export function parseMultiattack(description: string | undefined, actions: Sheet
     const pos = (a: SheetAction) => desc.search(new RegExp(`\\b${baseName(a.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
     const named = attacks.filter((a) => pos(a) >= 0).sort((x, y) => pos(x) - pos(y))[0];
     const pick = named ?? attacks[0];
+    // "makes three attacks, only one of which can be with its bite": 1 bite + the rest with another attack
+    const only = /only one of which (?:can|may) be (?:with |a )?(?:its |his |her |their )?([A-Za-z' -]+?)(?:\s+attack)?(?=[,.;]|$)/i.exec(desc);
+    if (only && count > 1) {
+      const x = byLen.find((a) => sing(only[1].trim().toLowerCase()).endsWith(sing(baseName(a.name))));
+      const other = attacks.find((a) => a !== x);
+      if (x && other) return [{ actionId: x.id, name: x.name, count: 1 }, { actionId: other.id, name: other.name, count: count - 1 }];
+    }
     return [{ actionId: pick.id, name: pick.name, count }];
   }
   return [];
@@ -144,4 +151,137 @@ export function upcastDamagePart(
   if (!perLevel || spellLevel < 1 || extra <= 0) return undefined;
   const dice = scaleDice(perLevel, extra);
   return dice ? { dice, type: type ?? '', label: `Nâng ô +${extra}` } : undefined;
+}
+
+
+// ---------------------------------------------------------------- multiattack options, multi-target, summons
+
+const WORDNUM: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
+const clean = (n: string) => n.replace(/\(.*?\)/g, '').trim().toLowerCase();
+
+/** Find a stat-block action by a name written in prose ("Talons", "a use of Snap Limb", "its tail"). */
+export function actionByProse(prose: string, actions: SheetAction[]): SheetAction | undefined {
+  const p = prose.toLowerCase().replace(/^(?:a use of|use of|its|his|her|their|a|an|one)\s+/, '').replace(/\s+attacks?$/, '').trim();
+  const sing = (w: string) => w.replace(/(?<=[a-z])s$/, '');
+  const byLen = [...actions].sort((x, y) => clean(y.name).length - clean(x.name).length);
+  return byLen.find((a) => {
+    const n = clean(a.name);
+    return n === p || sing(n) === sing(p) || p.startsWith(n) || sing(p).startsWith(sing(n));
+  });
+}
+
+/** What a Multiattack lets you swap in ("can replace one attack with X", "use X in place of one attack") and what it uses first. */
+export function multiattackOptions(description: string | undefined, actions: SheetAction[]): { swaps: SheetAction[]; pre: SheetAction[] } {
+  const d = description ?? '';
+  const others = actions.filter((a) => !/^multiattack/i.test(a.name));
+  const swaps: SheetAction[] = [];
+  const add = (list: SheetAction[], a: SheetAction | undefined) => a && !list.includes(a) && list.push(a);
+  for (const m of d.matchAll(/(?:replace|in place of|instead of)[^.]*?\b(?:with|of)\s+(?:a use of\s+|its\s+|an?\s+)?([A-Z][\w' -]+?)(?:\s+attacks?)?(?=,|\.|\s+if\b|\s+\(|$)/g)) add(swaps, actionByProse(m[1], others));
+  for (const m of d.matchAll(/\buse (?:its |his |her )?([A-Z][\w' -]+?) in place of/g)) add(swaps, actionByProse(m[1], others));
+  for (const m of d.matchAll(/\bcan use (?:its |his |her )?([A-Z][\w' -]+?) instead of/g)) add(swaps, actionByProse(m[1], others));
+  // free choice ("makes three attacks", "makes two attacks, using Claw or Bite"): any of its attacks
+  if (/\bmakes\s+(?:two|three|four|five|\d+)\s+(?:melee\s+|ranged\s+|weapon\s+)?attacks(?!\s*:)/i.test(d) && !/\b(?:one|two|three)\s+with\s+(?:its|his|her|their)\b/i.test(d))
+    for (const a of others) if (typeof a.attackBonus === 'number') add(swaps, a);
+  const pre: SheetAction[] = [];
+  for (const m of d.matchAll(/\b(?:uses|can use) (?:its|his|her) ([A-Z][\w' -]+?)(?:\s*\(if available\))?(?:,|\.| and| then)/g)) {
+    const a = actionByProse(m[1], others);
+    if (a && !swaps.includes(a)) add(pre, a);
+  }
+  return { swaps, pre };
+}
+
+/** "makes a tentacle attack against up to five creatures" / "makes a melee spell attack against each" (up to N). */
+export function multiTargetSpec(a: SheetAction, actions: SheetAction[]): { attack: SheetAction; max: number } | null {
+  const d = a.description ?? '';
+  const m = /make[s]? (?:a|an|one) ([\w' -]+?) attack against (?:up to |each of up to )?(two|three|four|five|six|\d+) (?:different )?(?:creatures|targets)/i.exec(d);
+  if (m) {
+    const atk = actionByProse(m[1], actions.filter((x) => typeof x.attackBonus === 'number' && x.id !== a.id));
+    if (atk) return { attack: atk, max: WORDNUM[m[2].toLowerCase()] ?? Number(m[2]) };
+  }
+  const n = /chooses? up to (two|three|four|five|six|\d+) creatures[^.]*\.[^.]*attack[^.]*against each/i.exec(d);
+  if (n && typeof a.attackBonus === 'number') return { attack: a, max: WORDNUM[n[1].toLowerCase()] ?? Number(n[1]) };
+  return null;
+}
+
+/** "summons three hunting hounds (use the Wolf stat block)", "lets out 1d4 will-o'-wisps", "summons two Wights". */
+export function summonSpec(a: SheetAction, bestiaryNames: string[]): { count: string; name: string } | null {
+  const d = a.description ?? '';
+  const re = /(?:summons?|creates?|calls? forth|lets? out)\s+(?:up to\s+)?(\d+d\d+|\d+|an?|one|two|three|four|five|six)\s+([\w' -]+?)(?:\s*\(use the ([\w' -]+?) stat block\))?(?=\s+(?:in|into|that|which|to|who|and)\b|,|\.|$)/gi;
+  const sing = (w: string) => w.replace(/(?<=[a-z])s$/, '').replace(/-/g, ' ');
+  const names = bestiaryNames.filter(Boolean);
+  for (const m of d.matchAll(re)) {
+    const want = (m[3] ?? m[2]).trim().toLowerCase();
+    const hit =
+      names.find((n) => n.toLowerCase() === want) ??
+      names.find((n) => sing(n.toLowerCase()) === sing(want)) ??
+      (m[3] || want.split(/\s+/).length > 3 ? undefined : names.find((n) => sing(want).endsWith(' ' + sing(n.toLowerCase()))));
+    if (!hit) continue;
+    const c = m[1].toLowerCase();
+    return { count: /d/.test(c) ? c : String(WORDNUM[c] ?? Number(c)), name: hit };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- monster spell lists
+
+export interface MonsterSpellEntry {
+  name: string;
+  /** Casts per day (unset = at will). */
+  perDay?: number;
+  /** Leveled caster: spell slots of this level (shared by the spells of that level). */
+  slotLevel?: number;
+  slots?: number;
+}
+
+/**
+ * Read a Spellcasting trait / action: "At Will: Detect Magic, Hold Person 1/Day Each: Polymorph",
+ * "3/day each: fear, darkness", "1st level (4 slots): cure wounds, bless". `isSpell` checks a name
+ * against the spell database, so prose glued after the last spell is dropped.
+ */
+export function parseSpellList(text: string | undefined, isSpell: (name: string) => boolean): { entries: MonsterSpellEntry[]; dc?: number; attack?: number } {
+  const t = (text ?? '').replace(/\s+/g, ' ');
+  const dc = /spell save DC (\d+)/i.exec(t);
+  const atk = /([+-]\d+) to hit(?: with spell attacks)?/i.exec(t);
+  // also the Vietnamese wording of hand-written stat blocks: "2/ngày mỗi phép:", "Cấp 1 (4 slot):"
+  const marker = /(At Will|Cantrips?(?: \(at will\))?|(\d+)\s*\/\s*(?:day|ngày)(?: each| mỗi phép)?|(?:(\d+)(?:st|nd|rd|th) level|Cấp (\d+)) \((\d+) slots?\))\s*:\s*/gi;
+  const hits = [...t.matchAll(marker)];
+  const entries: MonsterSpellEntry[] = [];
+  hits.forEach((h, i) => {
+    const start = (h.index ?? 0) + h[0].length;
+    const end = i + 1 < hits.length ? hits[i + 1].index ?? t.length : t.length;
+    const chunk = t.slice(start, end);
+    const items = chunk.split(/,\s*/);
+    for (let k = 0; k < items.length; k++) {
+      // prose after the list ("… Polymorph. Constitution Saving Throw: DC 17, …") ends it
+      const stop = /[.:;]\s+\S/.test(items[k].replace(/\(.*?\)/g, ''));
+      // private-use glyphs some book exports put after homebrew spell names
+      let raw = items[k].replace(/\(.*?\)/g, '').replace(/[*†]/g, '').replace(/[\uE000-\uF8FF]|[\uDB80-\uDBFF][\uDC00-\uDFFF]/g, '').trim();
+      // the last item may carry the next sentence: keep the longest leading run of words that is a spell
+      const words = raw.split(/\s+/);
+      let name = '';
+      for (let w = Math.min(words.length, 5); w >= 1; w--) {
+        const cand = words.slice(0, w).join(' ').replace(/[.:;]+$/, '').trim();
+        if (isSpell(cand)) {
+          name = cand;
+          break;
+        }
+      }
+      if (!name) {
+        // not in the spell database: keep short plain names (homebrew spells), drop prose
+        const plain = raw.replace(/[.:;]+$/, '');
+        if (!stop && plain.split(/\s+/).length <= 4 && !/\d|[.:;]/.test(plain)) name = plain;
+        else break;
+      }
+      raw = name;
+      const e: MonsterSpellEntry = { name: raw };
+      if (h[2]) e.perDay = Number(h[2]);
+      if (h[3] || h[4]) {
+        e.slotLevel = Number(h[3] || h[4]);
+        e.slots = Number(h[5]);
+      }
+      if (!entries.some((x) => x.name.toLowerCase() === raw.toLowerCase())) entries.push(e);
+      if (stop) break;
+    }
+  });
+  return { entries, dc: dc ? Number(dc[1]) : undefined, attack: atk ? Number(atk[1]) : undefined };
 }

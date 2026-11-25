@@ -3831,6 +3831,75 @@ export class Room {
         break;
       }
 
+      case 'summon': {
+        if (!isDm) return 'Chỉ DM được triệu hồi';
+        const caller = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        const sb = this.state.bestiary.find((s) => s.id === action.statblockId);
+        if (!caller || !sb) return 'Không tìm thấy quái / statblock';
+        let n = 1;
+        try {
+          n = /d/i.test(action.count) ? rollNotation(action.count).total : Number(action.count);
+        } catch {
+          n = 1;
+        }
+        n = Math.max(1, Math.min(12, Math.floor(n) || 1));
+        const made: Token[] = [];
+        for (let i = 0; i < n; i++) {
+          const tok = createToken({
+            label: this.nextMonsterLabel(sb.name),
+            x: caller.x,
+            y: caller.y,
+            size: sb.size,
+            color: sb.color,
+            imageUrl: sb.imageUrl,
+            armorClass: sb.ac,
+            currentHp: sb.maxHp,
+            maxHp: sb.maxHp,
+            hidden: action.hidden ?? caller.hidden ?? false,
+            statblock: tokenStatblockFrom(sb),
+            defenses: sb.defenses ? { ...sb.defenses } : undefined,
+            baneTag: sb.baneTag,
+            undying: sb.undying,
+          });
+          // nearest free squares in rings around the summoner
+          const span = tokenSpan(tok);
+          const cs = tokenSpan(caller);
+          let spot: { x: number; y: number } | undefined;
+          for (let r = 1; r <= 12 && !spot; r++) {
+            for (let dy = -r - span + 1; dy <= cs + r - 1 && !spot; dy++)
+              for (let dx = -r - span + 1; dx <= cs + r - 1 && !spot; dx++) {
+                const p = { x: caller.x + dx, y: caller.y + dy };
+                if (p.x < 0 || p.y < 0 || p.x + span > this.state.map.cols || p.y + span > this.state.map.rows) continue;
+                if (this.state.tokens.some((t) => !t.godsBaneBlade && edgeFeet(p, span, t, tokenSpan(t)) === 0)) continue;
+                spot = p;
+              }
+          }
+          if (spot) {
+            tok.x = spot.x;
+            tok.y = spot.y;
+          }
+          this.state.tokens.push(tok);
+          made.push(tok);
+        }
+        const init = this.state.initiative;
+        const at = init.entries.findIndex((e) => e.tokenId === caller.id);
+        if (init.running && at >= 0) {
+          // shares the summoner's initiative and acts right after it (and after earlier summons)
+          const me = init.entries[at];
+          let k = at + 1;
+          while (k < init.entries.length && init.entries[k].initiative === me.initiative && init.entries[k].summonedBy === caller.id) k++;
+          init.entries.splice(
+            k,
+            0,
+            ...made.map((tk) => ({ id: nanoid(8), name: tk.label, initiative: me.initiative, tokenId: tk.id, isActive: false, hasGone: me.hasGone, summonedBy: caller.id })),
+          );
+          if (me.hasGone) init.turnIndex += made.length; // turnIndex counts turns already taken this round
+        }
+        this.systemLog(`${caller.label} · ${action.label ?? 'triệu hồi'}: ${made.length}× ${sb.name}${init.running && at >= 0 ? ' (chung initiative, đi ngay sau)' : ''}`);
+        this.touch();
+        break;
+      }
+
       case 'spawnStatblock': {
         if (!isDm) return 'Chỉ DM được spawn NPC';
         const sb = this.state.bestiary.find((s) => s.id === action.id);

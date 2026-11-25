@@ -1043,6 +1043,8 @@ export interface InitiativeEntry {
   hasGone: boolean;
   /** Sorts after every other entry with the same initiative (the God's Bane blade's fixed count 20). */
   loseTies?: boolean;
+  /** Summoned by this token: shares its initiative and acts right after it. */
+  summonedBy?: string;
 }
 
 export interface Initiative {
