@@ -138,6 +138,8 @@ import {
   sizeIndex,
   skillBonus,
   type MonsterMechanic,
+  mechanicsOfKind,
+  regenSuppressed,
 } from '@dnd-table/shared';
 
 /** Prompt options need an id the DM's pick can name (imported stat-block actions often have none). */
@@ -149,6 +151,10 @@ function withOptionIds<T extends { id: string }>(list: T[], prefix: string): T[]
 const PLAYER_TOKEN_FIELDS = new Set([
   'x', 'y', 'label', 'color', 'imageUrl', 'size', 'cover', 'currentHp', 'maxHp', 'tempHp', 'armorClass', 'actionUses',
 ]);
+
+/** Damage types plus attack traits (magical, silvered, moongilded…) of damage parts. */
+const partTypes = (parts: { type?: string; traits?: string[] }[]): string[] =>
+  [...new Set(parts.flatMap((p) => [p.type ?? '', ...(p.traits ?? [])]).filter(Boolean).map((x) => x.toLowerCase()))];
 
 export class Room {
   state: RoomState;
@@ -247,6 +253,7 @@ export class Room {
   }
 
   private touch(): void {
+    this.processDowns();
     this.syncLinkedAc();
     this.enforceConditionImmunity();
     // God's Bane undying / permanent-kill notes queued during damage, logged after the damage lines.
@@ -292,7 +299,8 @@ export class Room {
   }
 
   /** Damage lands on temp HP first, then HP. Sheet-linked tokens are handled on the sheet. */
-  private applyDamage(token: Token, amount: number, opts?: { godsBane?: boolean; crit?: boolean }): { applied: number; absorbed: number } {
+  private applyDamage(token: Token, amount: number, opts?: { godsBane?: boolean; crit?: boolean; types?: string[] }): { applied: number; absorbed: number } {
+    if (amount > 0 && opts?.types?.length) token.tookSinceTurn = [...new Set([...(token.tookSinceTurn ?? []), ...opts.types.map((x) => x.toLowerCase())])];
     if (token.godsBaneBlade) return { applied: 0, absorbed: 0 }; // the blade cannot be damaged
     const sheet = this.linkedSheet(token);
     const hpBefore = sheet ? sheet.currentHp : token.currentHp;
@@ -333,6 +341,7 @@ export class Room {
     // Wood Wose & co.: end when the bearer drops to 0 HP
     if (r.hp <= 0) this.endDownEffects(token, 'còn 0 HP');
     if (!sheet && amount > 0 && typeof hpBefore === 'number') this.undyingCheck(token, hpBefore, r.hp, !!opts?.godsBane);
+    if (!sheet && typeof hpBefore === 'number' && hpBefore > 0 && r.hp <= 0 && !token.downedUndying) this.pendingDowns.push(token.id);
     return { applied: r.applied, absorbed: r.absorbed };
   }
 
@@ -1262,6 +1271,7 @@ export class Room {
     if (phase === 'start-of-turn') token.turnUsed = undefined; // a new turn: Action / Bonus / Reaction available again
     const INCAPACITATING = ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'];
     if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
+    this.monsterTurnHooks(token, phase === 'start-of-turn' ? 'start' : 'end');
     if (phase === 'start-of-turn') {
       const ending = (this.state.hazards ?? []).filter((h) => h.sourceTokenId === token.id);
       if (ending.length) {
@@ -1422,6 +1432,7 @@ export class Room {
   private checkDmPrompts(ctx?: { endingId?: string; prevActiveInit?: number; includeLegendary?: boolean }): void {
     this.state.oaPrompts = []; // a new turn: last turn's Opportunity Attack offers lapse
     for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
+    for (const t of this.state.tokens) if (t.auraHitTurn?.length) t.auraHitTurn = [];
     if (this.state.dmPrompt) return; // don't clobber an unanswered prompt
     const init = this.state.initiative;
     if (!init.running) return;
@@ -1531,7 +1542,7 @@ export class Room {
     }
     const out = resolveDamageParts([{ part: { dice: h.dice, type: h.type }, raw: rolled }], this.effectiveDefenses(t));
     const dealt = s.pass ? (h.halfOnSave ? Math.floor(out.totalFinal / 2) : 0) : out.totalFinal;
-    const took = dealt > 0 ? this.applyDamage(t, dealt) : { applied: 0, absorbed: 0 };
+    const took = dealt > 0 ? this.applyDamage(t, dealt, { types: [h.type] }) : { applied: 0, absorbed: 0 };
     this.pushRoll({
       id: nanoid(8),
       ts: Date.now(),
@@ -1553,6 +1564,178 @@ export class Room {
       this.mechCache.set(t.statblock, m);
     }
     return m;
+  }
+
+  /** Monsters that dropped to 0 HP during this action — their death triggers run in `touch()`. */
+  private pendingDowns: string[] = [];
+
+  /** Roll damage dice of one or more parts against `t` (its defences), apply, log. Returns damage dealt. */
+  private mechDamage(t: Token, parts: { dice: string; type: string }[], label: string, opts?: { save?: { ability: Ability; dc: number }; halfOnSave?: boolean; magical?: boolean }): number {
+    let saveNote = '';
+    let pass = false;
+    if (opts?.save) {
+      const s = this.rollTokenSave(t, opts.save.ability, opts.save.dc, false, undefined, undefined, opts.magical);
+      pass = s.pass;
+      saveNote = ` · ${opts.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${opts.save.dc} ${pass ? '✔' : '✘'}`;
+    }
+    let rolled: { part: DamagePart; raw: number }[] = [];
+    try {
+      rolled = parts.map((p) => ({ part: { dice: p.dice, type: p.type }, raw: rollNotation(p.dice).total }));
+    } catch {
+      return 0;
+    }
+    const out = resolveDamageParts(rolled, this.effectiveDefenses(t));
+    const dealt = pass ? (opts?.halfOnSave ? Math.floor(out.totalFinal / 2) : 0) : out.totalFinal;
+    const took = dealt > 0 ? this.applyDamage(t, dealt, { types: parts.map((p) => p.type) }) : { applied: 0, absorbed: 0 };
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: 'system',
+      actorName: 'Hệ thống',
+      label: `${label} → ${t.label}${saveNote} — ${dealt} ${parts.map((p) => p.type).join(' + ')}`,
+      result: externalRollResult(parts.map((p) => p.dice).join(' + '), { total: rolled.reduce((n, r) => n + r.raw, 0), faces: [] }),
+      damage: { targetTokenId: t.id, targetName: t.label, amount: took.applied, raw: out.totalRaw, damageType: parts[0]?.type ?? '', notes: damageBreakdownNotes(out) },
+    });
+    return dealt;
+  }
+
+  /** Everyone within `radiusFt` of `c` (edge to edge), except `c`. */
+  private tokensNear(c: Token, radiusFt: number, pred: (t: Token) => boolean = () => true): Token[] {
+    return this.state.tokens.filter((t) => t.id !== c.id && !t.godsBaneBlade && edgeFeet(c, tokenSpan(c), t, tokenSpan(t)) <= radiusFt && pred(t));
+  }
+
+  private alive = (t: Token) => !(typeof t.currentHp === 'number' && t.currentHp <= 0);
+
+  /** A monster just dropped to 0 HP: revive (N/day), else bursts, effects on allies, reminder lines. */
+  private processDowns(): void {
+    let guard = 0;
+    while (this.pendingDowns.length && guard++ < 20) {
+      const id = this.pendingDowns.shift()!;
+      const t = this.state.tokens.find((x) => x.id === id);
+      if (!t || this.alive(t)) continue;
+      const mechs = this.mechOf(t);
+      const rv = mechanicsOfKind(mechs, 'reviveAtZero').find((m) => (t.actionUses?.[`mech:${m.from}`] ?? 0) < (m.uses ?? 1));
+      if (rv) {
+        t.actionUses = { ...(t.actionUses ?? {}), [`mech:${rv.from}`]: (t.actionUses?.[`mech:${rv.from}`] ?? 0) + 1 };
+        const hp = rv.hp === 'full' ? (t.maxHp ?? 1) : (() => { try { return rollNotation(rv.hp).total; } catch { return 1; } })();
+        t.currentHp = Math.min(t.maxHp ?? hp, hp);
+        this.systemLog(`♻ ${t.label}: ${rv.from} — không chết, hồi ${t.currentHp} HP`);
+        if (rv.burst) for (const v of this.tokensNear(t, rv.burst.radiusFt)) this.mechDamage(v, rv.burst.damage, `${t.label} · ${rv.from}`, { save: rv.burst.save, halfOnSave: rv.burst.halfOnSave });
+        continue;
+      }
+      // Regeneration that keeps it alive until a turn starts without regenerating: not dead yet.
+      if (mechanicsOfKind(mechs, 'regeneration').some((r) => r.diesOnlyAtTurnStart)) {
+        this.systemLog(`${t.label} gục ở 0 HP — chỉ chết nếu đầu lượt sau không tái sinh được`);
+        continue;
+      }
+      for (const b of mechanicsOfKind(mechs, 'deathBurst')) {
+        for (const v of this.tokensNear(t, b.radiusFt)) this.mechDamage(v, b.damage, `${t.label} · ${b.from}`, { save: b.save, halfOnSave: b.halfOnSave });
+      }
+      for (const a of mechanicsOfKind(mechs, 'deathAllyEffect')) {
+        const allies = this.tokensNear(t, a.radiusFt, (v) => this.isPlayerSide(v) === this.isPlayerSide(t) && this.alive(v));
+        for (const v of allies) {
+          v.effects = [
+            ...(v.effects ?? []),
+            { id: nanoid(8), name: a.effect.name, note: a.effect.note, condition: a.effect.condition as ConditionType | undefined, sourceTokenId: t.id, expiresRound: a.effect.rounds ? this.state.initiative.round + a.effect.rounds : undefined },
+          ];
+        }
+        if (allies.length) this.systemLog(`${t.label} · ${a.from}: ${allies.map((v) => v.label).join(', ')} nhận "${a.effect.name}"`);
+      }
+      for (const n of mechanicsOfKind(mechs, 'deathNote')) this.systemLog(`📜 ${t.label}: ${n.from} (xem statblock)`);
+    }
+  }
+
+  /** One aura reaching one creature: save, then condition / madness / damage; a success may grant immunity. */
+  private applyAura(bearer: Token, t: Token, a: Extract<MonsterMechanic, { kind: 'aura' }>, why: string): void {
+    const key = a.from ?? 'aura';
+    if (bearer.auraImmune?.[key]?.includes(t.id) || bearer.auraHitTurn?.includes(t.id)) return;
+    bearer.auraHitTurn = [...(bearer.auraHitTurn ?? []), t.id];
+    const s = a.save ? this.rollTokenSave(t, a.save.ability, a.save.dc, false, a.onFail.condition as ConditionType | undefined) : { pass: false, total: 0, modeNote: '' };
+    const head = `${bearer.label} · ${key} (${why}) → ${t.label}${a.save ? `: ${a.save.ability.toUpperCase()} cứu ${s.total}${s.modeNote} vs DC ${a.save.dc}` : ''}`;
+    if (s.pass) {
+      if (a.immuneOnSave) bearer.auraImmune = { ...(bearer.auraImmune ?? {}), [key]: [...(bearer.auraImmune?.[key] ?? []), t.id] };
+      if (a.onFail.damage && a.halfOnSave) this.mechDamage(t, [a.onFail.damage], head + ' ✔ (nửa)');
+      else this.systemLog(`${head} ✔${a.immuneOnSave ? ' — miễn nhiễm hào quang này' : ''}`);
+      return;
+    }
+    const bits: string[] = [];
+    if (a.onFail.condition) {
+      t.effects = [
+        ...(t.effects ?? []),
+        { id: nanoid(8), name: `${key} (${bearer.label})`, condition: a.onFail.condition as ConditionType, sourceTokenId: bearer.id, expiresRound: this.state.initiative.round + (a.onFail.rounds ?? 1) },
+      ];
+      bits.push(a.onFail.condition);
+    }
+    if (a.onFail.madness) {
+      const sh = this.linkedSheet(t);
+      if (sh) {
+        const err = this.inflictMadness(sh, a.onFail.madness, { id: 'system', name: 'Hệ thống', role: 'dm' } as Participant);
+        bits.push(err ? `madness (${err})` : `${a.onFail.madness}-term madness`);
+      }
+    }
+    if (a.onFail.damage) {
+      this.mechDamage(t, [a.onFail.damage], head + ' ✘');
+      if (!bits.length) return;
+    }
+    this.systemLog(`${head} ✘ — ${bits.join(', ') || 'trượt'}`);
+  }
+
+  /** Start / end of `t`'s turn: regeneration, turn damage, auras reaching it. */
+  private monsterTurnHooks(t: Token, phase: 'start' | 'end'): void {
+    const mechs = this.mechOf(t);
+    if (phase === 'start') {
+      for (const r of mechanicsOfKind(mechs, 'regeneration')) {
+        const hp = t.currentHp ?? 0;
+        const stopped = regenSuppressed(r, t.tookSinceTurn);
+        if (hp <= 0 && r.diesOnlyAtTurnStart && stopped) {
+          this.systemLog(`☠ ${t.label}: ${r.from} bị chặn (${r.suppressedBy?.join('/')}) — chết hẳn`);
+          continue;
+        }
+        if (stopped) {
+          this.systemLog(`${t.label}: ${r.from} không hoạt động lượt này (vừa dính ${r.suppressedBy?.join('/')})`);
+          continue;
+        }
+        if ((r.needsHp && hp <= 0) || hp >= (t.maxHp ?? 0)) continue;
+        let heal = 0;
+        try {
+          heal = rollNotation(r.hp).total;
+        } catch {
+          continue;
+        }
+        const got = this.applyHeal(t, heal);
+        if (got > 0) this.systemLog(`💚 ${t.label}: ${r.from} hồi ${got} HP${hp <= 0 ? ' — đứng dậy' : ''}`);
+      }
+      t.tookSinceTurn = [];
+    }
+    // its own turn damage (rings around it; creatures it grapples on its turn)
+    for (const d of mechanicsOfKind(mechs, 'turnDamage')) {
+      if (d.when !== phase || !this.alive(t)) continue;
+      if (d.ifBelowHalfHp && !((t.currentHp ?? 0) < (t.maxHp ?? 0) / 2)) continue;
+      if (regenSuppressed(d, t.tookSinceTurn)) continue;
+      const victims =
+        d.targets === 'nearby'
+          ? this.tokensNear(t, d.radiusFt ?? 5)
+          : d.alsoOwnTurn
+            ? this.state.tokens.filter((v) => v.id !== t.id && this.grappledBy(v, t))
+            : [];
+      for (const v of victims) this.mechDamage(v, [{ dice: d.dice, type: d.type }], `${t.label} · ${d.from}`, { save: d.save, halfOnSave: d.halfOnSave });
+    }
+    if (phase === 'start') {
+      // grapplers whose grip hurts at the start of the held creature's turn
+      for (const g of this.state.tokens) {
+        if (g.id === t.id || !this.grappledBy(t, g) || !this.alive(g)) continue;
+        for (const d of mechanicsOfKind(this.mechOf(g), 'turnDamage')) {
+          if (d.targets === 'grappled' && d.when === 'start') this.mechDamage(t, [{ dice: d.dice, type: d.type }], `${g.label} · ${d.from}`, { save: d.save, halfOnSave: d.halfOnSave });
+        }
+      }
+      // auras: hostile creatures with an aura reach this creature
+      for (const b of this.state.tokens) {
+        if (b.id === t.id || !this.alive(b) || this.isPlayerSide(b) === this.isPlayerSide(t)) continue;
+        for (const a of mechanicsOfKind(this.mechOf(b), 'aura')) {
+          if (edgeFeet(b, tokenSpan(b), t, tokenSpan(t)) <= a.radiusFt) this.applyAura(b, t, a, 'đầu lượt');
+        }
+      }
+    }
   }
 
   /** Condition immunities: an effect carrying a condition the creature is immune to never sticks. */
@@ -1710,7 +1893,7 @@ export class Room {
         out.totalFinal = this.baneReduce(target, action.attackerTokenId, out.totalFinal);
         // A plain damage roll against a target is a hit the player resolved themselves.
         this.consumeHitRiders(action.attackerSheetId, dmgParts, actor.id, isDm);
-        const took = this.applyDamage(target, out.totalFinal, { godsBane: !!this.godsBane() && isGodsBaneAttack(action.damageParts) });
+        const took = this.applyDamage(target, out.totalFinal, { godsBane: !!this.godsBane() && isGodsBaneAttack(action.damageParts), types: partTypes(dmgParts) });
         const amount = took.applied;
         // "Dealt damage" includes what temp HP soaked up (a hit is a hit even if HP didn't move).
         if (amount + took.absorbed > 0) this.markDealtDamage(action.attackerTokenId);
@@ -2213,7 +2396,7 @@ export class Room {
         if (damageResult && outcome) {
           const hadTemp = this.tempOf(target);
           const retEff = target.effects?.find((e) => e.retaliate); // captured before the temp HP (and effect) are used up
-          const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane, crit: effectiveCrit });
+          const took = this.applyDamage(target, outcome.totalFinal, { godsBane: !!this.godsBane() && withGodsBane, crit: effectiveCrit, types: partTypes(dmgParts) });
           const applied = took.applied;
           if (attackerTok && atkMechs.length) {
             // A hit that grapples (escape DC), if the target isn't too big and isn't already held by it.
@@ -2560,6 +2743,14 @@ export class Room {
             const was = this.inHazard({ ...token, x: beforeX, y: beforeY }, h);
             if (!was && this.inHazard(token, h)) this.hazardHit(token, h, 'đi vào vùng');
           }
+          for (const b of this.state.tokens) {
+            if (b.id === token.id || !this.alive(b) || this.isPlayerSide(b) === this.isPlayerSide(token)) continue;
+            for (const a of mechanicsOfKind(this.mechOf(b), 'aura')) {
+              if (a.trigger !== 'startOrEnter') continue;
+              const was = edgeFeet({ x: beforeX, y: beforeY }, tokenSpan(token), b, tokenSpan(b)) <= a.radiusFt;
+              if (!was && edgeFeet(token, tokenSpan(token), b, tokenSpan(b)) <= a.radiusFt) this.applyAura(b, token, a, 'đi vào vùng');
+            }
+          }
         }
         // Booming Blade: this token actually changed position (a simplification of "willingly
         // moves" — see the field's doc comment) while primed from an earlier hit.
@@ -2865,7 +3056,7 @@ export class Room {
           const base = evade ? (pass ? 0 : Math.floor(out.totalFinal / 2)) : pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           if (evade) this.pendingBaneLogs.push(`${target.label}: Evasion — ${pass ? 'không nhận sát thương' : 'chỉ nhận nửa'}`);
           const dealt = this.baneReduce(target, action.sourceTokenId, base);
-          const took = this.applyDamage(target, dealt);
+          const took = this.applyDamage(target, dealt, { types: partTypes(action.damageOnFail ?? []) });
           const applied = took.applied;
           if (applied + took.absorbed > 0) this.markDealtDamage(action.sourceTokenId);
           this.pushRoll({

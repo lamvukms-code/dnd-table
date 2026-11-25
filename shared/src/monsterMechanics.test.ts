@@ -13,6 +13,7 @@ import {
   monsterMechanics,
   onHitGrappleFor,
   registerMonsterMechanics,
+  regenSuppressed,
 } from './monsterMechanics.js';
 import type { SheetAction } from './types.js';
 import { parseMultiattack } from './monsterActions.js';
@@ -84,5 +85,33 @@ describe('multiattack wording', () => {
   it('"one with its bite and two with its claws"', () => {
     const acts = [act('Bite', '', 9), act('Claw', '', 9)];
     expect(parseMultiattack('The beast makes three attacks: one with its bite and two with its claws.', acts).map((s) => `${s.count}×${s.name}`)).toEqual(['1×Bite', '2×Claw']);
+  });
+});
+
+describe('monster mechanics wave 2: turn hooks and death', () => {
+  const sb = {
+    name: 'Test Horror',
+    traits: [
+      { name: 'Regeneration', description: 'The horror regains 10 hit points at the start of its turn. If the horror takes fire or acid damage, this trait doesn\'t function at the start of the horror\'s next turn. The horror dies only if it starts its turn with 0 hit points and doesn\'t regenerate.' },
+      { name: 'Dread Aura', description: 'Any creature that starts its turn within 30 feet of the horror must make a DC 15 Wisdom saving throw. On a failed save, the creature is frightened until the start of its next turn. If a creature\'s saving throw is successful, the creature is immune to the horror\'s Dread Aura for the next 24 hours.' },
+      { name: 'Grinding Grip', description: 'A creature that the horror is grappling takes 7 (2d6) slashing damage at the start of each of its turns and the horror\'s turns.' },
+      { name: 'Death Burst', description: 'When the horror dies, it explodes. Each creature within 10 feet of it must make a DC 13 Dexterity saving throw, taking 14 (4d6) fire damage on a failed save, or half as much damage on a successful one.' },
+    ],
+    actions: [act('Undying Howl (1/Day)', 'When the horror is reduced to 0 hit points, it howls, instantly regaining 22 (4d10) hit points.')],
+  };
+  const m = detectMechanics(sb);
+  const find = (k: string) => m.find((x) => x.kind === k) as Record<string, unknown> | undefined;
+  it('regeneration with what stops it', () => {
+    expect(find('regeneration')).toMatchObject({ hp: '10', suppressedBy: ['fire', 'acid'], diesOnlyAtTurnStart: true });
+    expect(regenSuppressed({ suppressedBy: ['fire', 'acid'] }, ['slashing', 'fire'])).toBe(true);
+    expect(regenSuppressed({ suppressedBy: ['fire', 'acid'] }, ['cold'])).toBe(false);
+  });
+  it('start-of-turn aura with immunity on a save', () => {
+    expect(find('aura')).toMatchObject({ radiusFt: 30, trigger: 'startTurn', save: { ability: 'wis', dc: 15 }, onFail: { condition: 'frightened', rounds: 1 }, immuneOnSave: true });
+  });
+  it('grip damage on the held creature and its own turn; burst at 0 HP; revive N/day', () => {
+    expect(find('turnDamage')).toMatchObject({ targets: 'grappled', dice: '2d6', type: 'slashing', alsoOwnTurn: true });
+    expect(find('deathBurst')).toMatchObject({ radiusFt: 10, save: { ability: 'dex', dc: 13 }, damage: [{ dice: '4d6', type: 'fire' }], halfOnSave: true });
+    expect(find('reviveAtZero')).toMatchObject({ hp: '4d10', uses: 1 });
   });
 });

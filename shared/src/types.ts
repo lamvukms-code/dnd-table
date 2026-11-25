@@ -931,6 +931,12 @@ export interface Token {
   downedUndying?: boolean;
   /** Killed for good by a God's Bane attack (undying or not). Visual state + log only. */
   baneSlain?: boolean;
+  /** Damage types / traits (fire, moongilded…) taken since this creature's last turn started (regeneration). */
+  tookSinceTurn?: string[];
+  /** Aura name → creatures that saved and are immune to it (aura bearers). */
+  auraImmune?: Record<string, string[]>;
+  /** Creatures already caught by this token's auras this turn (once per creature per turn). */
+  auraHitTurn?: string[];
   /** This token IS the awakened God's Bane blade: DM-moved only, no AC / HP, never a target. */
   godsBaneBlade?: boolean;
 }
