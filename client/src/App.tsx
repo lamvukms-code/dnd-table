@@ -52,7 +52,25 @@ export function App() {
   const [eqSrdOpen, setEqSrdOpen] = useState(false);
   const [godsBaneOpen, setGodsBaneOpen] = useState(false);
   const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
-  const [dockOpen, setDockOpen] = useState(true);
+  // the sheet dock: remembered per viewer; first visit = open for players, closed for the DM
+  const [dockPref, setDockPref] = useState<boolean | null>(() => {
+    try {
+      const v = localStorage.getItem('dnd.sheetDockOpen');
+      return v == null ? null : v === '1';
+    } catch {
+      return null; // storage blocked
+    }
+  });
+  const dockOpen = dockPref ?? me?.role !== 'dm';
+  const setDockOpen = (f: (v: boolean) => boolean) => {
+    const next = f(dockOpen);
+    setDockPref(next);
+    try {
+      localStorage.setItem('dnd.sheetDockOpen', next ? '1' : '0');
+    } catch {
+      /* storage blocked */
+    }
+  };
   const isDm = me?.role === 'dm';
   const send = useStore((s) => s.send);
   const worldSeconds = useStore((s) => s.room?.worldSeconds ?? 0);
@@ -285,7 +303,7 @@ export function App() {
           <OaPromptBanner />
           <PickPromptBanner />
           {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
-          {dockOpen && <SheetDock />}
+          {dockOpen && <SheetDock onClose={() => setDockOpen(() => false)} />}
         </div>
       </div>
 

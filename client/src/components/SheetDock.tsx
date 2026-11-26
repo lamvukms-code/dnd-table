@@ -228,7 +228,7 @@ function SheetFace({ sheet, token }: { sheet: CharacterSheet | null; token?: Tok
   );
 }
 
-function SheetDockImpl() {
+function SheetDockImpl({ onClose }: { onClose?: () => void }) {
   const sheets = useStore((s) => s.room?.sheets)!;
   const send = useStore((s) => s.send);
   const isDm = useStore((s) => s.isDm());
@@ -436,6 +436,11 @@ function SheetDockImpl() {
                 : []),
             ]}
           />
+          {onClose && (
+            <button className="sd-close" title="Ẩn character sheet (mở lại bằng nút 📜 Sheet trên thanh trên cùng)" onClick={onClose}>
+              ✕
+            </button>
+          )}
           <input
             ref={pdfRef}
             type="file"
@@ -472,7 +477,7 @@ function SheetDockImpl() {
       <div className="sd-body">
         {!sheet ? (
           <div className="empty">
-            <p>Chưa có nhân vật. Bấm “+” để tạo sheet trống, hoặc “📄 PDF” để nhập từ phiếu.</p>
+            <p>Chưa có nhân vật. Bấm “⋯” ở trên để tạo sheet trống hoặc nhập từ PDF; bấm ✕ để ẩn ô này.</p>
             {hasBuilder && (
               <button className="primary" onClick={openCharacterBuilder}>
                 🧙 Mở trang tạo nhân vật

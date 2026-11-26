@@ -1,0 +1,201 @@
+/*
+ * Monochrome gothic skin for the stat block and the character sheet:
+ *  - stat block: a night-black card, thin silver double rule, dotted corners, ivory serif text,
+ *    hairline dividers ending in a diamond, small-caps section heads;
+ *  - character sheet: torn off-white paper pages on a misty dark ground, ink-ruled panels,
+ *    a ringed AC seal, notched ability boxes, a diamond for Heroic Inspiration.
+ * CSS only (no image files), layered after theme.css.
+ */
+
+/* ------------------------------------------------------------------ stat block card */
+.inspector .sb-inspect {
+  --bg: #141312;
+  --panel: #1b1a18;
+  --panel-2: #262421;
+  --line: #57524b;
+  --text: #ece6da;
+  --muted: #aaa194;
+  --accent: #cdb98a;
+  --sb-rule: rgba(222, 214, 198, 0.42);
+  color-scheme: dark;
+  position: relative;
+  color: var(--text);
+  background: radial-gradient(130% 70% at 50% 0%, #22201e 0%, #0d0c0c 72%);
+  border: 1px solid #8f897f;
+  border-radius: 2px;
+  outline: 1px solid #3c3934;
+  outline-offset: -6px;
+  padding: 18px 16px 16px;
+  gap: 7px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+/* dotted corners, like a printed frame */
+.inspector .sb-inspect::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 3px 3px, #d9d1c2 0 2.6px, transparent 3.2px) left top / 12px 12px no-repeat,
+    radial-gradient(circle at 9px 3px, #d9d1c2 0 2.6px, transparent 3.2px) right top / 12px 12px no-repeat,
+    radial-gradient(circle at 3px 9px, #d9d1c2 0 2.6px, transparent 3.2px) left bottom / 12px 12px no-repeat,
+    radial-gradient(circle at 9px 9px, #d9d1c2 0 2.6px, transparent 3.2px) right bottom / 12px 12px no-repeat;
+}
+.inspector .sb-inspect .sb-title {
+  font-family: var(--serif-body);
+  font-size: 24px;
+  line-height: 1.1;
+  color: #f4efe5;
+  letter-spacing: 0.01em;
+}
+.inspector .sb-inspect .sb-meta { font-size: 12.5px; color: var(--muted); margin-top: -4px; }
+/* hairline rule with a diamond at its left end between the blocks */
+.inspector .sb-inspect .sb-ability-roll,
+.inspector .sb-inspect .sb-quick-roll,
+.inspector .sb-inspect .sb-target,
+.inspector .sb-inspect .sb-traits-view {
+  position: relative;
+  border-top: 1px solid var(--sb-rule);
+  padding-top: 9px;
+  margin-top: 4px;
+}
+.inspector .sb-inspect .sb-ability-roll::before,
+.inspector .sb-inspect .sb-quick-roll::before,
+.inspector .sb-inspect .sb-target::before,
+.inspector .sb-inspect .sb-traits-view::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: -4px;
+  width: 6px;
+  height: 6px;
+  background: #d9d1c2;
+  transform: rotate(45deg);
+}
+.inspector .sb-inspect button,
+.inspector .sb-inspect select,
+.inspector .sb-inspect input {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid #4e4943;
+  color: #ece6da;
+}
+.inspector .sb-inspect button:hover { border-color: #d9d1c2; color: #fff; background: rgba(255, 255, 255, 0.07); }
+.inspector .sb-inspect button.on { background: #ece6da; color: #141312; border-color: #ece6da; }
+.inspector .sb-inspect option { background: #1b1a18; color: #ece6da; }
+.inspector .sb-inspect .sb-abr button { font-family: var(--serif); letter-spacing: 0.05em; }
+.inspector .sb-inspect .sb-act { border-color: rgba(222, 214, 198, 0.14); }
+.inspector .sb-inspect .sb-act-name { color: #f6f1e7; font-weight: 600; }
+.inspector .sb-inspect .sb-act-detail,
+.inspector .sb-inspect .hint { color: var(--muted); }
+.inspector .sb-inspect .sb-traits-view > summary {
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 13px;
+  color: #efe9de;
+  border-bottom: 1px solid var(--sb-rule);
+  padding-bottom: 3px;
+  margin-bottom: 5px;
+  cursor: pointer;
+}
+.inspector .sb-inspect .sb-traits-view p { color: #ddd6c9; }
+.inspector .sb-inspect .sb-traits-view strong { color: #f6f1e7; }
+.inspector .sb-inspect .mech-badge { color: var(--accent); }
+.inspector .sb-inspect .sb-env-rule { color: #e3bf74; }
+
+/* ------------------------------------------------------------------ character sheet */
+.sheet-dock .sd-body {
+  background:
+    radial-gradient(70% 45% at 15% 0%, rgba(230, 230, 230, 0.1), transparent 70%),
+    radial-gradient(60% 40% at 90% 100%, rgba(230, 230, 230, 0.08), transparent 70%),
+    linear-gradient(#1c1b1a, #0e0d0d);
+  padding: 12px;
+}
+/* each tab is a torn sheet of off-white paper with crisp black ink */
+.sheet-dock .sd-body > .sheet-editor > div,
+.sheet-dock .sd-body > .empty {
+  --bg: #f6f2ea;
+  --panel: #eee8dc;
+  --panel-2: #e4ddcf;
+  --line: #2b2723;
+  --text: #1c1916;
+  --muted: #5d564d;
+  --accent: #1c1916;
+  background: #f4f0e7;
+  color: var(--text);
+  padding: 20px 18px 22px;
+  clip-path: polygon(0.00% 3.2px, 2.50% 3.9px, 5.00% 6.5px, 7.50% 3.3px, 10.00% 3.6px, 12.50% 4.1px, 15.00% 1.3px, 17.50% 3.6px, 20.00% 4.4px, 22.50% 5.6px, 25.00% 0.7px, 27.50% 2.1px, 30.00% 0.6px, 32.50% 5.7px, 35.00% 4.9px, 37.50% 0.3px, 40.00% 6.9px, 42.50% 6.8px, 45.00% 4.6px, 47.50% 4.3px, 50.00% 1.1px, 52.50% 0.1px, 55.00% 3.7px, 57.50% 0.4px, 60.00% 1.3px, 62.50% 1.7px, 65.00% 0.2px, 67.50% 3.2px, 70.00% 3.1px, 72.50% 5.9px, 75.00% 3.6px, 77.50% 4.5px, 80.00% 3.5px, 82.50% 4.6px, 85.00% 3.2px, 87.50% 1.9px, 90.00% 7.0px, 92.50% 7.0px, 95.00% 5.9px, 97.50% 5.0px, calc(100% - 2.2px) 0.00%, calc(100% - 1.6px) 2.50%, calc(100% - 2.0px) 5.00%, calc(100% - 0.5px) 7.50%, calc(100% - 5.4px) 10.00%, calc(100% - 2.8px) 12.50%, calc(100% - 5.9px) 15.00%, calc(100% - 2.7px) 17.50%, calc(100% - 6.7px) 20.00%, calc(100% - 5.9px) 22.50%, calc(100% - 0.0px) 25.00%, calc(100% - 1.5px) 27.50%, calc(100% - 6.4px) 30.00%, calc(100% - 3.3px) 32.50%, calc(100% - 6.9px) 35.00%, calc(100% - 2.8px) 37.50%, calc(100% - 0.5px) 40.00%, calc(100% - 4.4px) 42.50%, calc(100% - 5.4px) 45.00%, calc(100% - 1.9px) 47.50%, calc(100% - 0.6px) 50.00%, calc(100% - 2.3px) 52.50%, calc(100% - 6.7px) 55.00%, calc(100% - 5.3px) 57.50%, calc(100% - 0.8px) 60.00%, calc(100% - 1.7px) 62.50%, calc(100% - 0.7px) 65.00%, calc(100% - 0.4px) 67.50%, calc(100% - 5.6px) 70.00%, calc(100% - 1.2px) 72.50%, calc(100% - 3.9px) 75.00%, calc(100% - 3.1px) 77.50%, calc(100% - 1.3px) 80.00%, calc(100% - 5.1px) 82.50%, calc(100% - 0.9px) 85.00%, calc(100% - 4.5px) 87.50%, calc(100% - 0.8px) 90.00%, calc(100% - 2.9px) 92.50%, calc(100% - 1.5px) 95.00%, calc(100% - 1.9px) 97.50%, 100.00% calc(100% - 6.8px), 97.50% calc(100% - 5.6px), 95.00% calc(100% - 2.1px), 92.50% calc(100% - 6.2px), 90.00% calc(100% - 1.5px), 87.50% calc(100% - 2.8px), 85.00% calc(100% - 6.0px), 82.50% calc(100% - 4.5px), 80.00% calc(100% - 0.7px), 77.50% calc(100% - 6.9px), 75.00% calc(100% - 1.5px), 72.50% calc(100% - 1.8px), 70.00% calc(100% - 5.4px), 67.50% calc(100% - 2.3px), 65.00% calc(100% - 2.1px), 62.50% calc(100% - 0.5px), 60.00% calc(100% - 0.6px), 57.50% calc(100% - 4.1px), 55.00% calc(100% - 1.7px), 52.50% calc(100% - 4.2px), 50.00% calc(100% - 2.6px), 47.50% calc(100% - 3.2px), 45.00% calc(100% - 6.7px), 42.50% calc(100% - 3.4px), 40.00% calc(100% - 4.0px), 37.50% calc(100% - 6.1px), 35.00% calc(100% - 1.3px), 32.50% calc(100% - 1.1px), 30.00% calc(100% - 6.4px), 27.50% calc(100% - 5.7px), 25.00% calc(100% - 1.7px), 22.50% calc(100% - 1.3px), 20.00% calc(100% - 5.2px), 17.50% calc(100% - 6.6px), 15.00% calc(100% - 1.4px), 12.50% calc(100% - 6.7px), 10.00% calc(100% - 6.2px), 7.50% calc(100% - 4.2px), 5.00% calc(100% - 3.0px), 2.50% calc(100% - 0.7px), 0.3px 100.00%, 6.7px 97.50%, 1.7px 95.00%, 4.9px 92.50%, 1.8px 90.00%, 5.8px 87.50%, 4.2px 85.00%, 2.1px 82.50%, 1.2px 80.00%, 5.0px 77.50%, 0.5px 75.00%, 1.6px 72.50%, 3.9px 70.00%, 6.0px 67.50%, 4.3px 65.00%, 2.0px 62.50%, 6.4px 60.00%, 1.4px 57.50%, 0.1px 55.00%, 1.9px 52.50%, 3.1px 50.00%, 0.4px 47.50%, 1.2px 45.00%, 2.6px 42.50%, 4.0px 40.00%, 0.9px 37.50%, 2.5px 35.00%, 6.2px 32.50%, 6.9px 30.00%, 4.6px 27.50%, 4.8px 25.00%, 4.1px 22.50%, 1.0px 20.00%, 0.2px 17.50%, 0.1px 15.00%, 6.4px 12.50%, 4.9px 10.00%, 6.7px 7.50%, 0.1px 5.00%, 4.5px 2.50%);
+}
+/* ink-ruled panels inside the page */
+.sheet-dock .bt-header,
+.sheet-dock .bt-col,
+.sheet-dock .bt-actions,
+.sheet-dock .st-head,
+.sheet-dock .currency-row,
+.sheet-dock .spell-head {
+  border: 1.5px solid #1c1916;
+  outline: 1px solid #1c1916;
+  outline-offset: 2px;
+  border-radius: 1px;
+  padding: 10px;
+  background: #fbf8f2;
+}
+.sheet-dock .bt-cols { gap: 14px; }
+.sheet-dock .bta-title,
+.sheet-dock .ag-label,
+.sheet-dock .hd-label,
+.sheet-dock .mp-title,
+.sheet-dock .ab-key,
+.sheet-dock .ac-label {
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.sheet-dock .bta-title { border-bottom: 1px solid #1c1916; padding-bottom: 3px; }
+.sheet-dock .bt-name { font-size: 20px; font-family: var(--serif-body); }
+/* notched ability boxes */
+.sheet-dock .ab-cell {
+  background: #fbf8f2;
+  border: 1.5px solid #1c1916;
+  clip-path: polygon(7px 0, calc(100% - 7px) 0, 100% 7px, 100% calc(100% - 7px), calc(100% - 7px) 100%, 7px 100%, 0 calc(100% - 7px), 0 7px);
+}
+/* a ringed seal for AC */
+.sheet-dock .ac-badge {
+  border-radius: 50%;
+  border: 2px solid #1c1916;
+  box-shadow: 0 0 0 3px #f4f0e7, 0 0 0 4.5px #1c1916;
+  background: #fbf8f2;
+  color: #1c1916;
+}
+/* Heroic Inspiration: a diamond */
+.sheet-dock .insp-badge {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  border-radius: 0;
+  min-width: 42px;
+  min-height: 42px;
+  background: #1c1916 !important;
+  color: #f4f0e7 !important;
+}
+.sheet-dock .bt-prof {
+  border: 1px solid #1c1916;
+  padding: 1px 10px;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+/* ink buttons on the paper */
+.sheet-dock .sd-body button { background: #fbf8f2; border-color: #1c1916; color: #1c1916; }
+.sheet-dock .sd-body button:hover { background: #1c1916; color: #f4f0e7; }
+.sheet-dock .sd-body button.on,
+.sheet-dock .sd-body button.primary { background: #1c1916; color: #f4f0e7; border-color: #1c1916; }
+.sheet-dock .sd-body input,
+.sheet-dock .sd-body select,
+.sheet-dock .sd-body textarea { background: #fffdf8; border-color: #8b847a; color: #1c1916; }
+/* the band above the page (character picker + tabs) */
+.sheet-dock .sd-tabs { background: #121111; border-bottom: 1px solid #3c3934; }
+.sheet-dock .sd-tabs .sd-current-name { color: #efe9de; }
+.sheet-dock .sd-tabs button { background: #1d1c1a; border-color: #4e4943; color: #e7e1d5; }
+.sheet-dock .sd-tabs button:hover { border-color: #d9d1c2; color: #fff; }
+.sheet-dock .sd-tabs button.on { background: #ece6da; color: #141312; border-color: #ece6da; }
+.sheet-dock .ab-score { font-size: 20px; text-align: center; font-family: var(--serif-body); }
+.sheet-dock .play .ab-score, .sheet-dock.play .ab-score { font-weight: 600; }
+.sheet-dock .skill-table td, .sheet-dock .skill-table th { border-bottom: 1px solid rgba(28, 25, 22, 0.25); }
+.sheet-dock .skill-table th { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.08em; }

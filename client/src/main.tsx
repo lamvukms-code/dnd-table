@@ -4,6 +4,7 @@ import './localContent.js'; // setting spells / feats from git-ignored data, bef
 import { App } from './App.js';
 import './styles.css';
 import './theme.css';
+import './gothic.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

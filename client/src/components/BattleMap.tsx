@@ -1553,6 +1553,21 @@ function TokenInspector({
   const [multiPick, setMultiPick] = useState<{ actionId: string; ids: string[] } | null>(null);
   const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
   const [lootTargetSheetId, setLootTargetSheetId] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(() => {
+    try {
+      return localStorage.getItem('dnd.inspSettingsOpen') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const rememberSettings = (open: boolean) => {
+    setSettingsOpen(open);
+    try {
+      localStorage.setItem('dnd.inspSettingsOpen', open ? '1' : '0');
+    } catch {
+      /* storage blocked */
+    }
+  };
   // monster d20 tests carry the token's Exhaustion (PCs get it through their sheet bonuses)
   // light-dependent traits (Sunlight Sensitivity…) and Aversion-style effects put its d20s at disadvantage
   const sceneLight = useStore((s) => s.room?.light);
@@ -1871,57 +1886,12 @@ function TokenInspector({
           ✕
         </button>
       </div>
-      {isDm && token.statblock && !linkedSheet && (
-        <label className="chk insp-autoreact" title="Bật: Parry / né bằng save / giảm sát thương tự dùng khi có lợi. Tắt: DM tự bấm.">
-          <input type="checkbox" checked={token.autoReactions !== false} onChange={(e) => patch({ autoReactions: e.target.checked ? undefined : false })} />
-          Tự dùng reaction phòng thủ
-        </label>
-      )}
       {isDm && (token.statblock?.artUrl ?? linkedEntry?.artUrl) && (
         <a className="sb-art" href={token.statblock?.artUrl ?? linkedEntry?.artUrl} target="_blank" rel="noreferrer" title="Bấm để xem ảnh lớn">
           <img src={token.statblock?.artUrl ?? linkedEntry?.artUrl} alt="" loading="lazy" />
         </a>
       )}
-      {isDm && (
-        <div className="insp-sb-link">
-          {linkedEntry && (
-            <button title="Mở stat block gốc trong Bestiary" onClick={() => openBestiary(linkedEntry.id)}>
-              📖 Mở statblock
-            </button>
-          )}
-          {linkedEntry && (
-            <button
-              title="Nạp lại statblock từ Bestiary vào token này (ghi đè chỉnh sửa riêng trên token, nếu có) — dùng khi Bestiary vừa được cập nhật (vd thêm DC/mod phép) sau khi token đã spawn"
-              onClick={() => patch({ statblock: tokenStatblockFrom(linkedEntry) })}
-            >
-              🔄 Đồng bộ từ Bestiary
-            </button>
-          )}
-          <button
-            title={
-              linkedEntry
-                ? 'Ghi chỉnh sửa của token này ngược lại vào stat block gốc'
-                : 'Tạo stat block mới trong Bestiary từ token này'
-            }
-            onClick={saveToBestiary}
-          >
-            {linkedEntry ? '💾 Cập nhật statblock' : '💾 Lưu vào Bestiary'}
-          </button>
-        </div>
-      )}
-      {isDm && (
-        <label className="chk insp-group">
-          <input type="checkbox" checked={inGroup} onChange={onToggleGroup} />
-          Thêm vào nhóm tung initiative
-        </label>
-      )}
-      {token.statblock && (
-        <p className="hint insp-npc-note">
-          Token NPC (có stat block) — không gán được vào character sheet. Nhân bản (⧉) nếu cần
-          token giống nhau.
-        </p>
-      )}
-      {!token.statblock && mySheets.length > 0 && (
+      {!token.statblock && !sheets.some((s) => s.tokenId === token.id) && mySheets.length > 0 && (
         <label className="insp-link">
           Gán token này cho nhân vật
           <select
@@ -2039,6 +2009,103 @@ function TokenInspector({
           </>
         )}
         <label>
+          Che chắn (cover)
+          <select
+            value={token.cover ?? 'none'}
+            onChange={(e) => patch({ cover: e.target.value as CoverLevel })}
+          >
+            <option value="none">Không che</option>
+            <option value="half">Nửa che (+2 AC)</option>
+            <option value="threequarters">3/4 che (+5 AC)</option>
+            <option value="total">Che hoàn toàn</option>
+          </select>
+        </label>
+      </div>
+
+      {token.cover === 'total' && (
+        <p className="hint cover-total-note">
+          ⚠ Mục tiêu đang <strong>che hoàn toàn</strong> — không thể bị nhắm bởi đòn tầm xa.
+        </p>
+      )}
+
+
+      {isDm && <GodsBaneTokenBox token={token} />}
+
+      <EffectsPanel token={token} />
+
+      {/* Token set-up (look, visibility, bestiary sync, defenses): folded away so the stat block comes first */}
+      <details className="insp-settings" open={settingsOpen} onToggle={(e) => rememberSettings((e.currentTarget as HTMLDetailsElement).open)}>
+        <summary>⚙ Thiết lập token</summary>
+      {!token.statblock && sheets.some((s) => s.tokenId === token.id) && mySheets.length > 0 && (
+        <label className="insp-link">
+          Gán token này cho nhân vật
+          <select
+            value={linkedSheet && mySheets.some((s) => s.id === linkedSheet.id) ? linkedSheet.id : ''}
+            onChange={(e) => {
+              const sheet = sheets.find((s) => s.id === e.target.value);
+              // unlink whatever this sheet pointed at, then link this token
+              if (linkedSheet && (!sheet || sheet.id !== linkedSheet.id)) {
+                send({ t: 'upsertSheet', sheet: { ...linkedSheet, tokenId: undefined }, base: linkedSheet });
+              }
+              if (sheet) send({ t: 'upsertSheet', sheet: { ...sheet, tokenId: token.id }, base: sheet });
+            }}
+          >
+            <option value="">— không —</option>
+            {mySheets.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {isDm && token.statblock && !linkedSheet && (
+        <label className="chk insp-autoreact" title="Bật: Parry / né bằng save / giảm sát thương tự dùng khi có lợi. Tắt: DM tự bấm.">
+          <input type="checkbox" checked={token.autoReactions !== false} onChange={(e) => patch({ autoReactions: e.target.checked ? undefined : false })} />
+          Tự dùng reaction phòng thủ
+        </label>
+      )}
+      {isDm && (
+        <div className="insp-sb-link">
+          {linkedEntry && (
+            <button title="Mở stat block gốc trong Bestiary" onClick={() => openBestiary(linkedEntry.id)}>
+              📖 Mở statblock
+            </button>
+          )}
+          {linkedEntry && (
+            <button
+              title="Nạp lại statblock từ Bestiary vào token này (ghi đè chỉnh sửa riêng trên token, nếu có) — dùng khi Bestiary vừa được cập nhật (vd thêm DC/mod phép) sau khi token đã spawn"
+              onClick={() => patch({ statblock: tokenStatblockFrom(linkedEntry) })}
+            >
+              🔄 Đồng bộ từ Bestiary
+            </button>
+          )}
+          <button
+            title={
+              linkedEntry
+                ? 'Ghi chỉnh sửa của token này ngược lại vào stat block gốc'
+                : 'Tạo stat block mới trong Bestiary từ token này'
+            }
+            onClick={saveToBestiary}
+          >
+            {linkedEntry ? '💾 Cập nhật statblock' : '💾 Lưu vào Bestiary'}
+          </button>
+        </div>
+      )}
+      {isDm && (
+        <label className="chk insp-group">
+          <input type="checkbox" checked={inGroup} onChange={onToggleGroup} />
+          Thêm vào nhóm tung initiative
+        </label>
+      )}
+      {token.statblock && (
+        <p className="hint insp-npc-note">
+          Token NPC (có stat block) — không gán được vào character sheet. Nhân bản (⧉) nếu cần
+          token giống nhau.
+        </p>
+      )}
+        <div className="insp-grid">
+        <label>
           Cỡ
           <select
             value={token.size}
@@ -2085,26 +2152,7 @@ function TokenInspector({
             Hiện AC / HP cho người chơi
           </label>
         )}
-        <label>
-          Che chắn (cover)
-          <select
-            value={token.cover ?? 'none'}
-            onChange={(e) => patch({ cover: e.target.value as CoverLevel })}
-          >
-            <option value="none">Không che</option>
-            <option value="half">Nửa che (+2 AC)</option>
-            <option value="threequarters">3/4 che (+5 AC)</option>
-            <option value="total">Che hoàn toàn</option>
-          </select>
-        </label>
-      </div>
-
-      {token.cover === 'total' && (
-        <p className="hint cover-total-note">
-          ⚠ Mục tiêu đang <strong>che hoàn toàn</strong> — không thể bị nhắm bởi đòn tầm xa.
-        </p>
-      )}
-
+        </div>
       {isDm && !statblockHidden && (
         <details className="def-details">
           <summary>Phòng thủ (kháng / miễn / DR)</summary>
@@ -2114,13 +2162,11 @@ function TokenInspector({
           />
         </details>
       )}
-
-      {isDm && <GodsBaneTokenBox token={token} />}
-
-      <EffectsPanel token={token} />
+      </details>
 
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
+          <div className="sb-title">{sb.name}</div>
           {sb.meta && <div className="sb-meta">{sb.meta}</div>}
           {isDm && linkedEntry && (
             <div className="loot-roller">

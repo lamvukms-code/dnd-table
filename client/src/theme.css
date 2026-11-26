@@ -388,6 +388,7 @@ label { color: var(--muted); }
 .sheet-dock .sd-pick-list button:hover { background: #e6dcc6; }
 .sheet-dock .sd-pick-list button.on { background: #e9d7ae; color: #1f160d; border-color: #c9a96a; }
 .sheet-dock .sd-tabs .sd-mode { flex: none; padding: 5px 10px; font-size: 13px; }
+.sheet-dock .sd-tabs .sd-close { flex: none; padding: 4px 9px; font-size: 14px; line-height: 1; margin-left: auto; }
 .sheet-dock .sd-tabs .sd-mode.on { background: #2f6b3a; border-color: #24532d; color: #f2fbef; }
 .sheet-dock .sd-chars .top-menu > button { padding: 4px 11px; font-size: 16px; line-height: 1; }
 .sheet-dock .sd-chars .top-menu-list { right: 0; left: auto; min-width: 200px; }
@@ -481,3 +482,9 @@ label { color: var(--muted); }
 /* monster stances + limb counter */
 .sb-stances { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0; }
 .sb-limbs { font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+
+/* token inspector: set-up fields folded under one line */
+.insp-settings { margin: 6px 0; border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+.insp-settings > summary { cursor: pointer; font-size: 12px; opacity: 0.85; padding: 2px 0; }
+.insp-settings[open] > summary { margin-bottom: 6px; }
+.insp-settings .insp-grid { margin-top: 6px; }
