@@ -24,6 +24,7 @@ export default defineConfig({
       '/uploads': { target },
       '/lorebook': { target },
       '/maps': { target },
+      '/recordings': { target },
     },
   },
 });

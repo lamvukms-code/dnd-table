@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
+import { cameraFollow, forgetLastCamera, onCameraMessage, postCamera, requestCamera } from '../cameraSync.js';
 import {
   attackRangeOf,
   attackKindOf,
@@ -68,7 +69,7 @@ import {
   economyKindOf,
   exhaustionPenalty,
 } from '@dnd-table/shared';
-import { useStore } from '../store.js';
+import { STREAM_MODE, useStore } from '../store.js';
 import { ImageField } from './ImageField.js';
 import { TokenMaker } from './TokenMaker.js';
 import { statblockFromToken } from '../statblock.js';
@@ -378,6 +379,50 @@ function BattleMapImpl() {
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map.cols, map.rows, activeSceneId]);
+
+  // The recording window frames what the DM screen looks at (see cameraSync.ts): the DM screen
+  // posts its camera a few times a second when it changes; the recording window follows it.
+  useEffect(() => {
+    if (STREAM_MODE) {
+      const off = onCameraMessage((msg) => {
+        if (msg.t !== 'camera' || !cameraFollow.on) return;
+        const vp = boardScrollRef.current;
+        const v = msg.v;
+        if (!vp || !vp.clientWidth || v.sceneId !== activeSceneId) return;
+        // same framing in a differently sized window
+        const z = clampZoom(v.zoom * Math.min(vp.clientWidth / Math.max(1, v.w), vp.clientHeight / Math.max(1, v.h)));
+        applyCamera(vp.clientWidth / 2 - v.cx * z, vp.clientHeight / 2 - v.cy * z, z);
+      });
+      requestCamera();
+      return off;
+    }
+    if (!isDm) return;
+    const post = () => {
+      const vp = boardScrollRef.current;
+      if (!vp || !activeSceneId) return;
+      const z = zoomRef.current;
+      postCamera({
+        cx: (vp.clientWidth / 2 - pan.current.x) / z,
+        cy: (vp.clientHeight / 2 - pan.current.y) / z,
+        zoom: z,
+        w: vp.clientWidth,
+        h: vp.clientHeight,
+        sceneId: activeSceneId,
+      });
+    };
+    const iv = window.setInterval(post, 150);
+    const off = onCameraMessage((msg) => {
+      if (msg.t === 'ask') {
+        forgetLastCamera();
+        post();
+      }
+    });
+    return () => {
+      window.clearInterval(iv);
+      off();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDm, activeSceneId]);
 
   // Viewport resized (window, sheet dock dragged taller/shorter): keep the board reachable.
   useEffect(() => {

@@ -23,6 +23,9 @@ import { OaPromptBanner } from './components/OaPromptBanner.js';
 import { PickPromptBanner } from './components/PickPromptBanner.js';
 import { TopMenu, type TopMenuItem } from './components/TopMenu.js';
 import { PartyBar } from './components/PartyBar.js';
+import { SpeakerStrip } from './components/SpeakerStrip.js';
+import { VoiceButton } from './components/VoiceButton.js';
+import { RecBadge, openStreamWindow } from './components/RecBadge.js';
 import { applyLongRest, applyShortRest, fmtDuration } from '@dnd-table/shared';
 import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
@@ -134,6 +137,11 @@ export function App() {
   };
 
   const dmItems: TopMenuItem[] = [
+    {
+      label: '🎬 Quay buổi chơi',
+      title: 'Mở khung quay: bản đồ theo góc nhìn người chơi + khung nhân vật, ghi hình và tiếng (mic DM + Discord) vào thư mục quay',
+      onClick: openStreamWindow,
+    },
     { label: '🗺 Bản đồ & cảnh', title: 'Thư viện bản đồ theo chương', onClick: () => setMapsOpen(true) },
     { label: '👹 Quái (Bestiary)', onClick: () => setBestiaryOpen(true) },
     ...(['short', 'long'] as const).map((kind) => ({
@@ -291,6 +299,10 @@ export function App() {
                 </button>
               )}
             </div>
+            <div className="hud-pill hud-voice">
+              <VoiceButton />
+              <RecBadge />
+            </div>
             <MoonChip />
             <LightChip />
             <InitiativeBar />
@@ -307,6 +319,7 @@ export function App() {
           <PickPromptBanner />
           {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
           {dockOpen && <SheetDock onClose={() => setDockOpen(() => false)} />}
+          {isDm && !dockOpen && <SpeakerStrip variant="dock" onCard={(c) => c.sheetId && setDockOpen(() => true)} />}
         </div>
       </div>
 

@@ -1132,6 +1132,8 @@ export interface Participant {
    *  merely reads another player's public id from taking over their identity and sheets).
    *  Persisted in room.json, stripped from every state sent to clients. */
   secret?: string;
+  /** Hide this person's real name on the speaker cards (recordings / stream view). */
+  anon?: boolean;
 }
 
 export interface DiceTray {
@@ -1213,6 +1215,8 @@ export interface RoomState {
   hazards?: Hazard[];
   /** The DM's shops (see shop.ts). Players only receive the open ones, without `dmNote`. */
   shops?: Shop[];
+  /** Set while the DM is recording the session (everyone sees a REC badge). */
+  recording?: { since: number } | null;
 }
 
 /** One line of a shop's stock: a catalog item snapshot, its price and how many are left. */

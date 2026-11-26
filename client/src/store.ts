@@ -81,6 +81,19 @@ const PID_KEY = 'dnd-table.participantId';
 const SECRET_KEY = 'dnd-table.secret';
 const IDENTITY_KEY = 'dnd-table.identity';
 
+/** This window is the DM's recording / stream view (`?stream=1`, opened from the DM screen): it joins
+ *  with the DM's stored identity but receives the PLAYER view and sends nothing. */
+export const STREAM_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('stream');
+
+/** The id + secret this browser holds (the recording window proves it is the DM's with them). */
+export function storedCredentials(): { participantId: string | null; secret: string | null } {
+  try {
+    return { participantId: localStorage.getItem(PID_KEY), secret: localStorage.getItem(SECRET_KEY) };
+  } catch {
+    return { participantId: null, secret: null };
+  }
+}
+
 interface Identity {
   name: string;
 }
@@ -143,6 +156,8 @@ interface StoreState {
   room: RoomState | null;
   /** Tokens someone else is dragging right now (where they are mid-drag), by token id. */
   dragPreviews: Record<string, { x: number; y: number; ts: number }>;
+  /** Participants talking right now (from their own mic's voice detector). */
+  speaking: string[];
   error: string | null;
   dddiceKey: string | null;
   dddiceConnected: boolean;
@@ -258,7 +273,12 @@ export const useStore = create<StoreState>((set, get) => {
     socket.onopen = () => {
       set({ status: 'open' });
       const identity = get().identity;
-      if (identity) {
+      if (STREAM_MODE) {
+        const c = storedCredentials();
+        socket?.send(
+          JSON.stringify({ action: { t: 'join', name: 'stream', stream: true, participantId: c.participantId ?? undefined, secret: c.secret ?? undefined } }),
+        );
+      } else if (identity) {
         const stored = localStorage.getItem(PID_KEY) ?? undefined;
         rawSend({
           t: 'join',
@@ -282,9 +302,11 @@ export const useStore = create<StoreState>((set, get) => {
         set((st) =>
           st.room ? { room: { ...st.room, bestiary: staticBestiary, homebrew: staticHomebrew } } : {},
         );
+      } else if (event.t === 'speaking') {
+        set({ speaking: event.ids });
       } else if (event.t === 'welcome') {
-        localStorage.setItem(PID_KEY, event.participantId);
-        if (event.secret) localStorage.setItem(SECRET_KEY, event.secret);
+        if (!STREAM_MODE) localStorage.setItem(PID_KEY, event.participantId);
+        if (event.secret && !STREAM_MODE) localStorage.setItem(SECRET_KEY, event.secret);
         const room = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
         set({ participantId: event.participantId, room, error: null });
       } else if (event.t === 'dragPreview') {
@@ -334,6 +356,7 @@ export const useStore = create<StoreState>((set, get) => {
   }
 
   function rawSend(action: ClientAction) {
+    if (STREAM_MODE) return; // the recording window only watches
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ action }));
     }
@@ -360,6 +383,7 @@ export const useStore = create<StoreState>((set, get) => {
     identity: loadIdentity(),
     room: null,
     dragPreviews: {},
+    speaking: [],
     error: null,
     dddiceKey: getLocalKey(),
     dddiceConnected: false,
@@ -368,7 +392,7 @@ export const useStore = create<StoreState>((set, get) => {
     levelUpPending: [],
 
     join: (identity) => {
-      localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+      if (!STREAM_MODE) localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
       set({ identity });
       if (get().status === 'open') {
         rawSend({
@@ -1251,13 +1275,15 @@ export const useStore = create<StoreState>((set, get) => {
       return room?.participants.find((p) => p.id === participantId);
     },
 
-    isDm: () => get().me()?.role === 'dm',
+    isDm: () => !STREAM_MODE && get().me()?.role === 'dm',
     dddiceActive,
   };
 });
 
-// auto-connect if identity already known
-if (loadIdentity()) {
+// auto-connect if identity already known (the recording window always connects, as the DM's viewer)
+if (STREAM_MODE) {
+  useStore.getState().join({ name: 'stream' });
+} else if (loadIdentity()) {
   useStore.getState().join(loadIdentity()!);
 }
 

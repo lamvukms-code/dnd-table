@@ -7,6 +7,7 @@ import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
 import { nanoid } from 'nanoid';
 import { Room } from './room.js';
+import { Recordings } from './recordings.js';
 import {
   PROTOCOL_VERSION,
   type ClientEnvelope,
@@ -14,7 +15,9 @@ import {
   type Participant,
   type RoomState,
   type Token,
+  formatElapsed,
   rollLogForPlayers,
+  sheetForStreamCard,
   sheetsForPlayer,
   statsHiddenFromPlayers,
   tokenForPlayers,
@@ -30,6 +33,12 @@ import {
 } from '@dnd-table/shared';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// Machine-local settings (e.g. RECORDINGS_DIR) in the git-ignored server/.env.
+try {
+  process.loadEnvFile(join(__dirname, '..', '.env'));
+} catch {
+  /* no .env */
+}
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? '0.0.0.0';
 const DATA_FILE = process.env.ROOM_FILE ?? join(__dirname, '..', 'data', 'room.json');
@@ -142,6 +151,70 @@ app.post('/upload', (req, res) => {
   res.json({ url: `/uploads/${name}` });
 });
 
+// --- Session recording (the DM's recording window uploads its video here; see recordings.ts) ---
+const RECORDINGS_DIR = process.env.RECORDINGS_DIR ?? join(__dirname, '..', 'data', 'recordings');
+const recordings = new Recordings(process.env.RECORDINGS_TMP ?? join(__dirname, '..', 'data', 'recordings-tmp'), RECORDINGS_DIR);
+
+/** The request comes from a DM holding that DM's secret (participant ids are public, secrets aren't). */
+function dmFromRequest(req: express.Request): Participant | undefined {
+  const who = getParticipant(req.header('x-participant-id') ?? '');
+  const secret = req.header('x-participant-secret');
+  return who && who.role === 'dm' && who.secret && secret === who.secret ? who : undefined;
+}
+
+function setRecordingState(since: number | null): void {
+  room.state.recording = since == null ? null : { since };
+  room.state.rev++;
+  broadcastState();
+  scheduleSave();
+}
+
+function stopRecording(reason: string): { folder: string } | null {
+  const done = recordings.stop();
+  if (!done) return null;
+  room.announce(`⏹ Đã dừng ghi hình (${formatElapsed(done.ms)})${reason}`);
+  setRecordingState(null);
+  console.log(`recording saved: ${done.folder} (${(done.bytes / 1e6).toFixed(1)} MB)`);
+  return done;
+}
+
+app.post('/recordings/start', (req, res) => {
+  if (!dmFromRequest(req)) return res.status(403).json({ error: 'Chỉ DM được ghi hình' });
+  const ext = String((req.body as { ext?: string })?.ext ?? '');
+  const rec = recordings.start(ext);
+  if (typeof rec === 'string') return res.status(409).json({ error: rec });
+  room.announce('🔴 DM bắt đầu ghi hình buổi chơi');
+  setRecordingState(rec.since);
+  res.json({ id: rec.id, since: rec.since, dir: RECORDINGS_DIR });
+});
+
+app.post('/recordings/:id/chunk', express.raw({ type: 'application/octet-stream', limit: '64mb' }), (req, res) => {
+  if (!dmFromRequest(req)) return res.status(403).json({ error: 'Chỉ DM được ghi hình' });
+  const seq = Number(req.query.seq);
+  if (!Number.isInteger(seq) || seq < 0 || !Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'Đoạn video không hợp lệ' });
+  try {
+    const err = recordings.append(req.params.id, seq, req.body);
+    if (err) return res.status(409).json({ error: err });
+  } catch (err) {
+    console.error('recording write failed:', err);
+    return res.status(500).json({ error: 'Không ghi được file (ổ đầy?)' });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/recordings/:id/stop', (req, res) => {
+  if (!dmFromRequest(req)) return res.status(403).json({ error: 'Chỉ DM được ghi hình' });
+  if (recordings.active?.id !== req.params.id) return res.status(404).json({ error: 'Không có bản ghi này' });
+  const done = stopRecording('');
+  res.json({ folder: done?.folder });
+});
+
+// A recording window that died (closed, crashed, lost the network) stops sending chunks: close it off.
+setInterval(() => {
+  const rec = recordings.active;
+  if (rec && Date.now() - rec.lastChunk > 90_000) stopRecording(' — khung quay mất kết nối');
+}, 15_000).unref();
+
 /** DM-only lore book (spoiler guard, not security — the app has no auth). */
 app.get('/lorebook', (req, res) => {
   const pid = req.header('x-participant-id');
@@ -190,6 +263,14 @@ const wss = new WebSocketServer({
 });
 
 const sockets = new Map<WebSocket, string>(); // socket -> participantId
+/** The DM's recording / stream windows: player view, read-only, not a "connection" of the DM. */
+const streamSockets = new Set<WebSocket>();
+/** Who is talking (voice activity from each person's own mic). Ephemeral: never saved. */
+const speaking = new Set<string>();
+function broadcastSpeaking(): void {
+  const msg = JSON.stringify({ t: 'speaking', ids: [...speaking] } satisfies ServerEvent);
+  for (const ws of sockets.keys()) if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+}
 
 function send(ws: WebSocket, event: ServerEvent): void {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(event));
@@ -299,13 +380,28 @@ function bestiaryJson(): string {
   return bestiaryJsonCache;
 }
 
+/** What the stream window shows: the player view, with just enough of each sheet for the speaker cards. */
+function streamState(base: RoomState = playerView()): RoomState {
+  return { ...base, sheets: room.state.sheets.map(sheetForStreamCard) };
+}
+
 function sendStateNow(): void {
+  recordings.captureLog(room.state.rollLog);
   const dmPayload = JSON.stringify({ t: 'state', state: stateFor(true) } satisfies ServerEvent);
   // Tokens / scenes / log are redacted once per broadcast; only `sheets` differs per player.
   let playerBase: RoomState | null = null;
+  let streamPayload: string | null = null;
   const playerPayloads = new Map<string, string>();
   for (const [ws, pid] of sockets) {
     if (ws.readyState !== WebSocket.OPEN) continue;
+    if (streamSockets.has(ws)) {
+      const extra = staticEventFor(ws, false);
+      if (extra) ws.send(extra);
+      playerBase ??= playerView();
+      streamPayload ??= JSON.stringify({ t: 'state', state: streamState(playerBase) } satisfies ServerEvent);
+      ws.send(streamPayload);
+      continue;
+    }
     const isDm = getParticipant(pid)?.role === 'dm';
     const extra = staticEventFor(ws, isDm);
     if (extra) ws.send(extra);
@@ -380,6 +476,23 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (action.t === 'join' && action.stream) {
+      // The DM's recording window: same identity (proved by the secret), player view, no actions.
+      const dm = action.participantId ? getParticipant(action.participantId) : undefined;
+      if (!dm || dm.role !== 'dm' || !dm.secret || dm.secret !== action.secret) {
+        send(ws, { t: 'error', message: 'Khung quay chỉ mở được từ máy DM' });
+        return;
+      }
+      sockets.set(ws, dm.id);
+      streamSockets.add(ws);
+      staticSent.delete(ws);
+      const joinStatic = staticEventFor(ws, false);
+      if (joinStatic) ws.send(joinStatic);
+      send(ws, { t: 'welcome', participantId: dm.id, protocol: PROTOCOL_VERSION, state: streamState() });
+      send(ws, { t: 'speaking', ids: [...speaking] });
+      return;
+    }
+
     if (action.t === 'join') {
       const claimedId = action.participantId;
       let participant = claimedId ? getParticipant(claimedId) : undefined;
@@ -427,9 +540,14 @@ wss.on('connection', (ws) => {
       });
       broadcastState();
       scheduleSave();
+      send(ws, { t: 'speaking', ids: [...speaking] });
       return;
     }
 
+    if (streamSockets.has(ws)) {
+      send(ws, { t: 'error', message: 'Khung quay chỉ để xem' });
+      return;
+    }
     const participantId = sockets.get(ws);
     const actor = participantId ? getParticipant(participantId) : undefined;
     if (!actor) {
@@ -446,6 +564,23 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (action.t === 'speaking') {
+      const was = speaking.has(actor.id);
+      if (!!action.on === was) return;
+      if (action.on) speaking.add(actor.id);
+      else speaking.delete(actor.id);
+      broadcastSpeaking();
+      return;
+    }
+
+    if (action.t === 'setAnon') {
+      actor.anon = action.anon ? true : undefined;
+      room.state.rev++;
+      broadcastState();
+      scheduleSave();
+      return;
+    }
+
     // Drag preview: relayed as a few bytes to everyone else, no state change, no full broadcast.
     if (action.t === 'dragPreview') {
       const p = room.previewMove(actor, action.id, action.x, action.y);
@@ -453,7 +588,7 @@ wss.on('connection', (ws) => {
       const msg = JSON.stringify({ t: 'dragPreview', id: p.token.id, x: p.x, y: p.y } satisfies ServerEvent);
       for (const [other, pid] of sockets) {
         if (other === ws || other.readyState !== WebSocket.OPEN) continue;
-        if (p.token.hidden && getParticipant(pid)?.role !== 'dm') continue;
+        if (p.token.hidden && (streamSockets.has(other) || getParticipant(pid)?.role !== 'dm')) continue;
         // a far-away / slow socket still flushing earlier data skips this frame instead of queueing it
         if (other.bufferedAmount > 64 * 1024) continue;
         other.send(msg);
@@ -473,6 +608,8 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     const id = sockets.get(ws);
     sockets.delete(ws);
+    if (streamSockets.delete(ws)) return; // the DM's own connection is unaffected
+    if (id && speaking.delete(id)) broadcastSpeaking();
     if (id) {
       const p = getParticipant(id);
       if (p) {
@@ -508,10 +645,15 @@ function pickColor(i: number): string {
   return palette[i % palette.length];
 }
 
+// A recording cut off by a crash / restart: finalise the leftover file, clear the REC badge.
+for (const folder of recordings.recoverLeftovers()) console.log(`recovered unfinished recording: ${folder}`);
+if (room.state.recording) room.state.recording = null;
+
 httpServer.listen(PORT, HOST, () => {
   console.log(`dnd-table server on http://${HOST}:${PORT}  (ws: /ws)`);
   console.log(`room file: ${DATA_FILE}`);
   console.log(`bestiary file: ${BESTIARY_FILE} (${room.state.bestiary.length} statblocks)`);
+  console.log(`recordings dir: ${RECORDINGS_DIR}`);
 });
 
 process.on('SIGINT', () => {

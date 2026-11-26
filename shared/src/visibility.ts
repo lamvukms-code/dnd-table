@@ -107,6 +107,19 @@ export function sheetStubForPlayers(sheet: CharacterSheet): CharacterSheet {
   return stub;
 }
 
+/** What the stream / recording window may know of a sheet: a stub plus the table-public identity
+ *  shown on the speaker cards (species, class, subclass, level). */
+export function sheetForStreamCard(sheet: CharacterSheet): CharacterSheet {
+  return {
+    ...sheetStubForPlayers(sheet),
+    className: sheet.className,
+    subclass: sheet.subclass,
+    classes: sheet.classes,
+    level: sheet.level,
+    species: sheet.species,
+  };
+}
+
 /** A player's view of the party's sheets: their own in full, everyone else's as blank stubs. */
 export function sheetsForPlayer(sheets: CharacterSheet[], participantId: string): CharacterSheet[] {
   return sheets.map((s) => (s.ownerId === participantId ? s : sheetStubForPlayers(s)));

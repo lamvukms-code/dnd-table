@@ -28,7 +28,16 @@ export const PROTOCOL_VERSION = 7;
 /** Actions sent client -> server. */
 export type ClientAction =
   // `role` is a hint only; the server assigns roles (room creator becomes DM).
-  | { t: 'join'; name: string; role?: 'dm' | 'player'; participantId?: string; secret?: string }
+  | {
+      t: 'join';
+      name: string;
+      role?: 'dm' | 'player';
+      participantId?: string;
+      secret?: string;
+      /** The DM's recording / stream window: joins with the DM's identity but gets the PLAYER view,
+       *  can't act, and doesn't count as a connection of that participant. */
+      stream?: boolean;
+    }
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
   | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
@@ -241,6 +250,10 @@ export type ClientAction =
   | { t: 'shopRemove'; id: string }
   | { t: 'shopRestock'; id: string }
   | { t: 'shopBuy'; shopId: string; itemId: string; sheetId: string; qty: number }
+  /** Voice activity from the sender's own mic (relayed, never stored). */
+  | { t: 'speaking'; on: boolean }
+  /** Hide / show my real name on the speaker cards. */
+  | { t: 'setAnon'; anon: boolean }
   | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean }
   /** A monster's summon action: roll `count`, place that many of the stat block around it and
    *  (in combat) give them the summoner's initiative, acting right after it. DM only. */
@@ -264,6 +277,8 @@ export type ServerEvent =
    *  they actually change. `state.bestiary` / `state.homebrew` arrive empty; the client splices these in. */
   | { t: 'static'; bestiary?: Statblock[]; homebrew?: HomebrewEntry[] }
   | { t: 'dragPreview'; id: string; x: number; y: number }
+  /** Who is talking right now (participant ids), sent whenever it changes. */
+  | { t: 'speaking'; ids: string[] }
   | { t: 'error'; message: string };
 
 export interface ClientEnvelope {

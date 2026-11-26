@@ -21,6 +21,8 @@ server/data/*.backup.json
 client/public/theme/
 client/src/data/species.local.json
 server/data/maps/
+server/data/recordings/
+server/data/recordings-tmp/
 client/public/sounds/
 client/src/data/soundManifest.json
 

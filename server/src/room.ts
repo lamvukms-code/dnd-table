@@ -602,6 +602,12 @@ export class Room {
     return token.baneTag ?? undefined;
   }
 
+  /** A system line in the log from outside an action (recording start / stop). */
+  announce(label: string): void {
+    this.systemLog(label);
+    this.state.rev++;
+  }
+
   private systemLog(label: string, actor?: { id: string; name: string }): void {
     this.pushRoll({
       id: nanoid(8),
@@ -4167,6 +4173,8 @@ export class Room {
         break;
       }
 
+      case 'speaking':
+      case 'setAnon':
       case 'dragPreview':
         // relayed by the socket layer (index.ts) without touching the state
         return null;
