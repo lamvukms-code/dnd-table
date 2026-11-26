@@ -592,3 +592,10 @@ label { color: var(--muted); }
 .stream-stage .map-tools, .stream-stage .zoom-controls, .stream-stage .bestiary-palette { display: none !important; }
 .stream-stage .board { transition: transform 0.16s linear; }
 .hud-top:has(.voice-panel) { z-index: 60; }
+.rec-mic { font-weight: 400; opacity: 0.9; }
+.rec-notice {
+  position: absolute; top: 46px; left: 0; z-index: 41; width: 320px;
+  flex-direction: column; align-items: stretch; gap: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.35;
+}
+.rec-notice-btns { display: flex; gap: 6px; justify-content: flex-end; }
+.hud-top:has(.rec-notice) { z-index: 60; }

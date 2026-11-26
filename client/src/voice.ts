@@ -12,10 +12,12 @@ export interface VoiceSettings {
   /** Loudness (dBFS) above which you count as talking. */
   thresholdDb: number;
   deviceId?: string;
+  /** While the DM records, also record my mic here for the clean per-person audio. */
+  recordMic: boolean;
 }
 
 const KEY = 'dnd.voice';
-const DEFAULTS: VoiceSettings = { enabled: false, thresholdDb: -48 };
+const DEFAULTS: VoiceSettings = { enabled: false, thresholdDb: -48, recordMic: true };
 
 export function loadVoiceSettings(): VoiceSettings {
   try {

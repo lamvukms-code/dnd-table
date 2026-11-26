@@ -5,7 +5,7 @@ import { audioInputs, startVoice, voice } from '../voice.js';
 /** HUD 🎙 button: turn on "light my card when I talk", tune the sensitivity, stay anonymous on video. */
 export function VoiceButton() {
   const [open, setOpen] = useState(false);
-  useSyncExternalStore(voice.subscribe, () => `${voice.status}|${voice.talking}|${voice.settings.thresholdDb}|${voice.settings.deviceId}`);
+  useSyncExternalStore(voice.subscribe, () => `${voice.status}|${voice.talking}|${voice.settings.thresholdDb}|${voice.settings.deviceId}|${voice.settings.recordMic}`);
   const me = useStore((s) => s.me());
   const send = useStore((s) => s.send);
   const ref = useRef<HTMLDivElement>(null);
@@ -100,6 +100,10 @@ function VoicePanel({ anon, setAnon }: { anon: boolean; setAnon: (v: boolean) =>
           )}
         </>
       )}
+      <label className="voice-row" title="Mic của bạn được ghi ngay tại máy bạn (không qua Discord) và gửi lên máy DM thành track riêng, để lọc ồn và làm tiếng video rõ hơn. Chỉ ghi khi DM đang quay.">
+        <input type="checkbox" checked={s.recordMic} onChange={(e) => voice.update({ recordMic: e.target.checked })} />
+        Ghi mic của tôi khi DM quay (tiếng video rõ hơn)
+      </label>
       <label className="voice-row">
         <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
         Ẩn tên thật của tôi trên khung (chỉ hiện tên nhân vật)

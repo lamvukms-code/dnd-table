@@ -7,7 +7,8 @@ import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
 import { nanoid } from 'nanoid';
 import { Room } from './room.js';
-import { Recordings } from './recordings.js';
+import { Recordings, type TracksManifest } from './recordings.js';
+import { mixSession } from './mix.js';
 import {
   PROTOCOL_VERSION,
   type ClientEnvelope,
@@ -18,6 +19,7 @@ import {
   formatElapsed,
   rollLogForPlayers,
   sheetForStreamCard,
+  speakerCards,
   sheetsForPlayer,
   statsHiddenFromPlayers,
   tokenForPlayers,
@@ -213,7 +215,71 @@ app.post('/recordings/:id/stop', (req, res) => {
 setInterval(() => {
   const rec = recordings.active;
   if (rec && Date.now() - rec.lastChunk > 90_000) stopRecording(' — khung quay mất kết nối');
-}, 15_000).unref();
+  recordings.closeStalled();
+  for (const r of recordings.takeReady()) void buildCleanMix(r.folder, r.manifest);
+}, 5_000).unref();
+
+// --- Per-person mic tracks (each tab records its own mic while the DM records; see recordings.ts) ---
+
+/** Any participant proving their identity with their secret (the stream window has no track). */
+function participantFromRequest(req: express.Request): Participant | undefined {
+  const who = getParticipant(req.header('x-participant-id') ?? '');
+  const secret = req.header('x-participant-secret');
+  return who && who.secret && secret === who.secret ? who : undefined;
+}
+
+/** Clock sync: clients measure their offset to the server clock with a few of these. */
+app.get('/recordings/time', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ now: Date.now() });
+});
+
+app.post('/recordings/track/start', (req, res) => {
+  const who = participantFromRequest(req);
+  if (!who) return res.status(403).json({ error: 'Không xác định được người chơi' });
+  const body = (req.body ?? {}) as { ext?: string; startMs?: number };
+  const card = speakerCards(room.state).find((c) => c.participantId === who.id);
+  const label =
+    who.role === 'dm' ? `DM ${who.anon ? '' : who.name}` : who.anon ? (card?.title ?? 'Nguoi choi') : `${who.name} ${card?.title && card.title !== who.name ? card.title : ''}`;
+  const t = recordings.trackStart(who.id, label, String(body.ext ?? ''), Number(body.startMs));
+  if (typeof t === 'string') return res.status(409).json({ error: t });
+  res.json({ id: t.id });
+});
+
+app.post('/recordings/track/:id/chunk', express.raw({ type: 'application/octet-stream', limit: '16mb' }), (req, res) => {
+  const who = participantFromRequest(req);
+  if (!who) return res.status(403).json({ error: 'Không xác định được người chơi' });
+  const seq = Number(req.query.seq);
+  if (!Number.isInteger(seq) || seq < 0 || !Buffer.isBuffer(req.body)) return res.status(400).json({ error: 'Đoạn tiếng không hợp lệ' });
+  try {
+    const err = recordings.trackAppend(req.params.id, who.id, seq, req.body, Number(req.query.t));
+    if (err) return res.status(409).json({ error: err });
+  } catch (err) {
+    console.error('track write failed:', err);
+    return res.status(500).json({ error: 'Không ghi được file' });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/recordings/track/:id/stop', (req, res) => {
+  const who = participantFromRequest(req);
+  if (!who) return res.status(403).json({ error: 'Không xác định được người chơi' });
+  const err = recordings.trackStop(req.params.id, who.id, Number((req.body as { endMs?: number })?.endMs));
+  if (err) return res.status(409).json({ error: err });
+  res.json({ ok: true });
+});
+
+/** After a recording's tracks are in: build the denoised mix in the background (ffmpeg). */
+async function buildCleanMix(folder: string, manifest: TracksManifest): Promise<void> {
+  if (!manifest.tracks.length) return;
+  console.log(`mixing ${manifest.tracks.length} track(s): ${folder}`);
+  const r = await mixSession(folder).catch((e: unknown) => ({ ok: false, note: String(e) }));
+  if (!r) return;
+  console.log(r.ok ? `clean mix ready: ${'out' in r ? r.out : folder}` : `clean mix failed: ${r.note}`);
+  room.announce(r.ok ? `🎚 Đã dựng xong bản tiếng sạch (${r.note})` : `🎚 Chưa dựng được bản tiếng sạch: ${r.note}`);
+  broadcastState();
+  scheduleSave();
+}
 
 /** DM-only lore book (spoiler guard, not security — the app has no auth). */
 app.get('/lorebook', (req, res) => {
@@ -646,7 +712,10 @@ function pickColor(i: number): string {
 }
 
 // A recording cut off by a crash / restart: finalise the leftover file, clear the REC badge.
-for (const folder of recordings.recoverLeftovers()) console.log(`recovered unfinished recording: ${folder}`);
+for (const r of recordings.recoverLeftovers()) {
+  console.log(`recovered unfinished recording: ${r.folder}`);
+  void buildCleanMix(r.folder, r.manifest);
+}
 if (room.state.recording) room.state.recording = null;
 
 httpServer.listen(PORT, HOST, () => {
