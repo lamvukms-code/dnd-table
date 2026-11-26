@@ -44,6 +44,9 @@ import {
   mechanicAttackAdvantage,
   lightAt,
   activeLightRules,
+  defenseDisadvantageWhy,
+  acBonusByHp,
+  mechanicsOfKind,
   edgeFeet,
   tokenSpan,
   passiveRangeMultiplier,
@@ -487,6 +490,30 @@ export const useStore = create<StoreState>((set, get) => {
             reasons.push(...lightWhy, ...fxWhy);
           }
         }
+        // Its target's traits (ranged weapon attacks against it have disadvantage).
+        if (tgtTok?.statblock && room && !room.sheets.some((s) => s.tokenId === tgtTok.id)) {
+          const why = defenseDisadvantageWhy(monsterMechanics(tgtTok.statblock), { ranged: attackRange === 'ranged', spell: attackKind === 'spell' });
+          if (why.length) {
+            mode = combineRollModes(mode, 'disadvantage');
+            reasons.push(...why);
+          }
+        }
+        // +1 attack and damage per other creature of its kind nearby (hive traits).
+        if (atkTok?.statblock && !atkSheet && room) {
+          for (const h of mechanicsOfKind(monsterMechanics(atkTok.statblock), 'hiveBonus')) {
+            const n = Math.min(
+              h.max,
+              room.tokens.filter(
+                (t) => t.id !== atkTok.id && t.statblock?.name === atkTok.statblock?.name && !(typeof t.currentHp === 'number' && t.currentHp <= 0) && edgeFeet(t, tokenSpan(t), atkTok, tokenSpan(atkTok)) <= h.radiusFt,
+              ).length,
+            );
+            if (n > 0) {
+              attackBonus += n;
+              damageParts = [...damageParts, { dice: String(n), type: damageParts[0]?.type ?? '', label: h.from ?? 'hive' }];
+              reasons.push(`${h.from ?? 'hive'} +${n}`);
+            }
+          }
+        }
         // Ranged weapon: beyond normal range = disadvantage, beyond long range = can't (asks first).
         if (attackRange === 'ranged' && attackKind !== 'spell' && atkTok && tgtTok) {
           const mult = passiveRangeMultiplier(atkSheet);
@@ -500,6 +527,7 @@ export const useStore = create<StoreState>((set, get) => {
         const finalMode = combineRollModes(rollMode ?? 'normal', mode);
         notation = d20Check(attackBonus, finalMode);
         if (mode !== 'normal') condNote = ` [${mode === 'advantage' ? 'lợi thế' : 'bất lợi'}: ${reasons.join(', ')}]`;
+        else if (reasons.length) condNote = ` [${reasons.join(', ')}]`;
       }
       const finalLabel = label + condNote;
       const plain = () =>
@@ -547,7 +575,9 @@ export const useStore = create<StoreState>((set, get) => {
         });
       }
       const ac =
-        (linked ? effectiveArmorClass(linked, token?.effects).ac : npcArmorClass(token?.armorClass ?? 10, token?.effects)) +
+        (linked
+          ? effectiveArmorClass(linked, token?.effects).ac
+          : npcArmorClass(token?.armorClass ?? 10, token?.effects) + acBonusByHp(monsterMechanics(token?.statblock), token?.currentHp)) +
         coverAcBonus(
           attackRange === 'ranged' && attackKind !== 'spell'
             ? passiveRangedCover(attackerSheetId ? room?.sheets.find((s) => s.id === attackerSheetId) : undefined, token?.cover ?? 'none')

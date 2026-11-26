@@ -39,7 +39,7 @@ export type MonsterMechanic =
   | {
       kind: 'aura';
       radiusFt: number;
-      trigger: 'startTurn' | 'startOrEnter';
+      trigger: 'startTurn' | 'startOrEnter' | 'endTurn';
       save?: { ability: Ability; dc: number };
       onFail: { condition?: string; rounds?: number; madness?: 'short' | 'long' | 'indefinite'; damage?: { dice: string; type: string } };
       halfOnSave?: boolean;
@@ -137,6 +137,16 @@ export type MonsterMechanic =
   | { kind: 'aversion'; damageType: string; disadvantage: ('attack' | 'check' | 'save')[]; from?: string }
   /** Seeing a creature holding one of these weapons at the start of its turn gives it a condition until its next turn. */
   | { kind: 'weaponAversion'; weapons: string[]; condition: string; from?: string }
+  /** Advantage on its initiative roll — unless it has one of `unless`, or only near another of its kind. */
+  | { kind: 'initiativeAdvantage'; unless?: string[]; nearSameFt?: number; from?: string }
+  /** +1 to attack and damage per other creature of its kind within `radiusFt` (at most `max`). */
+  | { kind: 'hiveBonus'; radiusFt: number; max: number; from?: string }
+  /** Attack rolls against it have disadvantage: ranged weapon attacks only, or all. */
+  | { kind: 'defenseDisadvantage'; vs: 'rangedWeapon' | 'all'; from?: string }
+  /** Hitting a creature with an attack heals it (not when the target is one of `notTypes`). */
+  | { kind: 'healOnHit'; dice: string; notTypes?: string[]; from?: string }
+  /** AC bonus while its HP is under thresholds (highest bonus that applies). */
+  | { kind: 'acByHp'; steps: { below: number; bonus: number }[]; from?: string }
   /** Any other reaction: offered to the DM when its trigger happens (one click runs its save / damage). */
   | {
       kind: 'reaction';
@@ -224,14 +234,36 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
     if (lunar && condsIn(lunar[1]).length) out.push({ kind: 'light', when: 'notMoon', conditions: condsIn(lunar[1]), from: name });
     if (/while in dim light or darkness[^.]*hide action as a bonus action/i.test(d))
       out.push({ kind: 'light', when: 'dimOrDark', note: 'Hide được bằng bonus action', from: name });
-    const avers = /if (?:it|the [\w' -]+?) takes (\w+) damage, (?:it|the [\w' -]+?) has disadvantage on ([^.]+?) until the end of its next turn/i.exec(d);
+    const avers =
+      /if (?:it|the [\w' -]+?) takes (\w+) damage, (?:it|the [\w' -]+?) has disadvantage on ([^.]+?) until the end of its next turn/i.exec(d) ??
+      /(?:when|if) (?:it|the [\w' -]+?) [^.]*?,? or takes (\w+) damage, (?:it|the [\w' -]+?) has disadvantage on ([^.]+?) until the end of its next turn/i.exec(d);
     if (avers) {
-      const dis: ('attack' | 'check' | 'save')[] = [
+      const dis: ('attack' | 'check' | 'save')[] = /d20 tests/i.test(avers[2]) ? ['attack', 'check', 'save'] : [
         ...(/attack rolls/i.test(avers[2]) ? ['attack' as const] : []),
         ...(/ability checks/i.test(avers[2]) ? ['check' as const] : []),
         ...(/saving throws/i.test(avers[2]) ? ['save' as const] : []),
       ];
       if (dis.length) out.push({ kind: 'aversion', damageType: avers[1].toLowerCase(), disadvantage: dis, from: name });
+    }
+    // initiative advantage: "has advantage on its initiative roll" (unless blinded / near another of its kind)
+    if (/(?:has|have|gains?) advantage on (?:its |their )?initiative rolls?/i.test(d)) {
+      const un = /if (?:it|the [\w' -]+?) (?:is not|isn't) ([a-z]+)/i.exec(d);
+      const near = /within (\d+) feet of at least one other/i.exec(d);
+      out.push({ kind: 'initiativeAdvantage', unless: un && condsIn(un[1]).length ? condsIn(un[1]) : undefined, nearSameFt: near ? Number(near[1]) : undefined, from: name });
+    }
+    const hive = /bonus to (?:its )?attack and damage rolls equal to the number of [\w' -]+? within (\d+) feet of it \(maximum \+(\d+)\)/i.exec(d);
+    if (hive) out.push({ kind: 'hiveBonus', radiusFt: Number(hive[1]), max: Number(hive[2]), from: name });
+    if (/ranged weapon attacks? (?:rolls? )?against (?:it|the [\w' -]+?) (?:are made with|have) disadvantage/i.test(d))
+      out.push({ kind: 'defenseDisadvantage', vs: 'rangedWeapon', from: name });
+    else if (/(?:^|\. )attack rolls against (?:it|the [\w' -]+?) (?:are made with|have) disadvantage\./i.test(d))
+      out.push({ kind: 'defenseDisadvantage', vs: 'all', from: name });
+    const hoh = new RegExp(String.raw`after hitting an? (non-?(\w+) )?creature with an attack,[^.]*?regain(?:s|ing) \d+ \((${DICE})\) hit points`, 'i').exec(d);
+    if (hoh) out.push({ kind: 'healOnHit', dice: hoh[3].replace(/\s/g, ''), notTypes: hoh[2] ? [hoh[2].toLowerCase()] : undefined, from: name });
+    const acHp = /while (?:it|the [\w' -]+?|\w+) has fewer than ([\d, ]+?(?:,? or \d+)?) hit points, (?:it|he|she) gains an? ([+\d, ]+?(?:,? or \+\d+)?) bonus to (?:its|his|her) AC/i.exec(d);
+    if (acHp) {
+      const hp = acHp[1].match(/\d+/g)!.map(Number);
+      const bonus = acHp[2].match(/\d+/g)!.map(Number);
+      if (hp.length === bonus.length) out.push({ kind: 'acByHp', steps: hp.map((below, i) => ({ below, bonus: bonus[i] })), from: name });
     }
     const wav = /at the start of (?:its|the [\w' -]+?'s) turn, if it can see a creature holding an? ([^,]+(?:, an? [^,]+)*,? or an? [\w -]+?), it has the (\w+) condition until the start of its next turn/i.exec(d);
     if (wav && condsIn(wav[2]).length) {
@@ -267,7 +299,12 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
     }
     const revive = /(?:when|if) (?:the|it)[\w' -]*? is reduced to 0 hit points[^.]*?(?:\.\s*instead, it)?[^.]*?regain(?:s|ing) (all (?:of )?its hit points|(\d+)(?: \((\d+d\d+(?: ?[+-] ?\d+)?)\))? hit points)/i.exec(d);
     const startAura =
-      /starts? (?:its|their) turn within (\d+) feet of/i.exec(d) ?? /that starts its turn within (\d+) feet of/i.exec(d);
+      /starts? (?:its|their) turn within (\d+) feet of/i.exec(d) ??
+      /that starts its turn within (\d+) feet of/i.exec(d) ??
+      /(?:starts|ends) its turn in an? (\d+)-?\s?foot emanation/i.exec(d) ??
+      /an? (\d+)-?\s?foot emanation[^.]*\.[^]*?(?:starts|ends) its turn in th/i.exec(d) ??
+      /an? (\d+)-foot-radius sphere[^.]*centered on itself[^]*?(?:starts|ends) its turn there/i.exec(d);
+    const inSpace = /(?:starts|ends) its turn in (?:the [\w' -]+?'s|its) space/i.test(d);
     if (revive) {
       const uses = /\((\d+)\/day\)/i.exec(name);
       const after = d.slice((revive.index ?? 0) + revive[0].length);
@@ -287,17 +324,19 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
       if (sv && dm.length) out.push({ kind: 'deathBurst', radiusFt: Number(r[1] ?? r[2]), save: sv, damage: dm, halfOnSave: /half/i.test(d) || undefined, from: name });
     } else if (/restoration|rejuvenation/i.test(name) && /dies|destroyed/i.test(d)) {
       out.push({ kind: 'deathNote', from: name });
-    } else if (startAura && !/^innate spellcasting|^spellcasting/i.test(name)) {
+    } else if ((startAura || inSpace) && !/^innate spellcasting|^spellcasting/i.test(name)) {
       const sv = saveIn(d);
       const fail = /failure:\s*([^.]*(?:\.[^.]*)?)/i.exec(d)?.[1] ?? d;
-      const cond = condsIn(fail).find((c) => c !== 'exhaustion' && c !== 'madness');
+      // "…an effect that ends the Poisoned condition" names a condition it doesn't give
+      const cond = condsIn(fail.replace(/ends? the \w+ condition/gi, '')).find((c) => c !== 'exhaustion' && c !== 'madness');
       const dm = dmgIn(fail);
       const mad = madnessIn(fail);
-      if (sv && (cond || dm.length || mad)) {
+      // no save: plain damage to whoever ends / starts its turn there (Blighted Aura)
+      if ((sv && (cond || dm.length || mad)) || (!sv && dm.length && !cond && !mad)) {
         out.push({
           kind: 'aura',
-          radiusFt: Number(startAura[1]),
-          trigger: /enters? (?:that|the) area/i.test(d) ? 'startOrEnter' : 'startTurn',
+          radiusFt: startAura ? Number(startAura[1]) : 0,
+          trigger: /ends its turn (?:in|within|there)/i.test(d) && !/starts? its turn/i.test(d) ? 'endTurn' : /enters? (?:that|the) (?:[\w']+ )?area/i.test(d) ? 'startOrEnter' : 'startTurn',
           save: sv,
           onFail: { condition: cond, rounds: ROUNDS(fail), madness: mad, damage: dm[0] },
           halfOnSave: /half/i.test(d) || undefined,
@@ -519,4 +558,29 @@ export function activeLightRules(mechs: MonsterMechanic[], light: SceneLight | u
   const rules = mechanicsOfKind(mechs, 'light').filter((m) => lightRuleHolds(m, light));
   const dis = (k: 'attack' | 'check' | 'save') => rules.filter((m) => m.disadvantage?.includes(k)).map((m) => m.from ?? 'ánh sáng');
   return { rules, attack: dis('attack'), check: dis('check'), save: dis('save') };
+}
+
+
+// ---------------------------------------------------------------- wave 7
+
+/** Why it rolls initiative with advantage (trait names), given its conditions and whether another of its kind is near. */
+export function initiativeAdvantageWhy(mechs: MonsterMechanic[], ctx: { conditions: string[]; sameKindWithin: (ft: number) => boolean }): string[] {
+  return mechanicsOfKind(mechs, 'initiativeAdvantage')
+    .filter((m) => !m.unless?.some((c) => ctx.conditions.includes(c)) && (!m.nearSameFt || ctx.sameKindWithin(m.nearSameFt)))
+    .map((m) => m.from ?? 'initiative');
+}
+
+/** AC bonus from its HP thresholds ("fewer than N hit points: +X AC"). */
+export function acBonusByHp(mechs: MonsterMechanic[], hp: number | undefined): number {
+  if (typeof hp !== 'number') return 0;
+  let best = 0;
+  for (const m of mechanicsOfKind(mechs, 'acByHp')) for (const s of m.steps) if (hp < s.below && s.bonus > best) best = s.bonus;
+  return best;
+}
+
+/** Disadvantage on an attack against a creature with these mechanics (trait names). */
+export function defenseDisadvantageWhy(mechs: MonsterMechanic[], attack: { ranged: boolean; spell: boolean }): string[] {
+  return mechanicsOfKind(mechs, 'defenseDisadvantage')
+    .filter((m) => m.vs === 'all' || (m.vs === 'rangedWeapon' && attack.ranged && !attack.spell))
+    .map((m) => m.from ?? 'phòng thủ');
 }

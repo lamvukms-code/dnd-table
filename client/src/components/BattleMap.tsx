@@ -56,6 +56,11 @@ import {
   automatedFeatures,
   lightAt,
   activeLightRules,
+  initiativeAdvantageWhy,
+  legendaryInfo,
+  tokenConditions,
+  edgeFeet,
+  tokenSpan,
   SCENE_LIGHTS,
   SCENE_LIGHT_VI,
   type SceneLight,
@@ -1563,6 +1568,20 @@ function TokenInspector({
   const mtag =
     sbRollMode === 'advantage' ? ' (lợi thế)' : sbRollMode === 'disadvantage' ? ' (bất lợi)' : '';
   const etag = (k: 'attack' | 'check' | 'save') => (envWhy(k).length ? ` [bất lợi: ${envWhy(k).join(', ')}]` : '');
+  // initiative advantage from its traits ("advantage on its initiative roll")
+  const legendary = legendaryInfo(token.statblock);
+  const initWhy = token.statblock
+    ? initiativeAdvantageWhy(monsterMechanics(token.statblock), {
+        conditions: tokenConditions(token),
+        sameKindWithin: (ft) =>
+          tokens.some((o) => o.id !== token.id && o.statblock?.name === token.statblock?.name && !(typeof o.currentHp === 'number' && o.currentHp <= 0) && edgeFeet(o, tokenSpan(o), token, tokenSpan(token)) <= ft),
+      })
+    : [];
+  const initMode = (): RollMode => {
+    const m = sbMode('check');
+    if (!initWhy.length) return m;
+    return m === 'disadvantage' ? 'normal' : 'advantage';
+  };
 
   useEffect(() => {
     if (!spellPickerOpen) return;
@@ -2200,7 +2219,12 @@ function TokenInspector({
           <div className="sb-quick-roll">
             <button
               className="roll-btn sm"
-              onClick={() => rollDice(`${sb.name} · Initiative${mtag}${etag('check')}`, sbd20(sb.initiativeMod))}
+              onClick={() =>
+                rollDice(
+                  `${sb.name} · Initiative${mtag}${etag('check')}${initWhy.length ? ` [lợi thế: ${initWhy.join(', ')}]` : ''}`,
+                  d20Check(sb.initiativeMod + exhaustionPenalty(token.exhaustion), initMode()),
+                )
+              }
             >
               Init {fmtMod(sb.initiativeMod)}
             </button>
@@ -2550,15 +2574,15 @@ function TokenInspector({
               ))}
             </details>
           )}
-          {(sb.legendaryActions?.length ?? 0) > 0 && (
+          {legendary && (
             <details className="sb-traits-view" open>
               <summary>
-                ⚡ Legendary actions ({token.legendaryActionsRemaining ?? sb.legendaryActionsPerRound ?? 0}/
-                {sb.legendaryActionsPerRound})
+                ⚡ Legendary actions ({token.legendaryActionsRemaining ?? legendary.perRound}/{legendary.perRound})
               </summary>
-              {sb.legendaryActions!.map((a, i) => (
-                <p key={i}>
+              {legendary.options.map((a, i) => (
+                <p key={i} className={token.legendaryLocks?.includes(a.name) ? 'sb-leg-locked' : undefined}>
                   <strong>{a.name}.</strong> {a.description}
+                  {token.legendaryLocks?.includes(a.name) && <em> (đã dùng — chờ lượt sau)</em>}
                 </p>
               ))}
             </details>

@@ -46,6 +46,9 @@ import {
   diceFacesOf,
   expendJaegerMomentum,
   legendaryActionCost,
+  legendaryInfo,
+  legendaryOncePerTurn,
+  d20Check,
   initiativeBonus,
   mergeSheetEdit,
   rollNotation,
@@ -139,6 +142,8 @@ import {
   critExtraParts,
   onHitGrappleFor,
   lifestealFor,
+  initiativeAdvantageWhy,
+  acBonusByHp,
   sizeIndex,
   skillBonus,
   type MonsterMechanic,
@@ -282,7 +287,7 @@ export class Room {
     const sheet = this.linkedSheet(token);
     return sheet
       ? effectiveArmorClass(sheet, token.effects).ac
-      : npcArmorClass(token.armorClass ?? 10, token.effects);
+      : npcArmorClass(token.armorClass ?? 10, token.effects) + acBonusByHp(this.mechOf(token), token.currentHp);
   }
 
   /** Keep the printed AC of sheet-linked tokens in step with their sheet (derived, never typed). */
@@ -1543,7 +1548,7 @@ export class Room {
         t.id !== ctx?.endingId &&
         t.id !== active?.tokenId &&
         (t.legendaryActionsRemaining ?? 0) > 0 &&
-        t.statblock?.legendaryActions?.length &&
+        this.legendaryOptions(t).length > 0 &&
         alive(t),
     );
     if (legendaryToken) {
@@ -1552,7 +1557,7 @@ export class Room {
         tokenId: legendaryToken.id,
         tokenName: legendaryToken.label,
         remaining: legendaryToken.legendaryActionsRemaining ?? 0,
-        options: withOptionIds(legendaryToken.statblock?.legendaryActions ?? [], 'leg'),
+        options: withOptionIds(this.legendaryOptions(legendaryToken), 'leg'),
         round: init.round,
       };
     }
@@ -1967,7 +1972,15 @@ export class Room {
       for (const b of this.state.tokens) {
         if (b.id === t.id || !this.alive(b) || this.isPlayerSide(b) === this.isPlayerSide(t)) continue;
         for (const a of mechanicsOfKind(this.mechOf(b), 'aura')) {
-          if (edgeFeet(b, tokenSpan(b), t, tokenSpan(t)) <= a.radiusFt) this.applyAura(b, t, a, 'đầu lượt');
+          if (a.trigger !== 'endTurn' && edgeFeet(b, tokenSpan(b), t, tokenSpan(t)) <= a.radiusFt) this.applyAura(b, t, a, 'đầu lượt');
+        }
+      }
+    }
+    if (phase === 'end') {
+      for (const b of this.state.tokens) {
+        if (b.id === t.id || !this.alive(b) || !this.alive(t) || this.isPlayerSide(b) === this.isPlayerSide(t)) continue;
+        for (const a of mechanicsOfKind(this.mechOf(b), 'aura')) {
+          if (a.trigger === 'endTurn' && edgeFeet(b, tokenSpan(b), t, tokenSpan(t)) <= a.radiusFt) this.applyAura(b, t, a, 'cuối lượt');
         }
       }
     }
@@ -2061,6 +2074,24 @@ export class Room {
     const anchor = token.turnAnchor ?? { x: token.x, y: token.y };
     const budget = this.tokenSpeed(token) + (token.extraMove ?? 0);
     return { ok: true, pos: clampToRange(anchor, next, budget) };
+  }
+
+  /** Legendary options it can take now: not locked since its last turn, affordable with the uses left. */
+  private legendaryOptions(t: Token) {
+    const left = t.legendaryActionsRemaining ?? 0;
+    return (legendaryInfo(t.statblock)?.options ?? []).filter((o) => !t.legendaryLocks?.includes(o.name) && legendaryActionCost(o) <= left);
+  }
+
+  /** Initiative roll for a token: advantage from its traits. */
+  private initRollNotation(token: Token): { notation: string; why: string[] } {
+    const mod = this.tokenInitMod(token);
+    if (!token.statblock || this.linkedSheet(token)) return { notation: initNotation(mod), why: [] };
+    const why = initiativeAdvantageWhy(this.mechOf(token), {
+      conditions: tokenConditions(token),
+      sameKindWithin: (ft) =>
+        this.state.tokens.some((o) => o.id !== token.id && this.alive(o) && o.statblock?.name === token.statblock?.name && edgeFeet(o, tokenSpan(o), token, tokenSpan(token)) <= ft),
+    });
+    return { notation: why.length ? d20Check(mod, 'advantage') : initNotation(mod), why };
   }
 
   /** Initiative modifier for a token: linked sheet, else stat block, else 0. */
@@ -2812,6 +2843,13 @@ export class Room {
                 : applied + took.absorbed;
               const healed = amount > 0 ? this.applyHeal(attackerTok, amount) : 0;
               if (healed > 0) this.pendingBaneLogs.push(`🩸 ${attackerTok.label} hút ${healed} HP (${ls.from ?? 'hút máu'})`);
+            }
+            // A hit heals it ("after hitting … regaining N hit points") (not off constructs etc. when the text says so)
+            for (const h of mechanicsOfKind(atkMechs, 'healOnHit')) {
+              const kind = (target.statblock?.meta ?? '').toLowerCase();
+              if (h.notTypes?.some((x) => kind.includes(x))) continue;
+              const healed = this.applyHeal(attackerTok, rollNotation(h.dice).total);
+              if (healed > 0) this.pendingBaneLogs.push(`🍖 ${attackerTok.label} hồi ${healed} HP (${h.from ?? 'đánh trúng'})`);
             }
           }
           // Temp HP soaking the hit still counts as dealing damage (Booming Blade, Bracers).
@@ -3602,7 +3640,9 @@ export class Room {
           if (token.godsBaneBlade) {
             return { id: nanoid(8), name: token.label, initiative: BLADE_INITIATIVE, tokenId: token.id, isActive: false, hasGone: false, loseTies: true };
           }
-          const roll = rollNotation(initNotation(this.tokenInitMod(token)));
+          const ir = this.initRollNotation(token);
+          const roll = rollNotation(ir.notation);
+          if (ir.why.length) this.systemLog(`${token.label}: initiative có lợi thế (${ir.why.join(', ')})`);
           return {
             id: nanoid(8),
             name: token.label,
@@ -3660,7 +3700,7 @@ export class Room {
           const token = this.state.tokens.find((tk) => tk.id === tokenId);
           if (!token || token.godsBaneBlade) continue; // the blade's count is fixed (God's Bane panel)
           // silent: no pushRoll, no dddice
-          const total = rollNotation(initNotation(this.tokenInitMod(token))).total;
+          const total = rollNotation(this.initRollNotation(token).notation).total;
           this.upsertInitEntry(token.label, total, token.id);
         }
         this.touch();
@@ -3676,7 +3716,8 @@ export class Room {
         this.state.dmPrompt = null;
         for (const tk of this.state.tokens) {
           tk.turnUsed = undefined;
-          tk.legendaryActionsRemaining = tk.statblock?.legendaryActionsPerRound ?? undefined;
+          tk.legendaryActionsRemaining = legendaryInfo(tk.statblock)?.perRound ?? undefined;
+          tk.legendaryLocks = undefined;
         }
         markActive(this.state.initiative);
         // the first creature's turn starts now too (regeneration, recharge, start-of-turn damage…)
@@ -3706,9 +3747,9 @@ export class Room {
         if (ending) this.processTurnEffects(ending, 'end-of-turn');
         const starting = startingId && this.state.tokens.find((t) => t.id === startingId);
         if (starting) {
-          if (starting.statblock?.legendaryActionsPerRound) {
-            starting.legendaryActionsRemaining = starting.statblock.legendaryActionsPerRound;
-          }
+          const li = legendaryInfo(starting.statblock);
+          if (li) starting.legendaryActionsRemaining = li.perRound;
+          starting.legendaryLocks = undefined;
           this.processTurnEffects(starting, 'start-of-turn');
           this.rollRecharges(starting);
         }
@@ -3769,7 +3810,9 @@ export class Room {
           const token = this.state.tokens.find((t) => t.id === prompt.tokenId);
           const left = token?.legendaryActionsRemaining ?? 0;
           if (cost > left) return `Không đủ legendary action: cần ${cost}, còn ${left}`;
+          if (chosen && token?.legendaryLocks?.includes(chosen.name)) return `${chosen.name}: đã dùng, chờ tới lượt sau của ${token.label}`;
           if (token) token.legendaryActionsRemaining = left - cost;
+          if (token && chosen && legendaryOncePerTurn(chosen)) token.legendaryLocks = [...(token.legendaryLocks ?? []), chosen.name];
         }
         this.pushRoll({
           id: nanoid(8),

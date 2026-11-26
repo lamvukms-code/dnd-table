@@ -1140,6 +1140,31 @@ export const RIDER_PRESETS: { name: string; rider: { dice: string; type: string 
   { name: 'Hex', rider: { dice: '1d6', type: 'necrotic' }, concentration: true },
 ];
 
+/**
+ * Legendary actions of a stat block: its own list, or (stat blocks in the newer layout) a
+ * "Legendary Actions" entry ("Legendary Action Uses: 3 …") followed by the options, among its other actions.
+ */
+export function legendaryInfo(
+  sb: { actions?: SheetAction[]; legendaryActions?: SheetAction[]; legendaryActionsPerRound?: number } | undefined,
+): { perRound: number; options: SheetAction[] } | null {
+  if (!sb) return null;
+  if (sb.legendaryActions?.length) return { perRound: sb.legendaryActionsPerRound ?? 3, options: sb.legendaryActions };
+  const acts = sb.actions ?? [];
+  const i = acts.findIndex((a) => a.actionType === 'other' && /^legendary actions?$/i.test((a.name ?? '').trim()));
+  if (i < 0) return null;
+  const n = /legendary action uses:\s*(\d+)/i.exec(acts[i].description ?? '');
+  const options: SheetAction[] = [];
+  for (const a of acts.slice(i + 1)) {
+    if (a.actionType !== 'other' || /^(?:lair|mythic) actions?$/i.test((a.name ?? '').trim())) break;
+    options.push({ ...a, actionType: 'legendary' });
+  }
+  return options.length ? { perRound: n ? Number(n[1]) : 3, options } : null;
+}
+
+/** "… can't take this action again until the start of its next turn": once between its turns. */
+export const legendaryOncePerTurn = (a: Pick<SheetAction, 'description'>): boolean =>
+  /can't take this action again until the start of (?:its|his|her|their) next turn/i.test(a.description ?? '');
+
 /** How many legendary actions an option costs: "(Costs 2 Actions)" in its name, else 1. */
 export function legendaryActionCost(a: Pick<SheetAction, 'name'>): number {
   const m = /\(\s*Costs?\s+(\d+)\s+Actions?\s*\)/i.exec(a.name ?? '');
