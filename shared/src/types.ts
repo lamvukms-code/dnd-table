@@ -569,6 +569,10 @@ export interface ActiveEffect {
    *  simplification: any `updateToken` position change counts as "willingly moves" — this app
    *  doesn't distinguish that from forced movement (a shove, a push effect). */
   boomingBladeMoveTrigger?: { dice: string };
+  /** Disadvantage on the bearer's own d20s of these kinds while active (Aversion to Fire…). */
+  rollDisadvantage?: ('attack' | 'check' | 'save')[];
+  /** Ends at the end of the bearer's own turn once this many of its turns have ended (1 = this/next one). */
+  endsAfterOwnTurns?: number;
 }
 
 /** What a token is currently concentrating on (one at a time). */
@@ -909,6 +913,8 @@ export interface Token {
   /** Stat-block actions with limited use (Recharge X–6, N/Day): times used since they last came back,
    *  keyed by action id. Recharge actions are rolled for at the start of the monster's turn. */
   actionUses?: Record<string, number>;
+  /** Light where this token stands, overriding the scene's (a shade in a dark corner of a sunny yard). */
+  light?: SceneLight | null;
   /** Exhaustion level 0–6 for a token with no linked sheet (monsters). PCs keep it on the sheet. */
   exhaustion?: number;
   /** DM override: show this NPC/monster token's AC / HP / statblock to players. Default (unset) =
@@ -1193,6 +1199,8 @@ export interface RoomState {
   godsBane?: GodsBaneState;
   /** The setting moon currently in the sky (DM-set). Keys/names come from the local moon data. */
   moon?: SkyMoon | null;
+  /** Light across the scene (DM-set). Unset = not tracked; with a moon in the sky it counts as moonlight. */
+  light?: SceneLight | null;
   /** Open "Opportunity Attack?" offers for the turn in progress (cleared when the turn changes). */
   oaPrompts?: OaPrompt[];
   /** "Pick a point on the map" requests (e.g. teleport a creature that failed its save). */
@@ -1257,6 +1265,14 @@ export interface OaPrompt {
   moverName: string;
   ts: number;
 }
+
+/**
+ * Light on the battlefield (DM-set, per scene and optionally per token): sunlight, other bright
+ * light, moonlight, dim light, darkness. Unset = not tracked (light-dependent traits stay manual).
+ */
+export type SceneLight = 'sun' | 'bright' | 'moon' | 'dim' | 'dark';
+export const SCENE_LIGHTS: SceneLight[] = ['sun', 'bright', 'moon', 'dim', 'dark'];
+export const SCENE_LIGHT_VI: Record<SceneLight, string> = { sun: 'Nắng', bright: 'Sáng', moon: 'Ánh trăng', dim: 'Mờ', dark: 'Tối' };
 
 /** A setting moon in the sky: `key` matches an entry of the local moon data (client). */
 export interface SkyMoon {

@@ -1,4 +1,4 @@
-import type { Ability, SheetAction, StatblockTrait, TokenSize } from './types.js';
+import type { Ability, SceneLight, SheetAction, StatblockTrait, TokenSize } from './types.js';
 
 /**
  * Monster mechanics as data. Each entry is one rule the engine applies at a fixed hook (attack roll,
@@ -119,6 +119,24 @@ export type MonsterMechanic =
     }
   /** It loses a limb whenever one hit deals more than `loseOver` damage. */
   | { kind: 'limbs'; count: number; loseOver: number; from?: string }
+  /**
+   * Depends on light where it stands: `sun` = in sunlight, `notMoon` = anywhere but moonlight,
+   * `dimOrDark` = dim light / darkness / moonlight. Damage at the start of its turn, disadvantage on its
+   * d20s, conditions while it holds, or just a reminder.
+   */
+  | {
+      kind: 'light';
+      when: 'sun' | 'notMoon' | 'dimOrDark';
+      startDamage?: { dice: string; type: string };
+      disadvantage?: ('attack' | 'check' | 'save')[];
+      conditions?: string[];
+      note?: string;
+      from?: string;
+    }
+  /** Taking `damageType` damage gives it disadvantage until the end of its next turn. */
+  | { kind: 'aversion'; damageType: string; disadvantage: ('attack' | 'check' | 'save')[]; from?: string }
+  /** Seeing a creature holding one of these weapons at the start of its turn gives it a condition until its next turn. */
+  | { kind: 'weaponAversion'; weapons: string[]; condition: string; from?: string }
   /** Any other reaction: offered to the DM when its trigger happens (one click runs its save / damage). */
   | {
       kind: 'reaction';
@@ -185,6 +203,41 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
       .flatMap((m) => [...m[1].matchAll(/(strength|dexterity|constitution|intelligence|wisdom|charisma)(?! checks)/gi)].map((x) => ABIL[x[1].toLowerCase()]));
     if (abilSaves.length && !vs) out.push({ kind: 'saveAdvantage', abilities: [...new Set(abilSaves)], from: name });
     if (/^evasion/i.test(name)) out.push({ kind: 'evasion', from: name });
+
+    // light: sunlight hypersensitivity / weakness, lunar invisibility, shadow stealth
+    const sunDmg = /takes (\d+)(?: \((\d+d\d+(?:\s*[+-]\s*\d+)?)\))? (\w+) damage if (?:it|he|she|they) starts? (?:its|his|her|their) turn in sunlight/i.exec(d);
+    const sunDis = /while in sunlight[^.]*?disadvantage on ([^.]+)/i.exec(d);
+    if (sunDmg || sunDis) {
+      const what = sunDis?.[1] ?? '';
+      const dis: ('attack' | 'check' | 'save')[] = /d20 tests/i.test(what)
+        ? ['attack', 'check', 'save']
+        : [...(/attack rolls/i.test(what) ? ['attack' as const] : []), ...(/ability checks|perception/i.test(what) ? ['check' as const] : [])];
+      out.push({
+        kind: 'light',
+        when: 'sun',
+        startDamage: sunDmg ? { dice: (sunDmg[2] ?? sunDmg[1]).replace(/\s/g, ''), type: sunDmg[3].toLowerCase() } : undefined,
+        disadvantage: dis.length ? dis : undefined,
+        from: name,
+      });
+    }
+    const lunar = /while not in moonlight, ([^.]+)/i.exec(d);
+    if (lunar && condsIn(lunar[1]).length) out.push({ kind: 'light', when: 'notMoon', conditions: condsIn(lunar[1]), from: name });
+    if (/while in dim light or darkness[^.]*hide action as a bonus action/i.test(d))
+      out.push({ kind: 'light', when: 'dimOrDark', note: 'Hide được bằng bonus action', from: name });
+    const avers = /if (?:it|the [\w' -]+?) takes (\w+) damage, (?:it|the [\w' -]+?) has disadvantage on ([^.]+?) until the end of its next turn/i.exec(d);
+    if (avers) {
+      const dis: ('attack' | 'check' | 'save')[] = [
+        ...(/attack rolls/i.test(avers[2]) ? ['attack' as const] : []),
+        ...(/ability checks/i.test(avers[2]) ? ['check' as const] : []),
+        ...(/saving throws/i.test(avers[2]) ? ['save' as const] : []),
+      ];
+      if (dis.length) out.push({ kind: 'aversion', damageType: avers[1].toLowerCase(), disadvantage: dis, from: name });
+    }
+    const wav = /at the start of (?:its|the [\w' -]+?'s) turn, if it can see a creature holding an? ([^,]+(?:, an? [^,]+)*,? or an? [\w -]+?), it has the (\w+) condition until the start of its next turn/i.exec(d);
+    if (wav && condsIn(wav[2]).length) {
+      const weapons = wav[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((w) => w.replace(/^an?\s+/i, '').trim().toLowerCase()).filter(Boolean);
+      out.push({ kind: 'weaponAversion', weapons, condition: condsIn(wav[2])[0], from: name });
+    }
 
     const when: AttackAdvantageWhen[] = [];
     if (/pack tactics/i.test(name) || /if at least one of (its|the \w+'s) allies is within 5 feet of the creature/i.test(d)) when.push('allyAdjacentToTarget');
@@ -445,4 +498,25 @@ export function mechanicsOfKind<K extends MonsterMechanic['kind']>(mechs: Monste
 export function regenSuppressed(r: { suppressedBy?: string[] }, tookSinceTurn: string[] | undefined): boolean {
   const took = new Set((tookSinceTurn ?? []).map((x) => x.toLowerCase()));
   return !!r.suppressedBy?.some((x) => took.has(x.toLowerCase()));
+}
+
+
+// ---------------------------------------------------------------- light
+
+/** Light where a token stands: its own override, else the scene's; a moon in the sky with no light set = moonlight. */
+export function lightAt(room: { light?: SceneLight | null; moon?: unknown }, token: { light?: SceneLight | null } | undefined): SceneLight | undefined {
+  return token?.light ?? room.light ?? (room.moon ? 'moon' : undefined);
+}
+
+/** Does this light rule hold in `light`? Untracked light (undefined) never triggers anything. */
+export function lightRuleHolds(m: { when: 'sun' | 'notMoon' | 'dimOrDark' }, light: SceneLight | undefined): boolean {
+  if (!light) return false;
+  return m.when === 'sun' ? light === 'sun' : m.when === 'notMoon' ? light !== 'moon' : light === 'dim' || light === 'dark' || light === 'moon';
+}
+
+/** The light rules active for a creature, and the d20 kinds they put at disadvantage (with the trait names). */
+export function activeLightRules(mechs: MonsterMechanic[], light: SceneLight | undefined) {
+  const rules = mechanicsOfKind(mechs, 'light').filter((m) => lightRuleHolds(m, light));
+  const dis = (k: 'attack' | 'check' | 'save') => rules.filter((m) => m.disadvantage?.includes(k)).map((m) => m.from ?? 'ánh sáng');
+  return { rules, attack: dis('attack'), check: dis('check'), save: dis('save') };
 }

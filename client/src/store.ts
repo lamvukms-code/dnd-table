@@ -42,6 +42,8 @@ import {
   findCantrip,
   monsterMechanics,
   mechanicAttackAdvantage,
+  lightAt,
+  activeLightRules,
   edgeFeet,
   tokenSpan,
   passiveRangeMultiplier,
@@ -474,6 +476,15 @@ export const useStore = create<StoreState>((set, get) => {
               mode = combineRollModes(mode, 'advantage');
               reasons.push(...why);
             }
+          }
+        }
+        // Light where the attacker stands (Sunlight Sensitivity…) and Aversion-style effects: disadvantage.
+        if (atkTok && room) {
+          const lightWhy = atkTok.statblock && !atkSheet ? activeLightRules(monsterMechanics(atkTok.statblock), lightAt(room, atkTok)).attack : [];
+          const fxWhy = (atkTok.effects ?? []).filter((e) => e.rollDisadvantage?.includes('attack')).map((e) => e.name);
+          if (lightWhy.length || fxWhy.length) {
+            mode = combineRollModes(mode, 'disadvantage');
+            reasons.push(...lightWhy, ...fxWhy);
           }
         }
         // Ranged weapon: beyond normal range = disadvantage, beyond long range = can't (asks first).

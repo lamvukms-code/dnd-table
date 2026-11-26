@@ -250,6 +250,16 @@ label { color: var(--muted); }
 
 /* moon chip + card */
 .moon-wrap { position: relative; flex: none; }
+.light-chip {
+  display: flex; align-items: center; gap: 6px; flex: none; height: 46px; padding: 0 12px;
+  border-radius: 23px; background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45); color: var(--text); font-family: var(--serif); font-size: 18px;
+}
+.light-chip { flex-direction: row !important; white-space: nowrap; width: auto; }
+.light-chip select { width: auto !important; margin: 0 !important; padding: 2px 4px; flex: none; }
+.light-chip.on { border-color: var(--accent, #c9a227); }
+.light-chip select { background: transparent; border: none; color: inherit; font-family: var(--serif); font-size: 13px; max-width: 150px; }
+.light-chip select option { background: var(--panel); }
 .moon-chip {
   display: flex;
   align-items: center;

@@ -54,6 +54,11 @@ import {
   type MonsterSpellEntry,
   mechanicsOfKind,
   automatedFeatures,
+  lightAt,
+  activeLightRules,
+  SCENE_LIGHTS,
+  SCENE_LIGHT_VI,
+  type SceneLight,
   monsterMechanics,
   economyKindOf,
   exhaustionPenalty,
@@ -71,6 +76,7 @@ import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
 import { ZONE_LAYOUTS } from '../campaignData.js';
 import { ExhaustionStepper } from './Exhaustion.js';
+import { LIGHT_ICON } from './LightChip.js';
 
 /** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
  *  `backgroundUrl` (`/maps/battlemaps/<id>.webp`, see MapLibrary.tsx) so a known zone layout can
@@ -1543,9 +1549,20 @@ function TokenInspector({
   const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
   const [lootTargetSheetId, setLootTargetSheetId] = useState('');
   // monster d20 tests carry the token's Exhaustion (PCs get it through their sheet bonuses)
-  const sbd20 = (mod: number) => d20Check(mod + exhaustionPenalty(token.exhaustion), sbRollMode);
+  // light-dependent traits (Sunlight Sensitivity…) and Aversion-style effects put its d20s at disadvantage
+  const sceneLight = useStore((s) => s.room?.light);
+  const skyMoon = useStore((s) => s.room?.moon);
+  const hereLight = lightAt({ light: sceneLight, moon: skyMoon }, token);
+  const envLight = token.statblock ? activeLightRules(monsterMechanics(token.statblock), hereLight) : { rules: [], attack: [], check: [], save: [] };
+  const envWhy = (k: 'attack' | 'check' | 'save') => [...envLight[k], ...(token.effects ?? []).filter((e) => e.rollDisadvantage?.includes(k)).map((e) => e.name)];
+  const sbMode = (k: 'attack' | 'check' | 'save'): RollMode => {
+    if (!envWhy(k).length) return sbRollMode;
+    return sbRollMode === 'advantage' ? 'normal' : 'disadvantage';
+  };
+  const sbd20 = (mod: number, k: 'attack' | 'check' | 'save' = 'check') => d20Check(mod + exhaustionPenalty(token.exhaustion), sbMode(k));
   const mtag =
     sbRollMode === 'advantage' ? ' (lợi thế)' : sbRollMode === 'disadvantage' ? ' (bất lợi)' : '';
+  const etag = (k: 'attack' | 'check' | 'save') => (envWhy(k).length ? ` [bất lợi: ${envWhy(k).join(', ')}]` : '');
 
   useEffect(() => {
     if (!spellPickerOpen) return;
@@ -2147,7 +2164,7 @@ function TokenInspector({
                     className="roll-btn sm"
                     title={`${sb.name} — ${ab.toUpperCase()} check`}
                     onClick={() =>
-                      rollDice(`${sb.name} · ${ab.toUpperCase()} check${mtag}`, sbd20(mod))
+                      rollDice(`${sb.name} · ${ab.toUpperCase()} check${mtag}${etag('check')}`, sbd20(mod))
                     }
                   >
                     {ab.toUpperCase()} {fmtMod(mod)}
@@ -2156,7 +2173,7 @@ function TokenInspector({
                     className={`roll-btn sm ${sb.saveProficiencies.includes(ab) ? 'prof' : ''}`}
                     title={`${sb.name} — ${ab.toUpperCase()} save`}
                     onClick={() =>
-                      rollDice(`${sb.name} · ${ab.toUpperCase()} save${mtag}`, sbd20(save))
+                      rollDice(`${sb.name} · ${ab.toUpperCase()} save${mtag}${etag('save')}`, sbd20(save, 'save'))
                     }
                   >
                     save {fmtMod(save)}
@@ -2172,7 +2189,7 @@ function TokenInspector({
                 <button
                   key={sk.skill}
                   className="roll-btn sm"
-                  onClick={() => rollDice(`${sb.name} · ${sk.skill}${mtag}`, sbd20(sk.bonus))}
+                  onClick={() => rollDice(`${sb.name} · ${sk.skill}${mtag}${etag('check')}`, sbd20(sk.bonus))}
                 >
                   {sk.skill} {fmtMod(sk.bonus)}
                 </button>
@@ -2183,12 +2200,45 @@ function TokenInspector({
           <div className="sb-quick-roll">
             <button
               className="roll-btn sm"
-              onClick={() => rollDice(`${sb.name} · Initiative${mtag}`, sbd20(sb.initiativeMod))}
+              onClick={() => rollDice(`${sb.name} · Initiative${mtag}${etag('check')}`, sbd20(sb.initiativeMod))}
             >
               Init {fmtMod(sb.initiativeMod)}
             </button>
           </div>
 
+          {(isDm || envLight.rules.length > 0) && (
+            <div className="sb-env">
+              {isDm && (
+                <label title="Ánh sáng tại chỗ token này đứng (bỏ trống = theo cảnh)">
+                  {hereLight ? LIGHT_ICON[hereLight] : '💡'}
+                  <select
+                    value={token.light ?? ''}
+                    onChange={(e) => send({ t: 'setLight', tokenId: token.id, light: (e.target.value || null) as SceneLight | null })}
+                  >
+                    <option value="">Theo cảnh{hereLight && !token.light ? ` (${SCENE_LIGHT_VI[hereLight]})` : ''}</option>
+                    {SCENE_LIGHTS.map((l) => (
+                      <option key={l} value={l}>
+                        {LIGHT_ICON[l]} {SCENE_LIGHT_VI[l]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {envLight.rules.map((m) => (
+                <span key={m.from} className="sb-env-rule" title={m.from}>
+                  ⚙ {m.from}:{' '}
+                  {[
+                    m.startDamage && `đầu lượt ${m.startDamage.dice} ${m.startDamage.type}`,
+                    m.disadvantage?.length && `bất lợi ${m.disadvantage.map((k) => (k === 'attack' ? 'đánh' : k === 'check' ? 'kiểm tra' : 'cứu')).join('/')}`,
+                    m.conditions?.length && m.conditions.join(', '),
+                    m.note,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              ))}
+            </div>
+          )}
           <label className="sb-target">
             {sb.name} tấn công →
             <select value={sbTargetId} onChange={(e) => setSbTargetId(e.target.value)}>
@@ -2387,7 +2437,7 @@ function TokenInspector({
                 {isAttack && !sbTargetId && (
                   <button
                     className="roll-btn"
-                    onClick={() => spendFor(a) && rollDice(`${base} (đánh)${mtag}`, sbd20(a.attackBonus!))}
+                    onClick={() => spendFor(a) && rollDice(`${base} (đánh)${mtag}${etag('attack')}`, sbd20(a.attackBonus!, 'attack'))}
                   >
                     đánh
                   </button>

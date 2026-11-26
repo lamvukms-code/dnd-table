@@ -129,6 +129,10 @@ import {
   monsterMechanics,
   immuneConditions,
   mechanicSaveAdvantage,
+  lightAt,
+  activeLightRules,
+  SCENE_LIGHTS,
+  SCENE_LIGHT_VI,
   hasEvasion,
   critMin,
   mechanicAutoCrit,
@@ -260,6 +264,7 @@ export class Room {
     this.processDowns();
     for (const t of this.state.tokens) if (t.stance && !t.effects?.some((e) => e.id === t.stance!.effectId)) this.stanceOff(t, 'hết thời hạn');
     this.syncLinkedAc();
+    this.syncLightConditions();
     this.enforceConditionImmunity();
     // God's Bane undying / permanent-kill notes queued during damage, logged after the damage lines.
     for (const label of this.pendingBaneLogs.splice(0)) this.systemLog(label);
@@ -355,6 +360,18 @@ export class Room {
         this.pendingBaneLogs.push(`🦴 ${token.label}: ${limb.from} — mất một chi (còn ${token.limbs}/${limb.count})`);
       }
       const types = (opts?.types ?? []).map((x) => x.toLowerCase());
+      // Aversion to Fire / Needles…: disadvantage until the end of its next turn
+      for (const av of mechanicsOfKind(mechs, 'aversion')) {
+        if (!types.includes(av.damageType) || r.hp <= 0) continue;
+        const own = this.state.initiative.running && this.state.initiative.entries.find((e) => e.isActive)?.tokenId === token.id;
+        const id = `aversion:${av.from ?? av.damageType}`;
+        const had = token.effects?.some((e) => e.id === id);
+        token.effects = [
+          ...(token.effects ?? []).filter((e) => e.id !== id),
+          { id, name: av.from ?? `Sợ ${av.damageType}`, rollDisadvantage: av.disadvantage, endsAfterOwnTurns: own ? 2 : 1, note: `bất lợi ${av.disadvantage.map((k) => (k === 'attack' ? 'đánh' : k === 'check' ? 'kiểm tra' : 'cứu')).join(', ')} đến hết lượt sau` },
+        ];
+        if (!had) this.pendingBaneLogs.push(`😖 ${token.label}: ${av.from} — dính ${av.damageType}, bất lợi đến hết lượt sau`);
+      }
       if (token.stance?.endOn && types.includes(token.stance.endOn.type.toLowerCase()) && amount > token.stance.endOn.over) {
         this.stanceOff(token, `nhận hơn ${token.stance.endOn.over} sát thương ${token.stance.endOn.type}`);
       }
@@ -1186,7 +1203,10 @@ export class Room {
     // (close-range disadvantage) cancel each other like any 5e advantage/disadvantage
     const mechAdv = mechanicSaveAdvantage(this.mechOf(token), { ability, magical, vsCondition });
     const adv = forced === 'advantage' || effectSaveAdvantage(token.effects, ability) || !!mechAdv;
-    const dis = forced === 'disadvantage';
+    // Sunlight Weakness & co. (light where it stands) and Aversion-style effects: disadvantage on its saves
+    const lightDis = activeLightRules(this.mechOf(token), lightAt(this.state, token)).save;
+    const fxDis = token.effects?.some((e) => e.rollDisadvantage?.includes('save'));
+    const dis = forced === 'disadvantage' || lightDis.length > 0 || !!fxDis;
     const mode: RollMode = adv && !dis ? 'advantage' : dis && !adv ? 'disadvantage' : 'normal';
     const r1 = 1 + Math.floor(Math.random() * 20);
     const r2 = 1 + Math.floor(Math.random() * 20);
@@ -1353,6 +1373,16 @@ export class Room {
       }
     }
     if (phase === 'end-of-turn') {
+      // effects lasting "until the end of its next turn"
+      if (token.effects?.some((e) => e.endsAfterOwnTurns != null)) {
+        const left: ActiveEffect[] = [];
+        for (const e of token.effects) {
+          if (e.endsAfterOwnTurns == null) left.push(e);
+          else if (e.endsAfterOwnTurns > 1) left.push({ ...e, endsAfterOwnTurns: e.endsAfterOwnTurns - 1 });
+          else this.systemLog(`${token.label}: hết ${e.name}`);
+        }
+        token.effects = left;
+      }
       for (const h of this.state.hazards ?? []) if (this.inHazard(token, h)) this.hazardHit(token, h, 'kết thúc lượt trong vùng');
       // Charged effects (retaliation + uses) also discharge into creatures the bearer is grappling.
       for (const e of [...(token.effects ?? [])]) {
@@ -1890,6 +1920,26 @@ export class Room {
         if (got > 0) this.systemLog(`💚 ${t.label}: ${r.from} hồi ${got} HP${hp <= 0 ? ' — đứng dậy' : ''}`);
       }
       t.tookSinceTurn = [];
+      const light = lightAt(this.state, t);
+      for (const m of activeLightRules(mechs, light).rules) {
+        if (m.startDamage && this.alive(t)) this.mechDamage(t, [m.startDamage], `${t.label} · ${m.from} (${SCENE_LIGHT_VI[light!]})`);
+        if (m.note) this.systemLog(`🌑 ${t.label}: ${m.from} — ${m.note} (${SCENE_LIGHT_VI[light!]})`);
+      }
+      // Aversion to Axes: frightened until the start of its next turn while it sees one of those weapons
+      const wavs = mechanicsOfKind(mechs, 'weaponAversion');
+      if (wavs.length) {
+        t.effects = (t.effects ?? []).filter((e) => !e.id.startsWith('wav:'));
+        for (const w of wavs) {
+          const holder = this.state.tokens.find((o) => {
+            if (o.id === t.id || o.hidden || !this.alive(o)) return false;
+            const items = this.linkedSheet(o)?.inventory ?? [];
+            return items.some((it) => it.equipped && w.weapons.some((n) => it.name.toLowerCase().includes(n)));
+          });
+          if (!holder) continue;
+          t.effects.push({ id: `wav:${w.from ?? w.condition}`, name: w.from ?? 'Sợ vũ khí', condition: w.condition as ActiveEffect['condition'], sourceTokenId: holder.id, note: 'đến đầu lượt sau' });
+          this.systemLog(`😨 ${t.label}: ${w.from} — thấy ${holder.label} cầm vũ khí đó → ${w.condition} đến đầu lượt sau`);
+        }
+      }
     }
     // its own turn damage (rings around it; creatures it grapples on its turn)
     for (const d of mechanicsOfKind(mechs, 'turnDamage')) {
@@ -1920,6 +1970,31 @@ export class Room {
           if (edgeFeet(b, tokenSpan(b), t, tokenSpan(t)) <= a.radiusFt) this.applyAura(b, t, a, 'đầu lượt');
         }
       }
+    }
+  }
+
+  /** Light-dependent conditions (Lunar Invisibility): kept in step with the light where each creature stands. */
+  private syncLightConditions(): void {
+    for (const t of this.state.tokens) {
+      if (!t.statblock) continue;
+      const mechs = this.mechOf(t);
+      if (!mechs.some((m) => m.kind === 'light')) continue;
+      const light = lightAt(this.state, t);
+      const want = activeLightRules(mechs, light).rules.flatMap((m) => (m.conditions ?? []).map((c) => ({ id: `light:${m.from}:${c}`, name: m.from ?? 'ánh sáng', c })));
+      const have = (t.effects ?? []).filter((e) => e.id.startsWith('light:'));
+      const drop = have.filter((e) => !want.some((w) => w.id === e.id));
+      const add = want.filter((w) => !have.some((e) => e.id === w.id));
+      if (!drop.length && !add.length) continue;
+      t.effects = [
+        ...(t.effects ?? []).filter((e) => !drop.includes(e)),
+        ...add.map((w) => ({ id: w.id, name: w.name, condition: w.c as ActiveEffect['condition'], note: `do ánh sáng (${light ? SCENE_LIGHT_VI[light] : '—'})` })),
+      ];
+      const names = [...new Set([...add, ...drop].map((x) => x.name))].join(', ');
+      this.systemLog(
+        add.length
+          ? `🌘 ${t.label}: ${names} → ${add.map((w) => w.c).join(', ')}`
+          : `🌕 ${t.label}: ${names} hết hiệu lực (${light ? SCENE_LIGHT_VI[light] : 'không theo dõi ánh sáng'})`,
+      );
     }
   }
 
@@ -2191,6 +2266,22 @@ export class Room {
           label: '⬆ DM đã mở thăng cấp — người chơi bấm nút "Lên cấp" trên character sheet',
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'setLight': {
+        if (!isDm) return 'Chỉ DM được đổi ánh sáng';
+        if (action.light !== null && !SCENE_LIGHTS.includes(action.light)) return 'Ánh sáng không hợp lệ';
+        if (action.tokenId) {
+          const tk = this.state.tokens.find((x) => x.id === action.tokenId);
+          if (!tk) return 'Không tìm thấy token';
+          tk.light = action.light ?? undefined;
+          this.systemLog(`💡 ${tk.label}: ánh sáng ${action.light ? SCENE_LIGHT_VI[action.light] : 'theo cảnh'}`);
+        } else {
+          this.state.light = action.light;
+          this.systemLog(`💡 Ánh sáng cảnh: ${action.light ? SCENE_LIGHT_VI[action.light] : 'không theo dõi'}`);
+        }
         this.touch();
         break;
       }
@@ -3588,6 +3679,13 @@ export class Room {
           tk.legendaryActionsRemaining = tk.statblock?.legendaryActionsPerRound ?? undefined;
         }
         markActive(this.state.initiative);
+        // the first creature's turn starts now too (regeneration, recharge, start-of-turn damage…)
+        const firstId = this.state.initiative.entries.find((e) => e.isActive)?.tokenId;
+        const first = firstId && this.state.tokens.find((t) => t.id === firstId);
+        if (first) {
+          this.processTurnEffects(first, 'start-of-turn');
+          this.rollRecharges(first);
+        }
         this.syncTurnAnchors();
         this.checkDmPrompts({ includeLegendary: false });
         this.touch();

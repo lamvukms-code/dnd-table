@@ -6,6 +6,7 @@ import { BattleMap } from './components/BattleMap.js';
 import { DiceWindow } from './components/DiceWindow.js';
 import { InitiativeBar } from './components/InitiativeBar.js';
 import { MoonChip } from './components/MoonChip.js';
+import { LightChip } from './components/LightChip.js';
 import { SheetDock, withSpeciesRest, withSubclassRest } from './components/SheetDock.js';
 import { SettingsModal } from './components/Settings.js';
 import { BestiaryPanel } from './components/BestiaryPanel.js';
@@ -270,6 +271,7 @@ export function App() {
               )}
             </div>
             <MoonChip />
+            <LightChip />
             <InitiativeBar />
             <PartyBar />
           </div>

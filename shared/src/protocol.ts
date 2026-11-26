@@ -3,6 +3,7 @@ import type {
   Ability,
   ActiveEffect,
   RollMode,
+  SceneLight,
   TurnUsed,
   AttackRange,
   BattleMap,
@@ -97,6 +98,8 @@ export type ClientAction =
   | { t: 'levelUpOpen' }
   /** DM: turn a monster stance / transformation on or off. */
   | { t: 'stance'; tokenId: string; name: string; on: boolean }
+  /** Scene light (no tokenId) or one token's light override (null = follow the scene). DM only. */
+  | { t: 'setLight'; light: SceneLight | null; tokenId?: string }
   /** DM: set a monster's remaining limbs. */
   | { t: 'setLimbs'; tokenId: string; limbs: number }
   /** DM answers a monster reaction offer: `use` spends the reaction and runs its save / damage on the trigger creature. */
