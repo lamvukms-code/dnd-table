@@ -16,6 +16,16 @@ export interface VoiceSettings {
   recordMic: boolean;
 }
 
+/**
+ * Browsers only expose the mic / screen capture on https:// or http://localhost. Opened over plain
+ * http on another address (a Tailscale / LAN IP), `navigator.mediaDevices` simply isn't there —
+ * this says why, and what to open instead. Null when capture is available.
+ */
+export function mediaBlockedReason(): string | null {
+  if (typeof navigator !== 'undefined' && navigator.mediaDevices && window.isSecureContext) return null;
+  return `Trình duyệt chỉ cho dùng mic / quay màn hình khi mở app bằng https:// hoặc http://localhost. Đang mở bằng ${location.origin} — hãy mở bằng link https (Tailscale) hoặc http://localhost:${location.port || 80} trên máy chạy server.`;
+}
+
 const KEY = 'dnd.voice';
 const DEFAULTS: VoiceSettings = { enabled: false, thresholdDb: -48, recordMic: true };
 
@@ -129,6 +139,8 @@ export async function startVoice(): Promise<void> {
   lastError = '';
   notify();
   try {
+    const blocked = mediaBlockedReason();
+    if (blocked) throw new Error(blocked);
     stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: settings.deviceId ? { ideal: settings.deviceId } : undefined,
@@ -180,6 +192,7 @@ export async function stopVoice(report = true): Promise<void> {
 /** Mic inputs for the picker (labels only appear once mic permission was granted). */
 export async function audioInputs(): Promise<MediaDeviceInfo[]> {
   try {
+    if (mediaBlockedReason()) return [];
     return (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'audioinput');
   } catch {
     return [];

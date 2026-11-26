@@ -1,5 +1,5 @@
 import { storedCredentials } from './store.js';
-import { levelMeter } from './voice.js';
+import { levelMeter, mediaBlockedReason } from './voice.js';
 
 /**
  * Session recorder, run in the DM's recording window (`?stream=1`):
@@ -103,6 +103,8 @@ type DisplayMediaOpts = DisplayMediaStreamOptions & {
 
 /** Step 1 when the computer's sound comes from a screen share: must be its own click (a browser rule). */
 export async function captureSystemAudioFromScreen(): Promise<MediaStream> {
+  const blocked = mediaBlockedReason();
+  if (blocked) throw new Error(blocked);
   const s = await navigator.mediaDevices.getDisplayMedia({
     video: true,
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
@@ -135,6 +137,8 @@ export class SessionRecorder {
 
   /** Start: capture this tab (cropped to `stage`), mix the audio, begin uploading. */
   async start(stage: HTMLElement, sources: RecorderSources, systemStream?: MediaStream): Promise<void> {
+    const blocked = mediaBlockedReason();
+    if (blocked) throw new Error(blocked);
     if (!pickMime()) throw new Error('Trình duyệt này không ghi được video (dùng Chrome hoặc Edge bản mới)');
     try {
       const view = await navigator.mediaDevices.getDisplayMedia({

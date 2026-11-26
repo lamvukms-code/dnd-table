@@ -1,4 +1,5 @@
 import { storedCredentials } from './store.js';
+import { mediaBlockedReason } from './voice.js';
 
 /**
  * Clean per-person audio: while the DM records, this tab records its own mic (no network in the way,
@@ -77,6 +78,8 @@ class MicTrack {
     try {
       const fmt = MIMES.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m.mime));
       if (!fmt) throw new Error('Trình duyệt không ghi được tiếng');
+      const blocked = mediaBlockedReason();
+      if (blocked) throw new Error(blocked);
       this.offset = await measureServerOffset();
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {

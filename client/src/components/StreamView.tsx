@@ -3,6 +3,7 @@ import { formatElapsed } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { cameraFollow } from '../cameraSync.js';
 import { LOOPBACK_RE, SessionRecorder, captureSystemAudioFromScreen, pickMime, type SystemAudio } from '../recorder.js';
+import { mediaBlockedReason } from '../voice.js';
 import { BattleMap } from './BattleMap.js';
 import { InitiativeBar } from './InitiativeBar.js';
 import { SpeakerStrip } from './SpeakerStrip.js';
@@ -58,8 +59,13 @@ export function StreamView() {
   useEffect(() => {
     document.title = '🎬 Khung quay — bàn D&D';
     // ask for the mic once so the device names show up in the pickers
+    const blocked = mediaBlockedReason();
+    if (blocked) {
+      setMsg(`⚠ ${blocked}`);
+      return;
+    }
     void navigator.mediaDevices
-      ?.getUserMedia({ audio: true })
+      .getUserMedia({ audio: true })
       .then((s) => s.getTracks().forEach((t) => t.stop()))
       .catch(() => undefined)
       .finally(() => void navigator.mediaDevices.enumerateDevices().then((d) => setDevices(d.filter((x) => x.kind === 'audioinput'))));

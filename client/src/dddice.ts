@@ -53,8 +53,8 @@ interface EngineState {
   canvas: HTMLCanvasElement;
   apiKey: string;
   roomSlug: string;
-  /** First theme in this player's dice box: used when they haven't picked one. */
-  boxTheme?: string;
+  /** The themes in this player's dice box (loading starts at connect; a roll waits for it). */
+  boxThemes: Promise<string[]>;
 }
 
 export interface TablePresence {
@@ -92,12 +92,10 @@ export async function connect(
     const engine = new ThreeDDice(canvas, apiKey, { autoClear: 3 } as never);
     engine.start();
     engine.connect(roomSlug);
-    current = { engine, canvas, apiKey, roomSlug };
-    listThemes(apiKey)
-      .then((t) => {
-        if (current?.apiKey === apiKey) current.boxTheme = t[0]?.id;
-      })
-      .catch(() => {});
+    const boxThemes = listThemes(apiKey)
+      .then((t) => t.map((x) => x.id))
+      .catch(() => [] as string[]);
+    current = { engine, canvas, apiKey, roomSlug, boxThemes };
     return true;
   } catch (err) {
     console.error('dddice connect failed', err);
@@ -138,6 +136,16 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
+/** dddice-js errors are axios errors: the reason dddice gives is in the response body, not `message`. */
+export function dddiceErrorText(err: unknown): string {
+  const e = err as { message?: string; response?: { status?: number; data?: { message?: string; errors?: Record<string, string[] | string> } } };
+  const status = e.response?.status;
+  const data = e.response?.data;
+  const detail = [data?.message, ...Object.values(data?.errors ?? {}).flat()].filter(Boolean).join(' · ');
+  if (status) return `lỗi ${status}${detail ? `: ${detail}` : ''}`;
+  return e.message ?? String(err);
+}
+
 /**
  * Roll an equation through dddice (animates on every connected client) and
  * return the resolved values in our ExternalRoll shape.
@@ -145,10 +153,27 @@ function toNumber(v: unknown): number {
 export async function rollEquation(notation: string): Promise<ExternalRoll> {
   if (!current) throw new Error('dddice chưa kết nối');
   const { parseRollEquation } = await loadModule();
-  // Always this player's own dice: their pick, else the first theme in their dice box.
-  const theme = getLocalThemeOverride() || current.boxTheme || 'dddice-standard';
-  const { dice, operator } = parseRollEquation(normalizeNotation(notation), theme);
-  const res = await current.engine.roll(dice, { operator });
+  // Always this player's own dice: their pick if it is still in their dice box, else the first
+  // theme of the box. (Rolling with a theme the account doesn't own is a 400 from dddice.)
+  const box = await current.boxThemes;
+  const picked = getLocalThemeOverride();
+  const themes = [...new Set([picked && (!box.length || box.includes(picked)) ? picked : null, box[0], picked].filter((t): t is string => !!t))];
+  if (!themes.length) {
+    throw new Error('hộp xúc xắc dddice của bạn đang trống: vào dddice.com thêm một bộ xúc xắc (có bộ miễn phí) rồi thử lại');
+  }
+  let res: unknown;
+  for (let i = 0; ; i++) {
+    const { dice, operator } = parseRollEquation(normalizeNotation(notation), themes[i]);
+    try {
+      res = await current.engine.roll(dice, { operator });
+      break;
+    } catch (err) {
+      // a theme that no longer works: try the next one before giving up
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 400 && i + 1 < themes.length) continue;
+      throw new Error(dddiceErrorText(err));
+    }
+  }
   const roll = (res as { data: unknown }).data as {
     uuid: string;
     total_value: unknown;
