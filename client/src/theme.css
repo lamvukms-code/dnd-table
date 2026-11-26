@@ -488,3 +488,19 @@ label { color: var(--muted); }
 .insp-settings > summary { cursor: pointer; font-size: 12px; opacity: 0.85; padding: 2px 0; }
 .insp-settings[open] > summary { margin-bottom: 6px; }
 .insp-settings .insp-grid { margin-top: 6px; }
+
+/* shops */
+.shop-panel { width: min(920px, 96vw); }
+.shop-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.shop-table th { text-align: left; font-size: 10px; text-transform: uppercase; color: var(--muted); padding: 2px 4px; }
+.shop-table td { padding: 2px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+.shop-table td .hb-tag { margin-left: 6px; }
+.shop-table tr.sold-out td { opacity: 0.5; }
+.shop-buy { display: flex; gap: 4px; align-items: center; justify-content: flex-end; }
+.shop-buy button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+.shop-open { flex-direction: row !important; align-items: center; gap: 4px; }
+.shop-add { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+@media (max-width: 640px) {
+  .shop-panel .homebrew-body { flex-direction: column; }
+  .shop-panel .hb-list { width: auto; }
+}

@@ -18,6 +18,7 @@ import {
   jaegerMomentumMax,
   jaegerVolleyDc,
   regainJaegerFocus,
+  jaegerCanRegain,
   spendJaegerFocus,
   viciousCritMin,
   viciousFinisherDamage,
@@ -77,10 +78,21 @@ describe('Jaeger resources', () => {
     expect([1, 2, 10, 11, 16, 17].map((l) => jaegerMomentumDie(sheet(l)))).toEqual([null, 'd6', 'd6', 'd8', 'd8', 'd10']);
   });
 
-  it('Momentum cap = PB + higher of STR/DEX mod', () => {
+  it('Momentum cap = PB (house rule)', () => {
     expect(jaegerMomentumMax(sheet(1))).toBe(0);
-    expect(jaegerMomentumMax(sheet(2))).toBe(2 + 3); // DEX 16
-    expect(jaegerMomentumMax(sheet(5, { abilities: { str: 20, dex: 12, con: 10, int: 10, wis: 10, cha: 10 } }))).toBe(3 + 5);
+    expect(jaegerMomentumMax(sheet(2))).toBe(2);
+    expect(jaegerMomentumMax(sheet(5, { abilities: { str: 20, dex: 12, con: 10, int: 10, wis: 10, cha: 10 } }))).toBe(3);
+  });
+
+  it('Focus regain in combat: once per round', () => {
+    const s = sheet(5, { jaeger: { focusUsed: 3 } });
+    expect(jaegerCanRegain(s, 2)).toBe(true);
+    const once = { ...s, jaeger: regainJaegerFocus(s, 1, 2) };
+    expect(once.jaeger.focusUsed).toBe(2);
+    expect(jaegerCanRegain(once, 2)).toBe(false);
+    expect(jaegerCanRegain(once, 3)).toBe(true);
+    expect(jaegerCanRegain(once)).toBe(true); // out of combat: no cap
+    expect(jaegerCanRegain(sheet(5))).toBe(false); // nothing to regain
   });
 
   it('spending Focus grants Momentum from level 2 (capped) and fails when empty', () => {
@@ -90,9 +102,9 @@ describe('Jaeger resources', () => {
     expect(after1.momentum).toBe(0); // no Momentum at level 1
     expect(spendJaegerFocus({ ...s1, jaeger: after1 })).toBeNull();
 
-    const s2 = sheet(2, { jaeger: { momentum: 4 } });
+    const s2 = sheet(2, { jaeger: { momentum: 1 } });
     const after2 = spendJaegerFocus(s2, 1, 1)!; // e.g. Flourish: +1 extra die
-    expect(after2.momentum).toBe(5); // capped at PB 2 + DEX 3
+    expect(after2.momentum).toBe(2); // capped at PB 2
     expect(jaegerFocusLeft({ ...s2, jaeger: after2 })).toBe(1);
     expect(regainJaegerFocus({ ...s2, jaeger: after2 }).focusUsed).toBe(0);
   });

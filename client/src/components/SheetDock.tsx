@@ -99,7 +99,7 @@ import { DamageTypeSelect, ExtraDamageEditor } from './DefensesEditor.js';
 import { EquipmentTab } from './sheet/EquipmentTab.js';
 import { ClassSetup } from './sheet/ClassSetup.js';
 import { JaegerFeatures } from './sheet/JaegerFeatures.js';
-import { CUSTOM_CLASS_NAMES } from '../campaignData.js';
+import { CUSTOM_CLASS_NAMES, ENEMY_ONLY_CLASS_KEYS, PLAYER_CUSTOM_CLASS_NAMES } from '../campaignData.js';
 import { mapViewCenterCell } from '../mapView.js';
 import { useWideLayout } from '../useMediaQuery.js';
 import { ExhaustionStepper } from './Exhaustion.js';
@@ -2982,7 +2982,9 @@ const CLASS_NAMES = ['Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 
  * SRD multiclass prerequisites (13+ in each class' primary ability) and non-stacking Extra Attack.
  */
 function ClassListEditor({ draft, commit }: EditorCtx) {
+  const isDm = useStore((s) => s.isDm());
   const classes = sheetClasses(draft);
+  const enemyOnly = classes.filter((c) => ENEMY_ONLY_CLASS_KEYS.has((c.name ?? '').trim().toLowerCase())).map((c) => c.name);
   const multi = (draft.classes?.length ?? 0) > 0;
   const total = totalLevelOf(draft);
   const issues = multiclassIssues(draft);
@@ -3057,7 +3059,7 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
         </div>
       ))}
       <datalist id="mc-class-names">
-        {[...CLASS_NAMES, ...CUSTOM_CLASS_NAMES].map((n) => (
+        {[...CLASS_NAMES, ...(isDm ? CUSTOM_CLASS_NAMES : PLAYER_CUSTOM_CLASS_NAMES)].map((n) => (
           <option key={n} value={n} />
         ))}
       </datalist>
@@ -3068,6 +3070,11 @@ function ClassListEditor({ draft, commit }: EditorCtx) {
       >
         + nghề phụ (đa nghề)
       </button>
+      {enemyOnly.length > 0 && (
+        <p className="hint mc-warn">
+          ⚠ {enemyOnly.join(', ')}: bàn chơi chỉ dùng cho kẻ địch / NPC, người chơi không chọn được.
+        </p>
+      )}
       {issues.length > 0 && (
         <p className="hint mc-warn">
           ⚠ Chưa đủ điều kiện đa nghề (cần 13+ ở chỉ số chính của <em>mọi</em> nghề): {issues.join(' · ')}

@@ -59,6 +59,8 @@ export interface CustomClassDef extends ClassDefaults {
   features?: Omit<ClassFeatureDef, 'class'>[];
   /** Extra Attack table: [class level, attacks per Attack action], e.g. [[5, 2]]. */
   extraAttack?: [number, number][];
+  /** Table rule: the class is for the DM's NPCs / enemies only — not offered to players. */
+  enemyOnly?: boolean;
 }
 const CUSTOM_DEFAULTS: Record<string, ClassDefaults> = {};
 const CUSTOM_EXTRA_ATTACK: Record<string, [number, number][]> = {};

@@ -100,4 +100,8 @@ const classesFile: ClassesFile =
 export const CUSTOM_CLASSES: CustomClassDef[] = Array.isArray(classesFile.classes) ? classesFile.classes : [];
 for (const c of CUSTOM_CLASSES) registerCustomClass(c);
 export const CUSTOM_CLASS_NAMES: string[] = CUSTOM_CLASSES.map((c) => c.name);
+/** Custom classes players may pick (the DM's `enemyOnly` ones are left out). */
+export const PLAYER_CUSTOM_CLASS_NAMES: string[] = CUSTOM_CLASSES.filter((c) => !c.enemyOnly).map((c) => c.name);
+/** Lowercase keys of the classes reserved for NPCs / enemies. */
+export const ENEMY_ONLY_CLASS_KEYS = new Set(CUSTOM_CLASSES.filter((c) => c.enemyOnly).map((c) => c.key.toLowerCase()));
 export const CLASS_OPTIONS: Record<string, ClassOptions> = classesFile.options ?? {};

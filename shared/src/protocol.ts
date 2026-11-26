@@ -12,6 +12,7 @@ import type {
   DddiceConfig,
   ExternalRoll,
   HomebrewEntry,
+  Shop,
   InitiativeEntry,
   MapZone,
   RoomState,
@@ -235,6 +236,11 @@ export type ClientAction =
   | { t: 'bestiaryReplaceAll'; entries: Statblock[] }
   | { t: 'homebrewUpsert'; entry: HomebrewEntry }
   | { t: 'homebrewRemove'; id: string }
+  // shops: the DM edits / restocks, players buy from open ones (see shop.ts)
+  | { t: 'shopUpsert'; shop: Shop }
+  | { t: 'shopRemove'; id: string }
+  | { t: 'shopRestock'; id: string }
+  | { t: 'shopBuy'; shopId: string; itemId: string; sheetId: string; qty: number }
   | { t: 'spawnStatblock'; id: string; x: number; y: number; rollHp?: boolean; hidden?: boolean }
   /** A monster's summon action: roll `count`, place that many of the stat block around it and
    *  (in combat) give them the summoner's initiative, acting right after it. DM only. */

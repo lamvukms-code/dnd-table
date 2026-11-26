@@ -24,6 +24,7 @@ import {
   jaegerVolleyDc,
   piercingGazeAlwaysOn,
   piercingGazeSenses,
+  jaegerCanRegain,
   regainJaegerFocus,
   spendJaegerFocus,
   viciousCritMin,
@@ -82,6 +83,8 @@ export function JaegerFeatures({ draft, commit }: { draft: CharacterSheet; commi
   const [breakRow, setBreakRow] = useState(1);
   const lvl = jaegerLevel(draft);
   if (lvl <= 0) return null;
+  // in combat, Focus comes back at most once per round (house rule)
+  const round = room?.initiative.running ? room.initiative.round : undefined;
 
   const opts = CLASS_OPTIONS.jaeger ?? {};
   const find = (list: ClassOptionDef[] | undefined, id: string, fallback?: ClassOptionDef['action']): ClassOptionDef =>
@@ -159,12 +162,21 @@ export function JaegerFeatures({ draft, commit }: { draft: CharacterSheet; commi
       </span>
       <button
         className="cf-btn"
-        disabled={fLeft >= fMax}
-        title="Hồi 1 Focus: tung 20 khi tấn công/save với kẻ địch · vào initiative khi đã hết Focus · phần thưởng của Finisher"
-        onClick={() => setJ(regainJaegerFocus(draft))}
+        disabled={!jaegerCanRegain(draft, round)}
+        title={`Hồi 1 Focus: tung 20 khi tấn công/save với kẻ địch · phần thưởng của Finisher · tính năng chapter.\nHouse rule: trong trận tối đa 1 lần mỗi round, gộp mọi nguồn.${round != null && js.regainRound === round ? '\nRound này đã hồi rồi.' : ''}`}
+        onClick={() => setJ(regainJaegerFocus(draft, 1, round))}
       >
         ↺ +1 Focus
       </button>
+      {round != null && fLeft === 0 && (
+        <button
+          className="cf-btn"
+          title="Vào initiative khi đã hết Focus: hồi 1 (không tính vào giới hạn 1 lần/round)"
+          onClick={() => setJ(regainJaegerFocus(draft))}
+        >
+          ↺ vào initiative
+        </button>
+      )}
 
       {/* Momentum */}
       {mDie && (
@@ -207,7 +219,7 @@ export function JaegerFeatures({ draft, commit }: { draft: CharacterSheet; commi
         <button
           className="cf-btn"
           disabled={fLeft <= 0}
-          title={`Hunter's Pursuit (đầu lượt): tốn 1 Focus → di chuyển nửa tốc độ, không tính vào di chuyển, không bị đòn cơ hội.${lvl >= 13 ? ' Relentless Pursuit: dừng cạnh kẻ địch → hồi lại Focus đó (bấm ↺).' : ''}`}
+          title={`Hunter's Pursuit (đầu lượt): tốn 1 Focus → di chuyển nửa tốc độ, không tính vào di chuyển, không bị đòn cơ hội.${lvl >= 13 ? ' Relentless Pursuit: dừng cạnh kẻ địch → hồi lại Focus đó (bấm ↺, tính vào giới hạn 1 lần/round).' : ''}`}
           onClick={() => spendFocusOnly("Hunter's Pursuit")}
         >
           🏃 Hunter's Pursuit
@@ -285,7 +297,7 @@ export function JaegerFeatures({ draft, commit }: { draft: CharacterSheet; commi
                   <button
                     className="cf-btn"
                     disabled={m <= 0 || !row}
-                    title={`${tip}\n\nSau khi đánh trúng: mục tiêu save ${row?.save.toUpperCase()} DC ${dc} hoặc bị ${row ? (CONDITION_VI[row.condition as keyof typeof CONDITION_VI] ?? row.condition) : ''} 1 phút (save lại cuối mỗi lượt). Trượt save lần đầu → hồi 1 Focus.`}
+                    title={`${tip}\n\nSau khi đánh trúng: mục tiêu save ${row?.save.toUpperCase()} DC ${dc} hoặc bị ${row ? (CONDITION_VI[row.condition as keyof typeof CONDITION_VI] ?? row.condition) : ''} ${row && row.dice >= 3 ? 'đến hết lượt sau của nó (house rule, không save lặp)' : '1 phút (save lại cuối mỗi lượt)'}. Mỗi sinh vật chỉ bị 1 lần mỗi nghỉ ngắn. Trượt save → hồi 1 Focus (tính vào giới hạn 1 lần/round).`}
                     onClick={expend}
                   >
                     {def.name}

@@ -1211,6 +1211,38 @@ export interface RoomState {
   reactPrompts?: ReactPrompt[];
   /** Lingering spell areas on the current map (a save on entering / ending a turn inside). */
   hazards?: Hazard[];
+  /** The DM's shops (see shop.ts). Players only receive the open ones, without `dmNote`. */
+  shops?: Shop[];
+}
+
+/** One line of a shop's stock: a catalog item snapshot, its price and how many are left. */
+export interface ShopItem {
+  id: string;
+  preset: EquipmentPreset;
+  /** Base price in copper (the shop's `markup` applies on top). */
+  priceCp: number;
+  /** Units left; unset = unlimited. */
+  stock?: number;
+  /** What "restock" refills `stock` to; unset = not restocked. */
+  restock?: number;
+}
+
+export interface Shop {
+  id: string;
+  name: string;
+  /** A `SHOP_KINDS` key (general / weapons / armor / alchemist / magic / custom). */
+  kind: string;
+  /** Shown to players. */
+  note?: string;
+  /** DM only (stripped for players). */
+  dmNote?: string;
+  /** Players can see and buy only while open. */
+  open: boolean;
+  /** Party level the stock was picked for. */
+  level?: number;
+  /** Price multiplier in percent (100 = list price). */
+  markup?: number;
+  items: ShopItem[];
 }
 
 /** A monster's reaction is available: its trigger fired (against / because of `triggerTokenId`). */

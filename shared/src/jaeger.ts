@@ -11,8 +11,12 @@ import { abilityMod, classLevelOf, sheetClasses } from './rules.js';
  *
  * Focus Points: 1 at level 1, +1 at 2, 5, 9, 13, 17 (+1 with the Focused Fighting style);
  * all return on a short or long rest. From level 2 every Focus Point spent grants a Momentum
- * die (d6, d8 at 11, d10 at 17); you hold at most PB + max(STR, DEX) mod of them. A Finisher
- * expends ALL held Momentum dice.
+ * die (d6, d8 at 11, d10 at 17); you hold at most PB of them. A Finisher expends ALL held
+ * Momentum dice.
+ *
+ * Table house rules (balance): the Momentum cap is PB (not PB + mod), and Focus regained in
+ * combat is capped at 1 per round from all sources together (entering initiative with no Focus
+ * left still regains 1, outside the cap).
  */
 
 export const JAEGER = 'jaeger';
@@ -31,6 +35,8 @@ export interface JaegerState {
   finishers?: string[];
   /** Piercing Gaze used since the last long rest. */
   gazeUsed?: boolean;
+  /** Initiative round in which Focus was last regained (house rule: at most 1 per round). */
+  regainRound?: number;
 }
 
 /** Focus Arts every Jaeger knows from level 1. */
@@ -62,10 +68,10 @@ export function jaegerMomentumDie(sheet: CharacterSheet): 'd6' | 'd8' | 'd10' | 
 const bestPhysicalMod = (sheet: CharacterSheet) =>
   Math.max(abilityMod(sheet.abilities.str), abilityMod(sheet.abilities.dex));
 
-/** Most Momentum dice the Jaeger can hold: PB + the higher of STR/DEX mod (at least 1). */
+/** Most Momentum dice the Jaeger can hold: PB (house rule; the book's PB + STR/DEX mod snowballs). */
 export function jaegerMomentumMax(sheet: CharacterSheet): number {
   if (jaegerLevel(sheet) < 2) return 0;
-  return Math.max(1, sheet.proficiencyBonus + bestPhysicalMod(sheet));
+  return Math.max(1, sheet.proficiencyBonus);
 }
 
 export function jaegerMomentum(sheet: CharacterSheet): number {
@@ -140,10 +146,21 @@ export function spendJaegerFocus(sheet: CharacterSheet, points = 1, extraMomentu
   };
 }
 
-/** Regain Focus Points (nat 20 vs a hostile creature, a Finisher's payoff, initiative with none left…). */
-export function regainJaegerFocus(sheet: CharacterSheet, points = 1): JaegerState {
+/**
+ * Regain Focus Points (nat 20 vs a hostile creature, a Finisher's payoff…). Pass the current
+ * initiative `round` in combat: it is recorded so a second regain that round is refused (see
+ * `jaegerCanRegain`). Without a round (out of combat, or the initiative-with-none-left regain)
+ * nothing is recorded.
+ */
+export function regainJaegerFocus(sheet: CharacterSheet, points = 1, round?: number): JaegerState {
   const s = state(sheet);
-  return { ...s, focusUsed: Math.max(0, (s.focusUsed ?? 0) - points) };
+  return { ...s, focusUsed: Math.max(0, (s.focusUsed ?? 0) - points), ...(round != null ? { regainRound: round } : {}) };
+}
+
+/** House rule: in combat (`round` given) Focus comes back at most once per round. */
+export function jaegerCanRegain(sheet: CharacterSheet, round?: number): boolean {
+  if ((state(sheet).focusUsed ?? 0) <= 0) return false;
+  return round == null || state(sheet).regainRound !== round;
 }
 
 /** Change held Momentum dice by `delta`, clamped to 0..max. */

@@ -15,6 +15,7 @@ import { ReferencePanel } from './components/ReferencePanel.js';
 import { MapLibrary } from './components/MapLibrary.js';
 import { HomebrewPanel } from './components/HomebrewPanel.js';
 import { HeirloomPanel } from './components/HeirloomPanel.js';
+import { ShopPanel } from './components/ShopPanel.js';
 import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
 import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner, ReactPromptBanner } from './components/DmPromptBanner.js';
@@ -49,6 +50,7 @@ export function App() {
   const [mapsOpen, setMapsOpen] = useState(false);
   const [homebrewOpen, setHomebrewOpen] = useState(false);
   const [heirloomOpen, setHeirloomOpen] = useState(false);
+  const [shopOpen, setShopOpen] = useState(false);
   const [eqSrdOpen, setEqSrdOpen] = useState(false);
   const [godsBaneOpen, setGodsBaneOpen] = useState(false);
   const godsBaneOn = useStore((s) => !!s.room?.godsBane?.enabled);
@@ -254,6 +256,7 @@ export function App() {
                     ? [{ label: "🗡 God's Bane", title: 'Lời thề, hào quang của kiếm, Cleaving Causality', onClick: () => setGodsBaneOpen(true) }]
                     : []),
                   { label: '🎒 Trang bị SRD', title: 'Trang bị SRD — gửi thẳng vào túi đồ nhân vật', onClick: () => setEqSrdOpen(true) },
+                  { label: '🛒 Cửa hàng', title: isDm ? 'Mở / sửa cửa hàng, nhập hàng' : 'Mua đồ ở các cửa hàng đang mở', onClick: () => setShopOpen(true) },
                 ]}
               />
               {isDm && (
@@ -328,6 +331,7 @@ export function App() {
       {homebrewOpen && <HomebrewPanel onClose={() => setHomebrewOpen(false)} />}
       {heirloomOpen && <HeirloomPanel onClose={() => setHeirloomOpen(false)} />}
       {eqSrdOpen && <EquipmentSrdPanel onClose={() => setEqSrdOpen(false)} />}
+      {shopOpen && <ShopPanel onClose={() => setShopOpen(false)} />}
       {godsBaneOpen && <GodsBanePanel onClose={() => setGodsBaneOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>

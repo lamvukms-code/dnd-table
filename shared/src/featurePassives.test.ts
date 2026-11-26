@@ -111,6 +111,16 @@ describe('feature action helpers', () => {
     expect(e).toMatchObject({ acBonus: 1, resist: ['fire'], expiresRound: 5 });
     expect(e.attackRiders![0]).toMatchObject({ dice: '2', type: 'fire', melee: true });
   });
+  it('effect: a target mark carries its rider and source', () => {
+    const e = buildFeatureEffect({ label: 'Mark', kind: 'effect', effect: { rider: { dice: '1d6', type: 'radiant' }, rounds: 10 } }, s, 'wizard', 1, 'Mark')!;
+    expect(e).toMatchObject({ rider: { dice: '1d6', type: 'radiant' }, sourceSheetId: s.id, expiresRound: 11 });
+    const grown = (lvl: number) =>
+      buildFeatureEffect(
+        { label: 'Mark', kind: 'effect', effect: { rider: { dice: '1d6', type: 'radiant', diceByLevel: { 8: '2d6', 16: '3d6' } } } },
+        sheet('Paladin', 'x', lvl), 'paladin', 1, 'Mark',
+      )!.rider!.dice;
+    expect([grown(3), grown(8), grown(15), grown(16)]).toEqual(['1d6', '2d6', '2d6', '3d6']);
+  });
 });
 
 describe('sheet damage riders (scope, same type)', () => {

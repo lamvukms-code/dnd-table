@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { nanoid } from 'nanoid';
+import { addShopPurchase, formatCp, payFromPurse, shopPriceCp } from '@dnd-table/shared';
 import {
   abilityMod,
   createRoomState,
@@ -3937,6 +3938,55 @@ export class Room {
       case 'homebrewRemove': {
         if (!isDm) return 'Chỉ DM được sửa homebrew';
         this.state.homebrew = this.state.homebrew.filter((h) => h.id !== action.id);
+        this.touch();
+        break;
+      }
+
+      case 'shopUpsert': {
+        if (!isDm) return 'Chỉ DM được sửa cửa hàng';
+        const shop = { ...action.shop, id: action.shop.id || nanoid(8), items: action.shop.items.map((i) => ({ ...i, id: i.id || nanoid(8) })) };
+        const list = this.state.shops ?? [];
+        this.state.shops = list.some((x) => x.id === shop.id) ? list.map((x) => (x.id === shop.id ? shop : x)) : [...list, shop];
+        this.touch();
+        break;
+      }
+
+      case 'shopRemove': {
+        if (!isDm) return 'Chỉ DM được xoá cửa hàng';
+        this.state.shops = (this.state.shops ?? []).filter((x) => x.id !== action.id);
+        this.touch();
+        break;
+      }
+
+      case 'shopRestock': {
+        if (!isDm) return 'Chỉ DM được nhập hàng';
+        const shop = (this.state.shops ?? []).find((x) => x.id === action.id);
+        if (!shop) return 'Không tìm thấy cửa hàng';
+        shop.items = shop.items.map((i) => (i.restock != null ? { ...i, stock: i.restock } : i));
+        this.state.shops = [...(this.state.shops ?? [])];
+        this.systemLog(`🛒 ${shop.name} đã nhập hàng mới`);
+        this.touch();
+        break;
+      }
+
+      case 'shopBuy': {
+        const shop = (this.state.shops ?? []).find((x) => x.id === action.shopId);
+        if (!shop || (!shop.open && !isDm)) return 'Cửa hàng đang đóng';
+        const item = shop.items.find((i) => i.id === action.itemId);
+        if (!item) return 'Món này không còn bán';
+        const sheet = this.state.sheets.find((x) => x.id === action.sheetId);
+        if (!sheet || (sheet.ownerId !== actor.id && !isDm)) return 'Chỉ mua cho nhân vật của mình';
+        const qty = Math.max(1, Math.floor(action.qty || 1));
+        if (item.stock != null && item.stock < qty) return `Chỉ còn ${item.stock} món`;
+        const cost = shopPriceCp(shop, item) * qty;
+        const purse = payFromPurse(sheet.currency, cost);
+        if (!purse) return `Không đủ tiền (cần ${formatCp(cost)})`;
+        sheet.currency = purse;
+        sheet.inventory = addShopPurchase(sheet.inventory, item, qty, () => nanoid(8));
+        if (item.stock != null) item.stock -= qty;
+        shop.items = [...shop.items];
+        this.state.shops = [...(this.state.shops ?? [])];
+        this.systemLog(`🛒 ${sheet.name} mua ${qty > 1 ? `${qty} × ` : ''}${item.preset.name} ở ${shop.name} (${formatCp(cost)})`);
         this.touch();
         break;
       }

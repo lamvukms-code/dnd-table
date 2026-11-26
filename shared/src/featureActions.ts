@@ -57,6 +57,9 @@ export interface FeatureEffect {
   attackRiders?: { dice: string; type: string; label?: string; melee?: boolean }[];
   /** Damage dealt back to a creature that hits the bearer in melee. */
   retaliate?: { dice: string; type: string; always?: boolean };
+  /** Target mark: extra damage whenever the effect's source hits the bearer (like Hunter's Mark).
+   *  `diceByLevel` ({ 8: '2d6' }) grows it with the source's class level. */
+  rider?: { dice: string; type: string; diceByLevel?: Record<string, string> };
   saveAdvantage?: Ability[];
   /** Ends when the bearer drops to 0 HP or is incapacitated. */
   endsWhenDown?: boolean;
@@ -164,6 +167,7 @@ export function buildFeatureEffect(
       melee: r.melee,
     })),
     retaliate: e.retaliate ? { dice: resolveFeatureFormula(e.retaliate.dice, sheet, classKey), type: e.retaliate.type, always: e.retaliate.always } : undefined,
+    rider: e.rider ? { dice: featureActionDice(e.rider, sheet, classKey), type: e.rider.type } : undefined,
     saveAdvantage: e.saveAdvantage,
     endsWhenDown: e.endsWhenDown,
     expiresRound: e.rounds ? round + e.rounds : undefined,
