@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '../store.js';
+import type { SettingReference } from '@dnd-table/shared';
+import { storedCredentials, useStore } from '../store.js';
 import { SrdRef } from './SrdRef.js';
 import { LoreBook } from './LoreBook.js';
+import { SettingRef } from './SettingRef.js';
 
-type Tab = 'srd' | 'lore' | 'web';
+type Tab = 'srd' | 'setting' | 'lore' | 'web';
 
 const KEY = 'dnd-table.referenceUrl';
 
@@ -23,6 +25,23 @@ export function ReferencePanel({ onClose }: { onClose: () => void }) {
   const [draft, setDraft] = useState(url);
   const isDm = useStore((st) => st.isDm());
   const [tab, setTab] = useState<Tab>('srd');
+  // the setting's own reference (the DM's notes, if the server has them; players get it without 🔒 lines)
+  const [setting, setSetting] = useState<SettingReference | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const c = storedCredentials();
+    fetch('/reference', { headers: { 'x-participant-id': c.participantId ?? '', 'x-participant-secret': c.secret ?? '' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: SettingReference | null) => {
+        if (dead || !j?.sections?.length) return;
+        setSetting(j);
+        setTab((t) => (t === 'srd' ? 'setting' : t));
+      })
+      .catch(() => undefined);
+    return () => {
+      dead = true;
+    };
+  }, [isDm]);
   const [width, setWidth] = useState(() => {
     const w = Number(localStorage.getItem(KEY + '.w'));
     return w >= 240 && w <= 900 ? w : 420;
@@ -61,6 +80,7 @@ export function ReferencePanel({ onClose }: { onClose: () => void }) {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'srd', label: '📚 SRD' },
+    ...(setting ? [{ id: 'setting' as Tab, label: `📕 ${setting.title}` }] : []),
     ...(isDm ? [{ id: 'lore' as Tab, label: '📖 Lore Book' }] : []),
     { id: 'web', label: '🌐 Web' },
   ];
@@ -79,6 +99,7 @@ export function ReferencePanel({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       {tab === 'srd' && <SrdRef />}
+      {tab === 'setting' && setting && <SettingRef data={setting} />}
       {tab === 'lore' && isDm && <LoreBook />}
       {tab === 'web' && (
         <>

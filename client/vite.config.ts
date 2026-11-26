@@ -25,6 +25,7 @@ export default defineConfig({
       '/lorebook': { target },
       '/maps': { target },
       '/recordings': { target },
+      '/reference': { target },
     },
   },
 });

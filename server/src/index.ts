@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import express from 'express';
 import compression from 'compression';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -20,6 +20,8 @@ import {
   formatElapsed,
   rollLogForPlayers,
   sheetForStreamCard,
+  referenceForPlayers,
+  type SettingReference,
   patchMessage,
   viewJson,
   withKeys,
@@ -296,6 +298,30 @@ app.get('/lorebook', (req, res) => {
   }
   res.setHeader('Cache-Control', 'no-store');
   res.type('json').sendFile(LOREBOOK_FILE);
+});
+
+// Setting reference for the "Tra cứu" panel (scripts/build-reference.mjs → a git-ignored file).
+// Everyone may read it; 🔒 lines go only to a DM proving it with their secret. Re-read when the
+// file changes, so rebuilding the notes needs no restart.
+const REFERENCE_FILE =
+  process.env.REFERENCE_FILE ?? join(__dirname, '..', '..', 'client', 'src', 'data', 'reference.local.json');
+let referenceCache: { mtime: number; full: string; players: string } | null = null;
+app.get('/reference', (req, res) => {
+  if (!existsSync(REFERENCE_FILE)) return res.status(404).json({ error: 'Chưa có dữ liệu tra cứu' });
+  try {
+    const mtime = statSync(REFERENCE_FILE).mtimeMs;
+    if (referenceCache?.mtime !== mtime) {
+      const full = readFileSync(REFERENCE_FILE, 'utf8');
+      referenceCache = { mtime, full, players: JSON.stringify(referenceForPlayers(JSON.parse(full) as SettingReference)) };
+    }
+  } catch (err) {
+    console.error('reference read failed:', err);
+    return res.status(500).json({ error: 'File tra cứu bị lỗi' });
+  }
+  const who = getParticipant(req.header('x-participant-id') ?? '');
+  const isDm = !!who && who.role === 'dm' && !!who.secret && req.header('x-participant-secret') === who.secret;
+  res.setHeader('Cache-Control', 'no-store');
+  res.type('json').send(isDm ? referenceCache.full : referenceCache.players);
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));

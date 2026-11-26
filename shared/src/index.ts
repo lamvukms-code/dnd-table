@@ -34,3 +34,4 @@ export * from './monsterMechanics.js';
 export * from './shop.js';
 export * from './speakerCards.js';
 export * from './statePatch.js';
+export * from './settingReference.js';

@@ -599,3 +599,17 @@ label { color: var(--muted); }
 }
 .rec-notice-btns { display: flex; gap: 6px; justify-content: flex-end; }
 .hud-top:has(.rec-notice) { z-index: 60; }
+
+/* --- Setting reference tab (Tra cứu) --- */
+.ref-group h4 { margin: 12px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent, #cda75b); }
+.ref-card { padding: 0; }
+.ref-card-head { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 6px 8px; cursor: pointer; color: inherit; font: inherit; }
+.ref-card.open { border-color: var(--accent, #cda75b); }
+.md { padding: 0 10px 8px; font-size: 13px; line-height: 1.45; }
+.md p { margin: 4px 0; }
+.md ul { margin: 4px 0; padding-left: 18px; }
+.md li { margin: 2px 0; }
+.md-table { overflow-x: auto; margin: 6px 0; }
+.md-table table { border-collapse: collapse; font-size: 12px; }
+.md-table th, .md-table td { border: 1px solid #ffffff22; padding: 3px 6px; text-align: left; vertical-align: top; }
+.md-table th { background: #ffffff10; }
