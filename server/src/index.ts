@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -579,6 +580,15 @@ function scheduleSave(): void {
   }, 1000);
 }
 
+/** Constant-time check of a join's DM key against DM_KEY (unset = feature off). */
+function dmKeyMatches(key: string): boolean {
+  const want = process.env.DM_KEY;
+  if (!want || want.length < 12) return false;
+  const a = Buffer.from(key);
+  const b = Buffer.from(want);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 function getParticipant(id: string): Participant | undefined {
   return room.state.participants.find((p) => p.id === id);
 }
@@ -651,6 +661,12 @@ wss.on('connection', (ws) => {
       // A room must always have at least one DM (covers older rooms / all DMs pruned).
       if (!room.state.participants.some((p) => p.role === 'dm')) {
         participant.role = 'dm';
+      }
+      // The DM's own key (DM_KEY in server/.env, opened as a `?dmkey=` link) takes the DM seat
+      // back from any browser, e.g. after clearing site data or switching between localhost / https.
+      if (action.dmKey && dmKeyMatches(action.dmKey) && participant.role !== 'dm') {
+        participant.role = 'dm';
+        console.log(`DM key used: ${participant.name} is DM`);
       }
       room.state.rev++;
       sockets.set(ws, participant.id);
