@@ -46,14 +46,14 @@ describe('parseMultiattack', () => {
     ]);
   });
   it('prefers the longest matching name', () => {
-    const a = [act('cc', 'Crooked Claw', 7), act('cl', 'Claw', 5)];
-    expect(parseMultiattack('The crooked man makes two Crooked Claw attacks, and he can replace one attack with a use of Snap Limb.', a)).toEqual([
-      { actionId: 'cc', name: 'Crooked Claw', count: 2 },
+    const a = [act('cc', 'Rending Claw', 7), act('cl', 'Claw', 5)];
+    expect(parseMultiattack('The ghoul lord makes two Rending Claw attacks, and it can replace one attack with a use of Grab.', a)).toEqual([
+      { actionId: 'cc', name: 'Rending Claw', count: 2 },
     ]);
   });
   it('falls back for "makes two attacks, using X or Y"', () => {
-    const a = [act('cl', 'Claw', 5), act('pe', 'Putrid Emission', 5)];
-    expect(parseMultiattack('The deepdreck makes two attacks, using Claw or Putrid Emission in any combination.', a)).toEqual([
+    const a = [act('cl', 'Claw', 5), act('pe', 'Acid Spit', 5)];
+    expect(parseMultiattack('The swamp lurker makes two attacks, using Claw or Acid Spit in any combination.', a)).toEqual([
       { actionId: 'cl', name: 'Claw', count: 2 },
     ]);
   });

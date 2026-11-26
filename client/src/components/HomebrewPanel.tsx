@@ -229,7 +229,7 @@ function HomebrewEditor({ entry, onDeleted }: { entry: HomebrewEntry; onDeleted:
         <label className="grow">
           Cho người chơi (chữ tự do)
           <input
-            placeholder="Sabine (Rogue / Sinner)"
+            placeholder="Mira (Rogue / Thief)"
             value={entry.forPlayer ?? ''}
             onChange={(e) => set('forPlayer', e.target.value || undefined)}
           />

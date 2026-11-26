@@ -54,7 +54,7 @@ export function parseMultiattack(description: string | undefined, actions: Sheet
   const desc = description ?? '';
   const attacks = actions.filter((a) => typeof a.attackBonus === 'number' && !/^multiattack/i.test(a.name));
   if (!attacks.length) return [];
-  // Longest names first so "Crooked Claw" wins over "Claw".
+  // Longest names first so "Rending Claw" wins over "Claw".
   const byLen = [...attacks].sort((x, y) => baseName(y.name).length - baseName(x.name).length);
   const steps: MultiattackStep[] = [];
   const re = /\b(one|two|three|four|five|six|\d+)\s+([A-Za-z][A-Za-z' -]*?)\s+attacks?\b/gi;
@@ -85,7 +85,7 @@ export function parseMultiattack(description: string | undefined, actions: Sheet
   const n = /\bmakes\s+(two|three|four|five|\d+)\s+(?:melee\s+|ranged\s+)?attacks\b/i.exec(desc);
   if (n) {
     const count = COUNT[n[1].toLowerCase()] ?? Number(n[1]);
-    // "using Claw or Putrid Emission": take the first named one, else the first attack.
+    // "using Claw or Acid Spit": take the first named one, else the first attack.
     const pos = (a: SheetAction) => desc.search(new RegExp(`\\b${baseName(a.name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'));
     const named = attacks.filter((a) => pos(a) >= 0).sort((x, y) => pos(x) - pos(y))[0];
     const pick = named ?? attacks[0];
@@ -159,7 +159,7 @@ export function upcastDamagePart(
 const WORDNUM: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8 };
 const clean = (n: string) => n.replace(/\(.*?\)/g, '').trim().toLowerCase();
 
-/** Find a stat-block action by a name written in prose ("Talons", "a use of Snap Limb", "its tail"). */
+/** Find a stat-block action by a name written in prose ("Talons", "a use of Grab", "its tail"). */
 export function actionByProse(prose: string, actions: SheetAction[]): SheetAction | undefined {
   const p = prose.toLowerCase().replace(/^(?:a use of|use of|its|his|her|their|a|an|one)\s+/, '').replace(/\s+attacks?$/, '').trim();
   const sing = (w: string) => w.replace(/(?<=[a-z])s$/, '');

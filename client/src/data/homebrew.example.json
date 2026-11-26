@@ -3,7 +3,7 @@
     "id": "hb-everflame-lantern",
     "name": "Everflame Lantern",
     "kind": "item",
-    "forPlayer": "Sabine (Rogue / Sinner)",
+    "forPlayer": "Mira (Rogue / Thief)",
     "rarity": "uncommon",
     "attunement": true,
     "status": "live",

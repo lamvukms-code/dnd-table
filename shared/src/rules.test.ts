@@ -620,11 +620,11 @@ describe('class features (Rogue / Barbarian)', () => {
 
   it('derivedSubclassFeatures matches class + subclass (loose) + level', () => {
     const defs: SubclassFeatureDef[] = [
-      { id: 's3', class: 'rogue', subclass: 'Sinner', level: 3, name: 'Hex Slinger', description: '', uses: { max: 'cha-mod', recharge: 'short' } },
-      { id: 's9', class: 'rogue', subclass: 'Sinner', level: 9, name: 'Borrowed Luck', description: '' },
+      { id: 's3', class: 'rogue', subclass: 'Thief', level: 3, name: 'Fast Hands', description: '', uses: { max: 'cha-mod', recharge: 'short' } },
+      { id: 's9', class: 'rogue', subclass: 'Thief', level: 9, name: 'Supreme Sneak', description: '' },
       { id: 'x', class: 'rogue', subclass: 'Other', level: 3, name: 'Nope', description: '' },
     ];
-    const s = sheet({ className: 'Rogue', subclass: 'sinner!', level: 5 });
+    const s = sheet({ className: 'Rogue', subclass: 'thief!', level: 5 });
     const got = derivedSubclassFeatures(s, defs);
     expect(got.map((f) => f.id)).toEqual(['s3']); // s9 needs level 9, "Other" doesn't match
     expect(derivedSubclassFeatures(sheet({ className: 'Rogue', level: 5 }), defs)).toHaveLength(0); // no subclass set

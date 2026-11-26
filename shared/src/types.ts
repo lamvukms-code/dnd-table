@@ -774,7 +774,7 @@ export interface HomebrewEntry {
   id: string;
   name: string;
   kind: HomebrewKind;
-  /** Free text — which character it's for ("Sabine (Rogue / Sinner)"), not an access grant. */
+  /** Free text — which character it's for ("Mira (Rogue / Thief)"), not an access grant. */
   forPlayer?: string;
   /** Items only (common/uncommon/rare/very rare/legendary/artifact — free text to match house naming). */
   rarity?: string;

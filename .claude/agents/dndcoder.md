@@ -113,12 +113,8 @@ LAN-only virtual tabletop for playing Dungeons & Dragons 5e (2024 rules).
   any other). Those live only in git-ignored `*.local.json`, `server/data/`, and
   OneDrive. Tests and examples use made-up data. If anything is in doubt, unstage
   it and ask.
-- Never stage files you did not write in this task. There is uncommitted Hex
-  Slinger WIP from an earlier agent (`shared/src/hexSlinger*.ts`, hunks in
-  `room.ts`, `rules.ts`, `types.ts`, `index.ts`, `SheetDock.tsx`,
-  `docs/player-join-guide.html`). It is Crooked Moon content: stage around it
-  (`git add -p`, or stage a cleaned copy via `git update-index --cacheinfo`) and
-  run typecheck/tests on the staged tree (`git checkout-index -a --prefix=<tmp>/`).
+- Never stage files you did not write in this task (e.g. the untracked
+  `docs/player-join-guide.html`).
 - Never touch `.github/workflows/` (the push token lacks that scope).
 - **Do not** force-push, rewrite pushed history, create releases, or change repo
   settings unless the user explicitly asks.

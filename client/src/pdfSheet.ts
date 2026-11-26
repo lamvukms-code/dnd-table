@@ -53,7 +53,7 @@ export async function importPdfSheet(
   }
   const res = sheetFromPdfFields(fields, ownerId, newId);
   if (!res) throw new Error('Không nhận ra mẫu phiếu này — hiện chỉ đọc được mẫu "Sirindoodles" 5e.');
-  // Some players type only the subclass in the CLASS box ("Sinner"): find its class in the local subclass data.
+  // Some players type only the subclass in the CLASS box ("Thief"): find its class in the local subclass data.
   const KNOWN = ['barbarian', 'bard', 'cleric', 'druid', 'fighter', 'monk', 'paladin', 'ranger', 'rogue', 'sorcerer', 'warlock', 'wizard', 'artificer'];
   if (!KNOWN.includes(res.sheet.className.trim().toLowerCase())) {
     const typed = (res.sheet.className + ' ' + (res.sheet.subclass ?? '')).trim().toLowerCase();

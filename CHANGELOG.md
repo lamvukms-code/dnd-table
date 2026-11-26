@@ -115,7 +115,7 @@ All notable changes to this project are documented here. Format follows
 - **PDF import: the newer "Sirindoodles" sheet revision** (the one the "Phil Jacques" sheet uses — fields numbered +1,
   boxes moved). Fields are mapped back onto the known template by column + row order, then nearest box
   (`remapSirindoodlesV2`; geometry only in `sirindoodlesGeometry.ts`). Also: a CLASS box holding just a subclass
-  ("Sinner") resolves to its class from the local subclass data; the AC printed on the sheet is kept as an override
+  ("Thief") resolves to its class from the local subclass data; the AC printed on the sheet is kept as an override
   when it differs from 10 + DEX (armor is plain text in the PDF). `scripts/dump-pdf-fields.mjs` dumps a template's
   fields for mapping a further revision.
 - **Circle of the Old Ways — Wood Wose, fully wired** (`woodWoseEffect`): Bark Bulwark AC, **Rampant Growth** temp

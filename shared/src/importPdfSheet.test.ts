@@ -89,7 +89,7 @@ describe('newer template revision (fields renumbered +1, boxes moved)', () => {
     shifted[idx] = { ...shifted[idx], value };
   };
   setByRef('I12', 'Nova'); // name
-  setByRef('I13', 'Rogue Sinner'); // class
+  setByRef('I13', 'Rogue Thief'); // class
   setByRef('I4', '4'); // level
   ['I20', 'I21', 'I22', 'I23', 'I24', 'I25'].forEach((r, i) => setByRef(r, String([10, 18, 16, 12, 16, 15][i])));
   it('is recognised and maps names back to the known template', () => {
