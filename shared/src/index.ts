@@ -33,3 +33,4 @@ export * from './opportunity.js';
 export * from './monsterMechanics.js';
 export * from './shop.js';
 export * from './speakerCards.js';
+export * from './statePatch.js';

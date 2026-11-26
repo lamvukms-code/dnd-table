@@ -19,6 +19,10 @@ import {
   formatElapsed,
   rollLogForPlayers,
   sheetForStreamCard,
+  patchMessage,
+  viewJson,
+  withKeys,
+  type ViewJson,
   speakerCards,
   sheetsForPlayer,
   statsHiddenFromPlayers,
@@ -451,37 +455,90 @@ function streamState(base: RoomState = playerView()): RoomState {
   return { ...base, sheets: room.state.sheets.map(sheetForStreamCard) };
 }
 
+// Delta sync (see statePatch.ts): clients that asked for patches get only what changed since the
+// last push we sent THEM; older clients still get the full state.
+const patchClients = new WeakSet<WebSocket>();
+const lastSent = new WeakMap<WebSocket, ViewJson>();
+
+/** After a full state went out on `ws` (welcome / fallback): remember it as the patch baseline. */
+function rememberFull(ws: WebSocket, state: RoomState): void {
+  if (patchClients.has(ws)) lastSent.set(ws, viewJson(state));
+}
+
 function sendStateNow(): void {
   recordings.captureLog(room.state.rollLog);
-  const dmPayload = JSON.stringify({ t: 'state', state: stateFor(true) } satisfies ServerEvent);
-  // Tokens / scenes / log are redacted once per broadcast; only `sheets` differs per player.
+  // Each view is built and serialised once per broadcast, however many sockets share it; only
+  // `sheets` differs per player. Full JSON (old clients) and per-key JSON (patch clients) are lazy.
+  let dmState: RoomState | null = null;
+  let dmView: ViewJson | null = null;
+  let dmFull: string | null = null;
   let playerBase: RoomState | null = null;
-  let streamPayload: string | null = null;
-  const playerPayloads = new Map<string, string>();
+  let playerBaseView: ViewJson | null = null;
+  let streamSt: RoomState | null = null;
+  let streamView: ViewJson | null = null;
+  let streamFull: string | null = null;
+  const playerFull = new Map<string, string>();
+  const playerViews = new Map<string, ViewJson>();
+
+  const deliver = (ws: WebSocket, view: () => ViewJson, full: () => string) => {
+    if (!patchClients.has(ws)) {
+      ws.send(full());
+      return;
+    }
+    const v = view();
+    const prev = lastSent.get(ws);
+    const msg = prev ? patchMessage(prev, v) : full();
+    lastSent.set(ws, v);
+    if (msg) ws.send(msg);
+  };
+  const stateMsg = (state: RoomState) => JSON.stringify({ t: 'state', state } satisfies ServerEvent);
+
   for (const [ws, pid] of sockets) {
     if (ws.readyState !== WebSocket.OPEN) continue;
     if (streamSockets.has(ws)) {
       const extra = staticEventFor(ws, false);
       if (extra) ws.send(extra);
       playerBase ??= playerView();
-      streamPayload ??= JSON.stringify({ t: 'state', state: streamState(playerBase) } satisfies ServerEvent);
-      ws.send(streamPayload);
+      const st = (streamSt ??= streamState(playerBase));
+      deliver(
+        ws,
+        () => (streamView ??= viewJson(st)),
+        () => (streamFull ??= stateMsg(st)),
+      );
       continue;
     }
     const isDm = getParticipant(pid)?.role === 'dm';
     const extra = staticEventFor(ws, isDm);
     if (extra) ws.send(extra);
     if (isDm) {
-      ws.send(dmPayload);
+      const st = (dmState ??= stateFor(true));
+      deliver(
+        ws,
+        () => (dmView ??= viewJson(st)),
+        () => (dmFull ??= stateMsg(st)),
+      );
       continue;
     }
-    let payload = playerPayloads.get(pid);
-    if (!payload) {
-      playerBase ??= playerView();
-      payload = JSON.stringify({ t: 'state', state: playerStateFor(pid, playerBase) } satisfies ServerEvent);
-      playerPayloads.set(pid, payload);
-    }
-    ws.send(payload);
+    playerBase ??= playerView();
+    const base = playerBase;
+    deliver(
+      ws,
+      () => {
+        let v = playerViews.get(pid);
+        if (!v) {
+          // the shared part once (with no sheets), then this player's own sheet list on top
+          playerBaseView ??= viewJson({ ...base, sheets: [] });
+          v = withKeys(playerBaseView, { sheets: JSON.stringify(sheetsForPlayer(room.state.sheets, pid)) });
+          playerViews.set(pid, v);
+        }
+        return v;
+      },
+      () => {
+        let f = playerFull.get(pid);
+        if (!f) playerFull.set(pid, (f = stateMsg(playerStateFor(pid, base))));
+        return f;
+      },
+    );
   }
 }
 
@@ -554,7 +611,10 @@ wss.on('connection', (ws) => {
       staticSent.delete(ws);
       const joinStatic = staticEventFor(ws, false);
       if (joinStatic) ws.send(joinStatic);
-      send(ws, { t: 'welcome', participantId: dm.id, protocol: PROTOCOL_VERSION, state: streamState() });
+      if (action.patch) patchClients.add(ws);
+      const st = streamState();
+      send(ws, { t: 'welcome', participantId: dm.id, protocol: PROTOCOL_VERSION, state: st });
+      rememberFull(ws, st);
       send(ws, { t: 'speaking', ids: [...speaking] });
       return;
     }
@@ -597,13 +657,17 @@ wss.on('connection', (ws) => {
       staticSent.delete(ws); // a (re)join always starts from "client holds nothing"
       const joinStatic = staticEventFor(ws, participant.role === 'dm');
       if (joinStatic) ws.send(joinStatic);
+      if (action.patch) patchClients.add(ws);
+      else patchClients.delete(ws);
+      const welcomeState = stateFor(participant.role === 'dm', participant.id);
       send(ws, {
         t: 'welcome',
         participantId: participant.id,
         secret: participant.secret,
         protocol: PROTOCOL_VERSION,
-        state: stateFor(participant.role === 'dm', participant.id),
+        state: welcomeState,
       });
+      rememberFull(ws, welcomeState);
       broadcastState();
       scheduleSave();
       send(ws, { t: 'speaking', ids: [...speaking] });

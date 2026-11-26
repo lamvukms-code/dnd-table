@@ -23,7 +23,9 @@ import type {
 } from './types.js';
 import type { GodsBaneOp, GodsBaneRoomOp } from './godsBane.js';
 
-export const PROTOCOL_VERSION = 7;
+import type { StatePatch } from './statePatch.js';
+
+export const PROTOCOL_VERSION = 8;
 
 /** Actions sent client -> server. */
 export type ClientAction =
@@ -37,6 +39,8 @@ export type ClientAction =
       /** The DM's recording / stream window: joins with the DM's identity but gets the PLAYER view,
        *  can't act, and doesn't count as a connection of that participant. */
       stream?: boolean;
+      /** The client applies `patch` events (only what changed since its last push); older clients get full `state`. */
+      patch?: boolean;
     }
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
@@ -279,6 +283,8 @@ export type ServerEvent =
   | { t: 'dragPreview'; id: string; x: number; y: number }
   /** Who is talking right now (participant ids), sent whenever it changes. */
   | { t: 'speaking'; ids: string[] }
+  /** Only what changed since this client's last push (see statePatch.ts). */
+  | ({ t: 'patch' } & StatePatch)
   | { t: 'error'; message: string };
 
 export interface ClientEnvelope {

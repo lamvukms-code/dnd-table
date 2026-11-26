@@ -70,6 +70,7 @@ import {
   upcastDamagePart,
   casterTypeOf,
 } from '@dnd-table/shared';
+import { PROTOCOL_VERSION, applyPatch } from '@dnd-table/shared';
 import {
   getLocalKey,
   rollEquation as dddiceRollEquation,
@@ -276,12 +277,13 @@ export const useStore = create<StoreState>((set, get) => {
       if (STREAM_MODE) {
         const c = storedCredentials();
         socket?.send(
-          JSON.stringify({ action: { t: 'join', name: 'stream', stream: true, participantId: c.participantId ?? undefined, secret: c.secret ?? undefined } }),
+          JSON.stringify({ action: { t: 'join', name: 'stream', stream: true, patch: true, participantId: c.participantId ?? undefined, secret: c.secret ?? undefined } }),
         );
       } else if (identity) {
         const stored = localStorage.getItem(PID_KEY) ?? undefined;
         rawSend({
           t: 'join',
+          patch: true,
           name: identity.name,
           participantId: stored,
           secret: localStorage.getItem(SECRET_KEY) ?? undefined,
@@ -305,6 +307,18 @@ export const useStore = create<StoreState>((set, get) => {
       } else if (event.t === 'speaking') {
         set({ speaking: event.ids });
       } else if (event.t === 'welcome') {
+        // the server runs a newer build than this tab: load it (once, so a mismatch can't loop)
+        if (event.protocol > PROTOCOL_VERSION) {
+          try {
+            if (sessionStorage.getItem('dnd.reloadedFor') !== String(event.protocol)) {
+              sessionStorage.setItem('dnd.reloadedFor', String(event.protocol));
+              location.reload();
+              return;
+            }
+          } catch {
+            /* storage blocked: keep going with this build */
+          }
+        }
         if (!STREAM_MODE) localStorage.setItem(PID_KEY, event.participantId);
         if (event.secret && !STREAM_MODE) localStorage.setItem(SECRET_KEY, event.secret);
         const room = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
@@ -312,10 +326,14 @@ export const useStore = create<StoreState>((set, get) => {
       } else if (event.t === 'dragPreview') {
         set((st) => ({ dragPreviews: { ...st.dragPreviews, [event.id]: { x: event.x, y: event.y, ts: Date.now() } } }));
         schedulePreviewPurge();
-      } else if (event.t === 'state') {
-        // Keep the identity of every sub-object that did not change (see share.ts).
-        const next = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
+      } else if (event.t === 'state' || event.t === 'patch') {
         set((st) => {
+          // a patch carries only what changed since our last push (see statePatch.ts)
+          if (event.t === 'patch' && !st.room) return {};
+          const next =
+            event.t === 'patch'
+              ? applyPatch(st.room!, event)
+              : { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
           // a dragged token whose position changed in the state has landed: drop its preview
           let previews = st.dragPreviews;
           if (Object.keys(previews).length) {
@@ -397,6 +415,7 @@ export const useStore = create<StoreState>((set, get) => {
       if (get().status === 'open') {
         rawSend({
           t: 'join',
+          patch: true,
           name: identity.name,
           participantId: localStorage.getItem(PID_KEY) ?? undefined,
           secret: localStorage.getItem(SECRET_KEY) ?? undefined,

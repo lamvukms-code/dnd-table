@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useStore } from './store.js';
 import { getSfxVolume, playForRollLogEntry, setSfxVolume } from './sound.js';
 import { JoinScreen } from './components/JoinScreen.js';
@@ -8,16 +8,7 @@ import { InitiativeBar } from './components/InitiativeBar.js';
 import { MoonChip } from './components/MoonChip.js';
 import { LightChip } from './components/LightChip.js';
 import { SheetDock, withSpeciesRest, withSubclassRest } from './components/SheetDock.js';
-import { SettingsModal } from './components/Settings.js';
-import { BestiaryPanel } from './components/BestiaryPanel.js';
-import { NpcPanel } from './components/NpcPanel.js';
-import { ReferencePanel } from './components/ReferencePanel.js';
-import { MapLibrary } from './components/MapLibrary.js';
-import { HomebrewPanel } from './components/HomebrewPanel.js';
-import { HeirloomPanel } from './components/HeirloomPanel.js';
-import { ShopPanel } from './components/ShopPanel.js';
 import { HEIRLOOMS, NPC_CATALOG } from './campaignData.js';
-import { EquipmentSrdPanel } from './components/EquipmentSrdPanel.js';
 import { DmPromptBanner, ReactPromptBanner } from './components/DmPromptBanner.js';
 import { OaPromptBanner } from './components/OaPromptBanner.js';
 import { PickPromptBanner } from './components/PickPromptBanner.js';
@@ -29,6 +20,17 @@ import { RecBadge, openStreamWindow } from './components/RecBadge.js';
 import { applyLongRest, applyShortRest, fmtDuration } from '@dnd-table/shared';
 import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
+
+// Panels opened now and then are loaded on first use, so the first page load stays small.
+const SettingsModal = lazy(() => import('./components/Settings.js').then((m) => ({ default: m.SettingsModal })));
+const BestiaryPanel = lazy(() => import('./components/BestiaryPanel.js').then((m) => ({ default: m.BestiaryPanel })));
+const NpcPanel = lazy(() => import('./components/NpcPanel.js').then((m) => ({ default: m.NpcPanel })));
+const ReferencePanel = lazy(() => import('./components/ReferencePanel.js').then((m) => ({ default: m.ReferencePanel })));
+const MapLibrary = lazy(() => import('./components/MapLibrary.js').then((m) => ({ default: m.MapLibrary })));
+const HomebrewPanel = lazy(() => import('./components/HomebrewPanel.js').then((m) => ({ default: m.HomebrewPanel })));
+const HeirloomPanel = lazy(() => import('./components/HeirloomPanel.js').then((m) => ({ default: m.HeirloomPanel })));
+const ShopPanel = lazy(() => import('./components/ShopPanel.js').then((m) => ({ default: m.ShopPanel })));
+const EquipmentSrdPanel = lazy(() => import('./components/EquipmentSrdPanel.js').then((m) => ({ default: m.EquipmentSrdPanel })));
 
 export function App() {
   const identity = useStore((s) => s.identity);
@@ -317,12 +319,17 @@ export function App() {
           <ReactPromptBanner />
           <OaPromptBanner />
           <PickPromptBanner />
-          {refOpen && <ReferencePanel onClose={() => setRefOpen(false)} />}
+          {refOpen && (
+            <Suspense fallback={null}>
+              <ReferencePanel onClose={() => setRefOpen(false)} />
+            </Suspense>
+          )}
           {dockOpen && <SheetDock onClose={() => setDockOpen(() => false)} />}
           {isDm && !dockOpen && <SpeakerStrip variant="dock" onCard={(c) => c.sheetId && setDockOpen(() => true)} />}
         </div>
       </div>
 
+      <Suspense fallback={null}>
       {settingsOpen && (
         <SettingsModal
           onClose={() => {
@@ -345,6 +352,7 @@ export function App() {
       {heirloomOpen && <HeirloomPanel onClose={() => setHeirloomOpen(false)} />}
       {eqSrdOpen && <EquipmentSrdPanel onClose={() => setEqSrdOpen(false)} />}
       {shopOpen && <ShopPanel onClose={() => setShopOpen(false)} />}
+      </Suspense>
       {godsBaneOpen && <GodsBanePanel onClose={() => setGodsBaneOpen(false)} />}
       {toast && <div className="toast">{toast}</div>}
     </div>
