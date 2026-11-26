@@ -141,6 +141,8 @@ interface StoreState {
   participantId: string | null;
   identity: Identity | null;
   room: RoomState | null;
+  /** Tokens someone else is dragging right now (where they are mid-drag), by token id. */
+  dragPreviews: Record<string, { x: number; y: number; ts: number }>;
   error: string | null;
   dddiceKey: string | null;
   dddiceConnected: boolean;
@@ -285,10 +287,25 @@ export const useStore = create<StoreState>((set, get) => {
         if (event.secret) localStorage.setItem(SECRET_KEY, event.secret);
         const room = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
         set({ participantId: event.participantId, room, error: null });
+      } else if (event.t === 'dragPreview') {
+        set((st) => ({ dragPreviews: { ...st.dragPreviews, [event.id]: { x: event.x, y: event.y, ts: Date.now() } } }));
+        schedulePreviewPurge();
       } else if (event.t === 'state') {
         // Keep the identity of every sub-object that did not change (see share.ts).
         const next = { ...event.state, bestiary: staticBestiary, homebrew: staticHomebrew };
-        set((st) => ({ room: shareStructure(st.room, next) }));
+        set((st) => {
+          // a dragged token whose position changed in the state has landed: drop its preview
+          let previews = st.dragPreviews;
+          if (Object.keys(previews).length) {
+            previews = { ...previews };
+            for (const id of Object.keys(previews)) {
+              const was = st.room?.tokens.find((t) => t.id === id);
+              const now = next.tokens.find((t) => t.id === id);
+              if (!now || (was && (was.x !== now.x || was.y !== now.y)) || Date.now() - previews[id].ts > PREVIEW_TTL) delete previews[id];
+            }
+          }
+          return { room: shareStructure(st.room, next), dragPreviews: previews };
+        });
       } else if (event.t === 'error') {
         set({ error: event.message, levelUpPending: [] });
       }
@@ -301,6 +318,19 @@ export const useStore = create<StoreState>((set, get) => {
     };
 
     socket.onerror = () => socket?.close();
+  }
+
+  // A preview nobody refreshes (the drop was rejected, or landed back where it started) fades out.
+  const PREVIEW_TTL = 1500;
+  let purgeTimer = 0;
+  function schedulePreviewPurge() {
+    if (purgeTimer) return;
+    purgeTimer = window.setTimeout(() => {
+      purgeTimer = 0;
+      const live = Object.entries(get().dragPreviews).filter(([, p]) => Date.now() - p.ts <= PREVIEW_TTL);
+      if (live.length !== Object.keys(get().dragPreviews).length) set({ dragPreviews: Object.fromEntries(live) });
+      if (live.length) schedulePreviewPurge();
+    }, 500);
   }
 
   function rawSend(action: ClientAction) {
@@ -329,6 +359,7 @@ export const useStore = create<StoreState>((set, get) => {
     participantId: null,
     identity: loadIdentity(),
     room: null,
+    dragPreviews: {},
     error: null,
     dddiceKey: getLocalKey(),
     dddiceConnected: false,

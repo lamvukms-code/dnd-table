@@ -100,6 +100,12 @@ export type ClientAction =
   | { t: 'stance'; tokenId: string; name: string; on: boolean }
   /** Scene light (no tokenId) or one token's light override (null = follow the scene). DM only. */
   | { t: 'setLight'; light: SceneLight | null; tokenId?: string }
+  /**
+   * Where a token is while it is being dragged — shown to the other viewers only, never stored.
+   * The drop is an ordinary `updateToken` (rules, movement budget, saving). Kept tiny on purpose:
+   * relaying the whole room state ~20x/s per drag swamped slow / far-away connections.
+   */
+  | { t: 'dragPreview'; id: string; x: number; y: number }
   /** DM: set a monster's remaining limbs. */
   | { t: 'setLimbs'; tokenId: string; limbs: number }
   /** DM answers a monster reaction offer: `use` spends the reaction and runs its save / damage on the trigger creature. */
@@ -251,6 +257,7 @@ export type ServerEvent =
    *  every `state` push — they ride in their own event, sent before the first state and again only when
    *  they actually change. `state.bestiary` / `state.homebrew` arrive empty; the client splices these in. */
   | { t: 'static'; bestiary?: Statblock[]; homebrew?: HomebrewEntry[] }
+  | { t: 'dragPreview'; id: string; x: number; y: number }
   | { t: 'error'; message: string };
 
 export interface ClientEnvelope {

@@ -244,6 +244,20 @@ function BattleMapImpl() {
   // move via the throttled `send` in `onPointerMove` below — unaffected by this local state.
   const [dragPos, setDragPos] = useState<{ id: string; x: number; y: number } | null>(null);
   const lastDragSendRef = useRef(0);
+  // After the drop the dragger keeps showing the drop square until the server's answer moves the token
+  // (or, if the move was refused, until it plainly isn't coming) — no flick back to the old square
+  // while the move crosses a slow link.
+  const settling = useRef<{ id: string; x: number; y: number; until: number } | null>(null);
+  const dragPreviews = useStore((s) => s.dragPreviews);
+  useEffect(() => {
+    const st = settling.current;
+    if (!st) return;
+    const t = tokens.find((x) => x.id === st.id);
+    if (!t || t.x !== st.x || t.y !== st.y) {
+      settling.current = null;
+      setDragPos((p) => (p?.id === st.id && !drag.current ? null : p));
+    }
+  }, [tokens]);
   // --- Free camera (Owlbear-style) -------------------------------------------------------------
   // The board is NOT inside a native scroll area any more. The viewport (`.board-scroll`) is a
   // fixed, overflow-hidden window and the board floats inside it under a
@@ -571,7 +585,7 @@ function BattleMapImpl() {
     const now = performance.now();
     if (now - lastDragSendRef.current >= 50) {
       lastDragSendRef.current = now;
-      send({ t: 'updateToken', id: drag.current.id, patch: { x, y } });
+      send({ t: 'dragPreview', id: drag.current.id, x, y });
     }
     if ((map.snap ?? true) && !e.shiftKey) setGhost({ x: Math.round(x), y: Math.round(y) });
     else setGhost(null);
@@ -605,18 +619,27 @@ function BattleMapImpl() {
     // send happened to land.
     const token = tokens.find((t) => t.id === drag.current!.id);
     const last = dragPos?.id === drag.current.id ? dragPos : token;
-    if (last) {
-      const snap = (map.snap ?? true) && !e.shiftKey;
-      send({
-        t: 'updateToken',
-        id: drag.current.id,
-        patch: snap
-          ? { x: Math.max(0, Math.round(last.x)), y: Math.max(0, Math.round(last.y)) }
-          : { x: Math.max(0, last.x), y: Math.max(0, last.y) },
-      });
-    }
+    const id = drag.current.id;
     drag.current = null;
-    setDragPos(null);
+    if (last && token) {
+      const snap = (map.snap ?? true) && !e.shiftKey;
+      const to = snap ? { x: Math.max(0, Math.round(last.x)), y: Math.max(0, Math.round(last.y)) } : { x: Math.max(0, last.x), y: Math.max(0, last.y) };
+      if (to.x === token.x && to.y === token.y) {
+        setDragPos(null);
+        return;
+      }
+      send({ t: 'updateToken', id, patch: to });
+      settling.current = { id, x: token.x, y: token.y, until: Date.now() + 3000 };
+      setDragPos({ id, ...to });
+      window.setTimeout(() => {
+        if (settling.current?.id === id && Date.now() >= settling.current.until) {
+          settling.current = null;
+          setDragPos((p) => (p?.id === id ? null : p));
+        }
+      }, 3050);
+    } else {
+      setDragPos(null);
+    }
   }
 
   function onBoardDrop(e: React.DragEvent) {
@@ -1054,8 +1077,8 @@ function BattleMapImpl() {
             .filter((t) => t.godsBaneBlade && godsBaneAwake)
             .map((t) => {
               // God's Bane aura: the 5 ft ring of squares around the blade.
-              const px = dragPos?.id === t.id ? dragPos.x : t.x;
-              const py = dragPos?.id === t.id ? dragPos.y : t.y;
+              const px = dragPos?.id === t.id ? dragPos.x : (dragPreviews[t.id]?.x ?? t.x);
+              const py = dragPos?.id === t.id ? dragPos.y : (dragPreviews[t.id]?.y ?? t.y);
               const span = Math.max(1, SIZE_CELLS[t.size]);
               return (
                 <div
@@ -1073,8 +1096,8 @@ function BattleMapImpl() {
               const span = SIZE_CELLS[t.size];
               // While this token is the one being dragged, follow the local (instant) position
               // instead of the throttled store one — see `dragPos`.
-              const px = dragPos?.id === t.id ? dragPos.x : t.x;
-              const py = dragPos?.id === t.id ? dragPos.y : t.y;
+              const px = dragPos?.id === t.id ? dragPos.x : (dragPreviews[t.id]?.x ?? t.x);
+              const py = dragPos?.id === t.id ? dragPos.y : (dragPreviews[t.id]?.y ?? t.y);
               return (
                 <div
                   key={t.id}

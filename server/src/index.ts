@@ -445,6 +445,21 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    // Drag preview: relayed as a few bytes to everyone else, no state change, no full broadcast.
+    if (action.t === 'dragPreview') {
+      const p = room.previewMove(actor, action.id, action.x, action.y);
+      if (!p) return;
+      const msg = JSON.stringify({ t: 'dragPreview', id: p.token.id, x: p.x, y: p.y } satisfies ServerEvent);
+      for (const [other, pid] of sockets) {
+        if (other === ws || other.readyState !== WebSocket.OPEN) continue;
+        if (p.token.hidden && getParticipant(pid)?.role !== 'dm') continue;
+        // a far-away / slow socket still flushing earlier data skips this frame instead of queueing it
+        if (other.bufferedAmount > 64 * 1024) continue;
+        other.send(msg);
+      }
+      return;
+    }
+
     const err = room.apply(actor, action);
     if (err) {
       send(ws, { t: 'error', message: err });

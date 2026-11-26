@@ -2059,6 +2059,17 @@ export class Room {
     }
   }
 
+  /** A drag preview `actor` may show for this token (same rights and turn gate as a real move), or null. */
+  previewMove(actor: Participant, id: string, x: number, y: number): { token: Token; x: number; y: number } | null {
+    const token = this.state.tokens.find((tk) => tk.id === id);
+    if (!token || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const isDm = actor.role === 'dm';
+    if (!isDm && (token.controllerId !== actor.id || token.godsBaneBlade)) return null;
+    if (isDm) return { token, x, y };
+    const gate = this.moveGate(actor, token, { x, y });
+    return gate.ok ? { token, x: gate.pos.x, y: gate.pos.y } : null;
+  }
+
   /** Whether `actor` may move `token` right now, and (for players in combat) how far. */
   private moveGate(
     actor: Participant,
@@ -4105,6 +4116,10 @@ export class Room {
         this.touch();
         break;
       }
+
+      case 'dragPreview':
+        // relayed by the socket layer (index.ts) without touching the state
+        return null;
 
       default: {
         const _exhaustive: never = action;
