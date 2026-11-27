@@ -1013,6 +1013,26 @@ export interface BattleMap {
   showGrid: boolean;
   /** Snap tokens to the grid on drop (hold Shift to place freely). */
   snap?: boolean;
+  /** Building roofs drawn over the background (cut from the map maker's roofs-on export). */
+  roofs?: MapRoof[];
+  /** DM override per roof id; unset = automatic (open while a PC token stands inside). */
+  roofOverride?: Record<string, 'open' | 'closed'>;
+}
+
+/**
+ * One building roof layered over a scene map. The background image shows the interior; the roof
+ * image hides it until a player character's token stands inside `area` (or the DM forces it
+ * open/closed). Everything is in grid cells, like token coordinates.
+ */
+export interface MapRoof {
+  id: string;
+  name: string;
+  url: string;
+  x: number; // where the roof image sits (it overhangs the walls a little)
+  y: number;
+  w: number;
+  h: number;
+  area: { x: number; y: number; w: number; h: number }; // the building's floor
 }
 
 /**
@@ -1269,6 +1289,9 @@ export interface ReactPrompt {
   triggerTokenId?: string;
   triggerName?: string;
   why: string;
+  /** The attack that triggered it is parked until the DM answers (a reaction that must come before
+   *  the roll, e.g. "impose disadvantage on the attack roll"). Same id on every prompt of one hold. */
+  holdsAttack?: string;
 }
 
 /** The caster picks where a creature lands (within `maxFeet` of `anchorTokenId`). */

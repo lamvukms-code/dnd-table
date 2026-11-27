@@ -532,6 +532,30 @@ summary.mt-btn::-webkit-details-marker { display: none; }
   touch-action: none;
   user-select: none;
 }
+/* Building roofs over the map (see MapRoof): hide the interior until a PC walks in. Painted after
+   the tokens so NPCs inside stay hidden from players; the DM sees through them. */
+.map-roof {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.45s ease;
+}
+.map-roof.dm { opacity: 0.45; }
+.map-roof.open { opacity: 0; }
+.roof-chip {
+  position: absolute;
+  z-index: 2;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  background: rgba(30, 26, 22, 0.8);
+  color: #e8dcc8;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.roof-chip.open { background: rgba(60, 110, 60, 0.9); }
+.roof-chip.closed { background: rgba(130, 50, 40, 0.9); }
 .token.sel { outline: 3px solid var(--accent); }
 .token.group-sel { outline: 3px dashed var(--accent-2); }
 .token.cover-total { outline: 3px dotted #e88; }

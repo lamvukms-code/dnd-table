@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { MapRoof } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 
 interface MapEntry {
@@ -11,6 +12,8 @@ interface MapEntry {
   cols?: number;
   rows?: number;
   grid: boolean;
+  /** Building roofs; `file` is relative to the maps folder, like the map's own. */
+  roofs?: (Omit<MapRoof, 'url'> & { file: string })[];
 }
 
 /**
@@ -57,6 +60,9 @@ export function MapLibrary({ onClose }: { onClose: () => void }) {
     cols: m.cols ?? 24,
     rows: m.rows ?? 16,
     showGrid: m.grid,
+    // Always sent (an empty list too) so switching to a roofless map clears the previous roofs.
+    roofs: (m.roofs ?? []).map(({ file, ...r }) => ({ ...r, url: `/maps/${file}` })),
+    roofOverride: {},
   });
 
   function useHere(m: MapEntry) {

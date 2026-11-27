@@ -65,6 +65,7 @@ import {
   SCENE_LIGHTS,
   SCENE_LIGHT_VI,
   type SceneLight,
+  type MapRoof,
   monsterMechanics,
   economyKindOf,
   exhaustionPenalty,
@@ -147,6 +148,20 @@ function BattleMapImpl() {
   const sheets = useStore((s) => s.room?.sheets)!;
   const initiative = useStore((s) => s.room?.initiative)!;
   const godsBaneAwake = useStore((s) => !!s.room?.godsBane?.enabled && !!s.room?.godsBane?.awakened);
+  /** A visible player character (controlled, or linked to a sheet) has its centre on the roof's
+   *  floor — follows the live drag position so the roof lifts as the token walks in. */
+  function roofHasPc(r: MapRoof): boolean {
+    const a = r.area;
+    return tokens.some((t) => {
+      if (t.hidden || !(t.controllerId || sheets.some((s) => s.tokenId === t.id))) return false;
+      const px = dragPos?.id === t.id ? dragPos.x : (dragPreviews[t.id]?.x ?? t.x);
+      const py = dragPos?.id === t.id ? dragPos.y : (dragPreviews[t.id]?.y ?? t.y);
+      const half = SIZE_CELLS[t.size] / 2;
+      const cx = px + half;
+      const cy = py + half;
+      return cx > a.x && cx < a.x + a.w && cy > a.y && cy < a.y + a.h;
+    });
+  }
 
   // --- movement tracker (active combatant) ---
   const activeEntry = initiative.running
@@ -1236,6 +1251,44 @@ function BattleMapImpl() {
                   )}
                   <span className="tk-label">{t.label}</span>
                 </div>
+              );
+            })}
+
+          {(map.roofs ?? []).map((r) => {
+            const forced = map.roofOverride?.[r.id];
+            const open = forced ? forced === 'open' : roofHasPc(r);
+            return (
+              <img
+                key={`roof-${r.id}`}
+                className={`map-roof ${open ? 'open' : ''} ${isDm ? 'dm' : ''}`}
+                src={r.url}
+                alt=""
+                draggable={false}
+                style={{ left: r.x * CELL, top: r.y * CELL, width: r.w * CELL, height: r.h * CELL }}
+              />
+            );
+          })}
+          {isDm &&
+            (map.roofs ?? []).map((r) => {
+              const forced = map.roofOverride?.[r.id];
+              const next = !forced ? 'open' : forced === 'open' ? 'closed' : undefined;
+              return (
+                <button
+                  key={`roofchip-${r.id}`}
+                  className={`roof-chip ${forced ?? 'auto'}`}
+                  style={{ left: r.area.x * CELL + 4, top: r.area.y * CELL + 4 }}
+                  title={`${r.name} — bấm để đổi: tự động → luôn mở → luôn đóng`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const o = { ...(map.roofOverride ?? {}) };
+                    if (next) o[r.id] = next;
+                    else delete o[r.id];
+                    send({ t: 'updateMap', patch: { roofOverride: o } });
+                  }}
+                >
+                  🏠 {forced === 'open' ? 'mở' : forced === 'closed' ? 'đóng' : 'tự động'}
+                </button>
               );
             })}
 
