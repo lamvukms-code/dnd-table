@@ -150,8 +150,10 @@ export type MonsterMechanic =
   /** Any other reaction: offered to the DM when its trigger happens (one click runs its save / damage). */
   | {
       kind: 'reaction';
-      trigger: 'selfDamaged' | 'selfAttacked' | 'allyDamaged' | 'nearStart' | 'healCast' | 'spellCast';
+      trigger: 'selfDamaged' | 'selfAttacked' | 'allyAttacked' | 'allyDamaged' | 'nearStart' | 'healCast' | 'spellCast';
       radiusFt?: number;
+      /** allyAttacked: only for creatures it summoned ("when a creature summoned by the <monster>…"). */
+      summonedOnly?: boolean;
       enters?: boolean;
       actionId?: string;
       from?: string;
@@ -397,12 +399,21 @@ export function detectMechanics(sb: { traits?: StatblockTrait[]; actions?: Sheet
           /starts? its turn within/.test(trig) ? 'nearStart'
           : /spell that restores hit points|casts a spell that restores/.test(trig) ? 'healCast'
           : /casts? a spell/.test(trig) ? 'spellCast'
+          : /(?:another creature|an ally|one of its allies|a creature)\b[^.]*?(?:is targeted by an? (?:attack|weapon)|is attacked by|is the target of an attack)/.test(trig) ? 'allyAttacked'
           : /another creature|an ally|a creature (?:the [\w' -]+ )?can see within \d+ feet[^.]*takes damage/.test(trig) && /takes damage/.test(trig) ? 'allyDamaged'
           : /after being hit|is hit by|takes damage|hits (?:it|the [\w' -]+) with/.test(trig) ? 'selfDamaged'
           : /targets? (?:it|the [\w' -]+) with an? (?:attack|spell)|is targeted by|is attacked by|attacks (?:it|the [\w' -]+)/.test(trig) ? 'selfAttacked'
           : undefined;
         if (trigger)
-          out.push({ kind: 'reaction', trigger, radiusFt: near ? Number(near[1]) : undefined, enters: /enters? (?:the|that) area/.test(trig) || undefined, actionId: a.id, from: a.name });
+          out.push({
+            kind: 'reaction',
+            trigger,
+            radiusFt: near ? Number(near[1]) : undefined,
+            enters: /enters? (?:the|that) area/.test(trig) || undefined,
+            summonedOnly: (trigger === 'allyAttacked' && /summoned by/.test(trig)) || undefined,
+            actionId: a.id,
+            from: a.name,
+          });
       }
     }
     const rv = /(?:when|if) (?:the|it)[\w' -]*? is reduced to 0 hit points[^.]*?regain(?:s|ing) (all (?:of )?its hit points|(\d+)(?: \((\d+d\d+(?: ?[+-] ?\d+)?)\))? hit points)/i.exec(d);
@@ -532,6 +543,10 @@ export function automatedFeatures(mechs: MonsterMechanic[]): Set<string> {
 export function mechanicsOfKind<K extends MonsterMechanic['kind']>(mechs: MonsterMechanic[], kind: K): Extract<MonsterMechanic, { kind: K }>[] {
   return mechs.filter((m): m is Extract<MonsterMechanic, { kind: K }> => m.kind === kind);
 }
+
+/** A reaction whose effect is "impose disadvantage on the attack roll" (applied to the attack it answers). */
+export const imposesAttackDisadvantage = (description: string | undefined): boolean =>
+  /impose(?:s)? disadvantage on (?:the|that) attack(?: roll)?|(?:the|that) attack(?: roll)? has disadvantage|attack roll is made with disadvantage/i.test(description ?? '');
 
 /** Has the regeneration been stopped by damage taken since the creature's last turn? */
 export function regenSuppressed(r: { suppressedBy?: string[] }, tookSinceTurn: string[] | undefined): boolean {

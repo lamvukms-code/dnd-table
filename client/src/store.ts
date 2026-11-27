@@ -240,8 +240,8 @@ interface StoreState {
   removeParticipant: (participantId: string) => void;
   /** Snap a token back to where it was at the start of its turn. */
   resetTokenMove: (id: string) => void;
-  /** Grant the token an extra Speed of movement this turn (Dash). */
-  tokenDash: (id: string) => void;
+  /** Dash: extra Speed of movement this turn, paid with the Action (or Bonus Action). false = refused / cancelled. */
+  tokenDash: (id: string, cost?: 'action' | 'bonus') => boolean;
   /** Dodge / Disengage / Help of a token (economy spent by the caller). */
   turnAction: (tokenId: string, kind: 'dodge' | 'disengage' | 'help', targetTokenId?: string) => void;
   /** Hide: a Stealth check (dddice when on) vs DC 15, resolved by the server. */
@@ -435,7 +435,20 @@ export const useStore = create<StoreState>((set, get) => {
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
     removeParticipant: (participantId) => rawSend({ t: 'removeParticipant', participantId }),
     resetTokenMove: (id) => rawSend({ t: 'resetTokenMove', id }),
-    tokenDash: (id) => rawSend({ t: 'tokenDash', id }),
+    tokenDash: (id, cost = 'action') => {
+      const room = get().room;
+      const tok = room?.tokens.find((t) => t.id === id);
+      if (room?.initiative.running && tok?.turnUsed?.[cost]) {
+        const what = cost === 'action' ? 'Action' : 'Bonus Action';
+        if (!get().isDm()) {
+          set({ error: `${what} lượt này đã dùng — không Dash được nữa.` });
+          return false;
+        }
+        if (!window.confirm(`${tok.label} đã dùng ${what} lượt này. Vẫn cho Dash?`)) return false;
+      }
+      rawSend({ t: 'tokenDash', id, cost });
+      return true;
+    },
     turnAction: (tokenId, kind, targetTokenId) => rawSend({ t: 'turnAction', tokenId, kind, targetTokenId }),
     hideAction: async (tokenId, stealthBonus, mode = 'normal') => {
       const notation = d20Check(stealthBonus, mode);

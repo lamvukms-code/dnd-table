@@ -148,6 +148,7 @@ export function ReactPromptBanner() {
             <span title={a?.description}>
               ⚡ <b>{p.tokenName}</b> có thể dùng reaction <b>{p.actionName}</b> ({p.why}
               {p.triggerName && !p.why.includes(p.triggerName) ? ` · ${p.triggerName}` : ''})
+              {p.holdsAttack && <b> · ⏸ đòn đánh đang chờ DM trả lời</b>}
             </span>
             <button className="primary" title={a?.description} onClick={() => send({ t: 'reactResolve', id: p.id, use: true })}>
               {a?.save && p.triggerName ? `🎲 Dùng lên ${p.triggerName}` : 'Dùng'}

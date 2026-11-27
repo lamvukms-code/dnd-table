@@ -31,18 +31,19 @@ export function TurnActions({ sheet, token, targetId, rollMode }: Props) {
   const dc = grappleDc(sheet);
 
   const pay = (kind: 'action' | 'bonus') => spendEconomy(token.id, kind);
-  const run: Record<'dash' | 'disengage' | 'hide', () => void> = {
-    dash: () => tokenDash(token.id),
-    disengage: () => turnAction(token.id, 'disengage'),
-    hide: () => void hideAction(token.id, stealth, rollMode),
+  // Dash pays its own Action / Bonus Action (checked by the server); the others spend it first.
+  const run: Record<'dash' | 'disengage' | 'hide', (cost: 'action' | 'bonus') => void> = {
+    dash: (cost) => tokenDash(token.id, cost),
+    disengage: (cost) => pay(cost) && turnAction(token.id, 'disengage'),
+    hide: (cost) => pay(cost) && void hideAction(token.id, stealth, rollMode),
   };
   const btn = (key: 'dash' | 'disengage' | 'hide', label: string, title: string) => (
     <span key={key} className="ta-split">
-      <button className="ta-btn" title={`${title} (Action)`} onClick={() => pay('action') && run[key]()}>
+      <button className="ta-btn" title={`${title} (Action)`} onClick={() => run[key]('action')}>
         {label}
       </button>
       {cunning && (
-        <button className="ta-btn ta-ba" title={`${title} — Cunning Action (Bonus Action)`} onClick={() => pay('bonus') && run[key]()}>
+        <button className="ta-btn ta-ba" title={`${title} — Cunning Action (Bonus Action)`} onClick={() => run[key]('bonus')}>
           BA
         </button>
       )}

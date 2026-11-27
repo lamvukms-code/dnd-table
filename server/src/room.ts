@@ -149,6 +149,7 @@ import {
   skillBonus,
   type MonsterMechanic,
   mechanicsOfKind,
+  imposesAttackDisadvantage,
   regenSuppressed,
   actionAvailable,
   failCondition,
@@ -1334,7 +1335,8 @@ export class Room {
   /** A new turn begins: last turn's offers lapse, once-per-turn lists reset, "Reactive" monsters get their reaction back. */
   private resetTurnScoped(): void {
     this.state.oaPrompts = [];
-    this.state.reactPrompts = [];
+    // an attack still waiting for its reaction answer keeps its prompts (else it would never resolve)
+    this.state.reactPrompts = (this.state.reactPrompts ?? []).filter((p) => p.holdsAttack && this.heldAttacks.has(p.holdsAttack));
     for (const h of this.state.hazards ?? []) h.hitThisTurn = [];
     for (const t of this.state.tokens) {
       if (t.engulfDmgTurn) t.engulfDmgTurn = 0;
@@ -1555,26 +1557,38 @@ export class Room {
       init.lastLairRound = init.round; // no lair owner on the map — don't re-check all round
     }
 
-    // Legendary action: any other legendary creature still has uses left this round.
+    // Legendary action, "at the end of another creature's turn": any legendary creature except the one
+    // whose turn just ended. The creature whose turn starts next may use it too — it is still the end
+    // of the previous turn — spending what it had left BEFORE its own turn refilled it.
     if (ctx?.includeLegendary === false) return;
-    const legendaryToken = this.state.tokens.find(
-      (t) =>
-        t.id !== ctx?.endingId &&
-        t.id !== active?.tokenId &&
-        (t.legendaryActionsRemaining ?? 0) > 0 &&
-        this.legendaryOptions(t).length > 0 &&
-        alive(t),
-    );
-    if (legendaryToken) {
+    const endingId = this.legendaryEndingId;
+    for (const t of this.state.tokens) {
+      if (t.id === endingId || !alive(t) || !legendaryInfo(t.statblock)) continue;
+      const pool = this.legendaryPool(t);
+      const options = this.legendaryOptions(t, pool);
+      if (pool.left <= 0 || !options.length) continue;
       this.state.dmPrompt = {
         kind: 'legendaryAction',
-        tokenId: legendaryToken.id,
-        tokenName: legendaryToken.label,
-        remaining: legendaryToken.legendaryActionsRemaining ?? 0,
-        options: withOptionIds(this.legendaryOptions(legendaryToken), 'leg'),
+        tokenId: t.id,
+        tokenName: t.label,
+        remaining: pool.left,
+        options: withOptionIds(options, 'leg'),
         round: init.round,
       };
+      return;
     }
+  }
+
+  /** The token whose turn just ended — it can't take a legendary action at the end of its own turn. */
+  private legendaryEndingId: string | undefined;
+  /** The starting creature's legendary uses as they were at the end of the previous turn (before refill). */
+  private preTurnLegendary: { tokenId: string; left: number; locks: string[] } | null = null;
+
+  /** Legendary uses left right now (and options locked until its next turn). Unset count = full: the
+   *  token joined the map after combat started. */
+  private legendaryPool(t: Token): { left: number; locks: string[] } {
+    if (this.preTurnLegendary?.tokenId === t.id) return this.preTurnLegendary;
+    return { left: t.legendaryActionsRemaining ?? legendaryInfo(t.statblock)?.perRound ?? 0, locks: t.legendaryLocks ?? [] };
   }
 
   /**
@@ -1779,6 +1793,82 @@ export class Room {
     const list = (this.state.reactPrompts ??= []);
     if (list.some((p) => p.tokenId === r.id && p.actionId === m.actionId && p.triggerTokenId === trigger?.id)) return;
     list.push({ id: nanoid(8), tokenId: r.id, tokenName: r.label, actionId: m.actionId, actionName: m.from ?? 'Reaction', triggerTokenId: trigger?.id, triggerName: trigger?.label, why });
+  }
+
+  /** Attacks waiting for the DM's answer to a reaction that comes before the roll (by hold id). */
+  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string }>();
+  /** Set just before a held attack is run again: skip the hold, apply the disadvantage if any. */
+  private resumingAttack: { dis?: string } | null = null;
+  /** Attacks sent while another one waits for its reaction answer — run in order once it resolves. */
+  private attackQueue: { actor: Participant; action: Extract<ClientAction, { t: 'attack' }> }[] = [];
+
+  /**
+   * Before an attack is rolled: monsters that may react to it being made — the target itself ("when it
+   * is attacked / targeted by an attack") or a nearby ally ("when a creature … within 30 feet is
+   * targeted by an attack"). If any can, the attack is parked and one prompt per reactor goes to the
+   * DM; the attack runs once every prompt of the hold is answered. Returns true when held.
+   */
+  private holdAttackForReactions(actor: Participant, action: Extract<ClientAction, { t: 'attack' }>, target: Token): boolean {
+    const attacker = action.attackerTokenId
+      ? this.state.tokens.find((t) => t.id === action.attackerTokenId)
+      : this.state.tokens.find((t) => this.state.sheets.some((x) => x.id === action.attackerSheetId && x.tokenId === t.id));
+    const found: { r: Token; m: Extract<MonsterMechanic, { kind: 'reaction' }> }[] = [];
+    const monster = (t: Token) => !!t.statblock && !this.linkedSheet(t);
+    if (monster(target)) {
+      for (const m of mechanicsOfKind(this.mechOf(target), 'reaction')) {
+        if (m.trigger !== 'selfAttacked' || !m.actionId || !this.canReact(target, m)) continue;
+        if (m.radiusFt && attacker && edgeFeet(attacker, tokenSpan(attacker), target, tokenSpan(target)) > m.radiusFt) continue;
+        found.push({ r: target, m });
+      }
+    }
+    const summoner = this.state.initiative.entries.find((e) => e.tokenId === target.id)?.summonedBy;
+    for (const r of this.state.tokens) {
+      if (r.id === target.id || r.id === attacker?.id || !monster(r)) continue;
+      for (const m of mechanicsOfKind(this.mechOf(r), 'reaction')) {
+        if (m.trigger !== 'allyAttacked' || !m.actionId || !this.canReact(r, m)) continue;
+        if (m.summonedOnly ? summoner !== r.id : this.isPlayerSide(r) !== this.isPlayerSide(target)) continue;
+        if (edgeFeet(r, tokenSpan(r), target, tokenSpan(target)) > (m.radiusFt ?? 5)) continue;
+        found.push({ r, m });
+      }
+    }
+    if (!found.length) return false;
+    const holdId = nanoid(8);
+    this.heldAttacks.set(holdId, { actor, action });
+    const list = (this.state.reactPrompts ??= []);
+    const by = attacker?.label ?? 'Đòn đánh';
+    for (const { r, m } of found) {
+      list.push({
+        id: nanoid(8),
+        tokenId: r.id,
+        tokenName: r.label,
+        actionId: m.actionId!,
+        actionName: m.from ?? 'Reaction',
+        triggerTokenId: attacker?.id,
+        triggerName: attacker?.label,
+        why: r.id === target.id ? `${by} đang tấn công nó` : `${by} đang tấn công ${target.label}`,
+        holdsAttack: holdId,
+      });
+    }
+    this.systemLog(`⏸ ${action.label || 'Đòn đánh'}: chờ DM quyết định reaction trước khi tung`);
+    return true;
+  }
+
+  /** Every prompt of a hold answered: run the parked attack (with disadvantage if a reaction imposed it). */
+  private releaseHeldAttack(holdId: string): void {
+    if ((this.state.reactPrompts ?? []).some((p) => p.holdsAttack === holdId)) return;
+    const held = this.heldAttacks.get(holdId);
+    if (!held) return;
+    this.heldAttacks.delete(holdId);
+    this.resumingAttack = { dis: held.dis };
+    const err = this.apply(held.actor, held.action);
+    this.resumingAttack = null;
+    if (err) this.systemLog(`⚠ Đòn chờ reaction không chạy được: ${err}`);
+    // then the attacks that lined up behind it, until one of them has to wait in turn
+    while (this.attackQueue.length && !this.heldAttacks.size) {
+      const next = this.attackQueue.shift()!;
+      const e = this.apply(next.actor, next.action);
+      if (e) this.systemLog(`⚠ Đòn xếp hàng không chạy được: ${e}`);
+    }
   }
 
   /** Reactions of every monster whose trigger is `kind`, filtered by distance to `near`. */
@@ -2103,9 +2193,8 @@ export class Room {
   }
 
   /** Legendary options it can take now: not locked since its last turn, affordable with the uses left. */
-  private legendaryOptions(t: Token) {
-    const left = t.legendaryActionsRemaining ?? 0;
-    return (legendaryInfo(t.statblock)?.options ?? []).filter((o) => !t.legendaryLocks?.includes(o.name) && legendaryActionCost(o) <= left);
+  private legendaryOptions(t: Token, pool = this.legendaryPool(t)) {
+    return (legendaryInfo(t.statblock)?.options ?? []).filter((o) => !pool.locks.includes(o.name) && legendaryActionCost(o) <= pool.left);
   }
 
   /** Initiative roll for a token: advantage from its traits. */
@@ -2387,13 +2476,19 @@ export class Room {
         this.state.reactPrompts = list.filter((x) => x.id !== p.id);
         const r = this.state.tokens.find((t) => t.id === p.tokenId);
         const a = r?.statblock?.actions.find((x) => x.id === p.actionId);
-        if (!action.use || !r || !a) {
+        const held = p.holdsAttack ? this.heldAttacks.get(p.holdsAttack) : undefined;
+        if (!action.use || !r || !a || (held && !this.canReact(r, { actionId: a.id }))) {
+          if (p.holdsAttack) this.releaseHeldAttack(p.holdsAttack);
           this.touch();
           break;
         }
         this.spendReaction(r, { actionId: a.id });
         const victim = p.triggerTokenId ? this.state.tokens.find((t) => t.id === p.triggerTokenId) : undefined;
-        if (a.save && victim) {
+        const disOnly = !!held && imposesAttackDisadvantage(a.description);
+        if (disOnly) {
+          held!.dis = `${r.label} · ${a.name}`;
+          this.systemLog(`⚡ ${r.label} dùng ${a.name}: đòn của ${victim?.label ?? 'kẻ tấn công'} bị BẤT LỢI (hiệu ứng thêm nếu có: DM xử lý)`);
+        } else if (a.save && victim) {
           const s = this.rollTokenSave(victim, a.save.ability, a.save.dc, false, failCondition(a.description));
           const parts = statblockDamageParts(a, r.statblock).map((x) => ({ dice: x.dice, type: x.type }));
           const half = /half (?:as much )?damage/i.test(a.description ?? '');
@@ -2410,6 +2505,7 @@ export class Room {
         } else {
           this.systemLog(`⚡ ${r.label} dùng reaction: ${a.name}${victim ? ` (vì ${victim.label})` : ''} — DM xử lý phần còn lại`);
         }
+        if (p.holdsAttack) this.releaseHeldAttack(p.holdsAttack);
         this.touch();
         break;
       }
@@ -2659,6 +2755,20 @@ export class Room {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
         if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
+        // A reaction that answers "is targeted by an attack" (impose disadvantage…) must come BEFORE the
+        // roll: the attack waits here until the DM has answered, then runs again via `reactResolve`.
+        const resume = this.resumingAttack;
+        this.resumingAttack = null;
+        if (!resume && this.heldAttacks.size) {
+          // the rest of a Multiattack lines up behind the attack that is waiting: order is kept
+          this.attackQueue.push({ actor, action });
+          this.touch();
+          break;
+        }
+        if (!resume && this.holdAttackForReactions(actor, action, target)) {
+          this.touch();
+          break;
+        }
         {
           // Help is spent by the first ally attack on its target; attacking gives a hidden attacker away.
           const attacker = action.attackerTokenId
@@ -2673,16 +2783,17 @@ export class Room {
           }
         }
         // God's Bane: a divine weapon attacking a creature within 5 ft of the blade has disadvantage.
-        const divineDis = this.divineDisadvantage(target, action.damageParts);
+        const godsBaneDis = this.divineDisadvantage(target, action.damageParts);
+        // the reason for disadvantage: God's Bane near a divine weapon, or a reaction the DM just used
+        const disWhy = godsBaneDis ? "vũ khí thần thánh gần God's Bane" : resume?.dis;
+        const divineDis = !!disWhy;
         let divineNote = '';
         if (divineDis && !action.external) {
           const d = withDisadvantage(action.attackNotation);
           if (d) {
             action.attackNotation = d.notation;
-            divineNote = d.cancelled
-              ? ' · ⚖ vũ khí thần thánh gần God\'s Bane: bất lợi triệt tiêu lợi thế'
-              : ' · ⬇ vũ khí thần thánh gần God\'s Bane: BẤT LỢI';
-          } else divineNote = ' · ⚠ vũ khí thần thánh gần God\'s Bane: bất lợi (công thức không có d20 — tự xử lý)';
+            divineNote = d.cancelled ? ` · ⚖ ${disWhy}: bất lợi triệt tiêu lợi thế` : ` · ⬇ ${disWhy}: BẤT LỢI`;
+          } else divineNote = ` · ⚠ ${disWhy}: bất lợi (công thức không có d20 — tự xử lý)`;
         }
         // Cover benefit is added to the target's AC automatically (homebrew).
         const baseAc = this.tokenAc(target);
@@ -2709,8 +2820,8 @@ export class Room {
           if (plain && attackRoll.d20) {
             const second = rollNotation('1d20').total;
             if (second < attackRoll.d20.natural) attackRoll = forceD20Value(attackRoll, second);
-            divineNote = ` · ⬇ vũ khí thần thánh gần God's Bane: BẤT LỢI (d20 thứ hai ${second})`;
-          } else divineNote = " · ⚠ vũ khí thần thánh gần God's Bane: BẤT LỢI — xúc xắc ngoài có lợi thế, DM tự xử lý";
+            divineNote = ` · ⬇ ${disWhy}: BẤT LỢI (d20 thứ hai ${second})`;
+          } else divineNote = ` · ⚠ ${disWhy}: BẤT LỢI — xúc xắc ngoài có lợi thế, DM tự xử lý`;
         }
         // God's Bane: −N for a rejected wielder, Cleaving Causality on this d20.
         const baneAtkTok = action.attackerTokenId ? this.state.tokens.find((tk) => tk.id === action.attackerTokenId) : undefined;
@@ -2773,7 +2884,6 @@ export class Room {
             this.pendingBaneLogs.push(`💨 ${target.label}: ${dodge.from} — DEX cứu ${s.total}${s.modeNote} vs ${attackRoll.total} ${s.pass ? '✔ né được, đòn trượt' : '✘ không né kịp'} (lùi 5–10 ft: dời tay)`);
           }
         }
-        if (target.statblock && !this.linkedSheet(target)) this.offerReactionsOf('selfAttacked', target, attackerTok, 'bị nhắm bằng đòn đánh', { self: target });
         if (action.attackKind === 'spell' && attackerTok) this.offerReactionsOf('spellCast', attackerTok, attackerTok, `${attackerTok.label} ra phép`);
         const mechCrit = res.hit && atkMechs.length ? mechanicAutoCrit(atkMechs, action.actionName, { targetGrappledBySelf: this.grappledBy(target, attackerTok) }) : null;
         if (mechCrit && !res.crit) {
@@ -3294,7 +3404,13 @@ export class Room {
       case 'tokenDash': {
         const token = this.state.tokens.find((tk) => tk.id === action.id);
         if (!token) return 'Token không tồn tại';
-        if (!isDm && token.controllerId !== actor.id) return 'Bạn không điều khiển token này';
+        if (!isDm && token.controllerId !== actor.id && this.linkedSheet(token)?.ownerId !== actor.id) return 'Bạn không điều khiển token này';
+        const cost = action.cost ?? 'action';
+        if (this.state.initiative.running) {
+          // Dash is an Action (a Bonus Action with Cunning Action & co.): one per turn, not free.
+          if (token.turnUsed?.[cost] && !isDm) return `${cost === 'action' ? 'Action' : 'Bonus Action'} lượt này đã dùng — không Dash được nữa`;
+          token.turnUsed = { ...(token.turnUsed ?? {}), [cost]: true };
+        }
         token.extraMove = (token.extraMove ?? 0) + this.tokenSpeed(token);
         this.pushRoll({
           id: nanoid(8),
@@ -3830,6 +3946,8 @@ export class Room {
         this.state.initiative.turnIndex = 0;
         this.state.initiative.lastLairRound = undefined;
         this.state.dmPrompt = null;
+        this.legendaryEndingId = undefined;
+        this.preTurnLegendary = null;
         for (const tk of this.state.tokens) {
           tk.turnUsed = undefined;
           tk.legendaryActionsRemaining = legendaryInfo(tk.statblock)?.perRound ?? undefined;
@@ -3862,8 +3980,12 @@ export class Room {
         const ending = endingId && this.state.tokens.find((t) => t.id === endingId);
         if (ending) this.processTurnEffects(ending, 'end-of-turn');
         const starting = startingId && this.state.tokens.find((t) => t.id === startingId);
+        this.preTurnLegendary = null;
+        this.legendaryEndingId = endingId;
         if (starting) {
           const li = legendaryInfo(starting.statblock);
+          // what it may still spend at the end of the turn that just ended, before its own refill
+          if (li && startingId !== endingId) this.preTurnLegendary = { tokenId: starting.id, ...this.legendaryPool(starting) };
           if (li) starting.legendaryActionsRemaining = li.perRound;
           starting.legendaryLocks = undefined;
           this.processTurnEffects(starting, 'start-of-turn');
@@ -3887,6 +4009,8 @@ export class Room {
         if (!isDm) return 'Chỉ DM được reset initiative';
         this.state.initiative = { entries: [], round: 1, turnIndex: 0, running: false };
         this.state.dmPrompt = null;
+        this.legendaryEndingId = undefined;
+        this.preTurnLegendary = null;
         for (const tk of this.state.tokens) {
           tk.turnUsed = undefined;
           tk.legendaryActionsRemaining = undefined;
@@ -3924,11 +4048,19 @@ export class Room {
         const cost = prompt.kind === 'legendaryAction' && chosen ? legendaryActionCost(chosen) : 1;
         if (prompt.kind === 'legendaryAction') {
           const token = this.state.tokens.find((t) => t.id === prompt.tokenId);
-          const left = token?.legendaryActionsRemaining ?? 0;
-          if (cost > left) return `Không đủ legendary action: cần ${cost}, còn ${left}`;
-          if (chosen && token?.legendaryLocks?.includes(chosen.name)) return `${chosen.name}: đã dùng, chờ tới lượt sau của ${token.label}`;
-          if (token) token.legendaryActionsRemaining = left - cost;
-          if (token && chosen && legendaryOncePerTurn(chosen)) token.legendaryLocks = [...(token.legendaryLocks ?? []), chosen.name];
+          if (token) {
+            const pool = this.legendaryPool(token);
+            if (cost > pool.left) return `Không đủ legendary action: cần ${cost}, còn ${pool.left}`;
+            if (chosen && pool.locks.includes(chosen.name)) return `${chosen.name}: đã dùng, chờ tới lượt sau của ${token.label}`;
+            const locks = chosen && legendaryOncePerTurn(chosen) ? [...pool.locks, chosen.name] : pool.locks;
+            if (this.preTurnLegendary?.tokenId === token.id) {
+              // spent at the end of the previous turn: its own turn's fresh uses stay untouched
+              this.preTurnLegendary = { tokenId: token.id, left: pool.left - cost, locks };
+            } else {
+              token.legendaryActionsRemaining = pool.left - cost;
+              token.legendaryLocks = locks.length ? locks : undefined;
+            }
+          }
         }
         this.pushRoll({
           id: nanoid(8),

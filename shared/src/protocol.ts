@@ -217,7 +217,9 @@ export type ClientAction =
   | { t: 'removeToken'; id: string }
   // movement tracker: snap a token back to its turn-start position / grant Dash
   | { t: 'resetTokenMove'; id: string }
-  | { t: 'tokenDash'; id: string }
+  /** Dash: +Speed of movement this turn. In combat it spends the token's Action (or Bonus Action, `cost`);
+   *  a player can't Dash with that already spent (the DM can, to override). */
+  | { t: 'tokenDash'; id: string; cost?: 'action' | 'bonus' }
   /** Standard actions of a turn (the client spends the economy): Dodge, Disengage, Hide (a Stealth roll vs
    *  DC 15; `external` = dddice result of `notation`) and Help (an ally's next attack on `targetTokenId`
    *  has advantage). */
