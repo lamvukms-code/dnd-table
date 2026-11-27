@@ -4409,6 +4409,15 @@ export class Room {
         // relayed by the socket layer (index.ts) without touching the state
         return null;
 
+      case 'sbPlay':
+      case 'sbStop':
+      case 'sbUpdate':
+      case 'sbRemove':
+      case 'sbMove':
+      case 'sbSettings':
+        // the soundboard is handled by the socket layer (index.ts → soundboard.ts)
+        return null;
+
       default: {
         const _exhaustive: never = action;
         return `Unknown action: ${JSON.stringify(_exhaustive)}`;

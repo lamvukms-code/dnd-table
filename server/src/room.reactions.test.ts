@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,6 +45,10 @@ const attack = (label: string, from: string, to: string): ClientAction => ({
   attackRange: 'melee',
   actionName: 'Claw',
 });
+
+// fixed dice: a natural 1 (auto-miss even at +100) would make these flaky
+beforeEach(() => vi.spyOn(Math, 'random').mockReturnValue(0.5));
+afterEach(() => vi.restoreAllMocks());
 
 describe('a reaction to being attacked comes before the roll', () => {
   it('holds the attack (and the rest of the Multiattack) until the DM answers', () => {

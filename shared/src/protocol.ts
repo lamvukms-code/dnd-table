@@ -220,6 +220,15 @@ export type ClientAction =
   /** Dash: +Speed of movement this turn. In combat it spends the token's Action (or Bonus Action, `cost`);
    *  a player can't Dash with that already spent (the DM can, to override). */
   | { t: 'tokenDash'; id: string; cost?: 'action' | 'bonus' }
+  /** Soundboard: play a clip for the whole table (a looping clip toggles on / off). */
+  | { t: 'sbPlay'; id: string }
+  /** Soundboard: stop one looping clip, or (no id) everything playing. */
+  | { t: 'sbStop'; id?: string }
+  /** Soundboard (DM): edit a clip / remove it / let players press the clips. Upload: POST /soundboard/upload. */
+  | { t: 'sbUpdate'; id: string; patch: { name?: string; emoji?: string; volume?: number; loop?: boolean } }
+  | { t: 'sbRemove'; id: string }
+  | { t: 'sbMove'; id: string; to: number }
+  | { t: 'sbSettings'; playersCanPlay: boolean }
   /** Standard actions of a turn (the client spends the economy): Dodge, Disengage, Hide (a Stealth roll vs
    *  DC 15; `external` = dddice result of `notation`) and Help (an ally's next attack on `targetTokenId`
    *  has advantage). */
@@ -298,6 +307,10 @@ export type ServerEvent =
   | { t: 'dragPreview'; id: string; x: number; y: number }
   /** Who is talking right now (participant ids), sent whenever it changes. */
   | { t: 'speaking'; ids: string[] }
+  /** Soundboard: play this one-shot clip now (`by` = who pressed it). Looping clips ride in `state.soundboard.looping`. */
+  | { t: 'sfx'; id: string; by: string }
+  /** Soundboard: stop every one-shot clip still playing. */
+  | { t: 'sfxStop' }
   /** Only what changed since this client's last push (see statePatch.ts). */
   | ({ t: 'patch' } & StatePatch)
   | { t: 'error'; message: string };

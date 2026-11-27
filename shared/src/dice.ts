@@ -39,7 +39,7 @@ export interface RollResult {
 
 export type Rng = () => number; // returns [0, 1)
 
-const defaultRng: Rng = Math.random;
+const defaultRng: Rng = () => Math.random(); // looked up per roll, so tests can stub Math.random
 
 function rollDie(sides: number, rng: Rng): number {
   return Math.floor(rng() * sides) + 1;

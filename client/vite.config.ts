@@ -26,6 +26,7 @@ export default defineConfig({
       '/maps': { target },
       '/recordings': { target },
       '/reference': { target },
+      '/soundboard': { target }, // also /soundboard-files
     },
   },
 });

@@ -80,6 +80,21 @@ function onRollFinished(roll: { uuid?: string }) {
     if (settled.size > 50) settled.delete(settled.values().next().value as string);
   }
 }
+// When each roll's dice first appeared here (RollCreated: dddice's websocket echo of the roll, after
+// its theme is loaded) — only to log where the time goes between "click" and "dice on screen".
+const appeared = new Map<string, number>();
+function onRollCreated(roll: { uuid?: string }) {
+  if (!roll?.uuid) return;
+  appeared.set(roll.uuid, performance.now());
+  if (appeared.size > 50) appeared.delete(appeared.keys().next().value as string);
+}
+
+/** Which theme this player rolls with: their pick if it is still in their dice box, then the box's first. */
+function themeOrder(box: string[]): string[] {
+  const picked = getLocalThemeOverride();
+  return [...new Set([picked && (!box.length || box.includes(picked)) ? picked : null, box[0], picked].filter((t): t is string => !!t))];
+}
+
 /** Wait for a roll's dice to land (or `maxMs`, in case the animation never reports back). */
 function untilSettled(uuid: string, maxMs = 6000): Promise<void> {
   if (settled.delete(uuid)) return Promise.resolve();
@@ -123,10 +138,26 @@ export async function connect(
     engine.start();
     engine.connect(roomSlug);
     engine.on(ThreeDDiceRollEvent.RollFinished, onRollFinished as never);
+    engine.on(ThreeDDiceRollEvent.RollCreated, onRollCreated as never);
     const boxThemes = listThemes(apiKey)
       .then((t) => t.map((x) => x.id))
       .catch(() => [] as string[]);
     current = { engine, canvas, apiKey, roomSlug, boxThemes };
+    // Load this player's dice theme (definition, meshes, textures, sounds) now, not on the first roll:
+    // otherwise the first throw of the session waits for all of it before any die shows up.
+    void boxThemes.then(async (box) => {
+      const id = themeOrder(box)[0];
+      if (!id || current?.engine !== engine) return;
+      try {
+        const { ThreeDDiceAPI } = await loadModule();
+        const theme = ((await new ThreeDDiceAPI(apiKey, 'dnd-table').theme.get(id)) as { data: Parameters<ThreeDDiceType['loadTheme']>[0] }).data;
+        if (current?.engine !== engine) return;
+        engine.loadTheme(theme);
+        engine.loadThemeResources(theme.id);
+      } catch {
+        /* the first roll loads it instead */
+      }
+    });
     return true;
   } catch (err) {
     console.error('dddice connect failed', err);
@@ -186,13 +217,12 @@ export async function rollEquation(notation: string): Promise<ExternalRoll> {
   const { parseRollEquation } = await loadModule();
   // Always this player's own dice: their pick if it is still in their dice box, else the first
   // theme of the box. (Rolling with a theme the account doesn't own is a 400 from dddice.)
-  const box = await current.boxThemes;
-  const picked = getLocalThemeOverride();
-  const themes = [...new Set([picked && (!box.length || box.includes(picked)) ? picked : null, box[0], picked].filter((t): t is string => !!t))];
+  const themes = themeOrder(await current.boxThemes);
   if (!themes.length) {
     throw new Error('hộp xúc xắc dddice của bạn đang trống: vào dddice.com thêm một bộ xúc xắc (có bộ miễn phí) rồi thử lại');
   }
   let res: unknown;
+  const t0 = performance.now();
   for (let i = 0; ; i++) {
     const { dice, operator } = parseRollEquation(normalizeNotation(notation), themes[i]);
     try {
@@ -216,7 +246,15 @@ export async function rollEquation(notation: string): Promise<ExternalRoll> {
   // log's per-die breakdown ("8, 4" for 2d6) is meant to show.
   const kept = roll.values.filter((v) => !v.is_dropped && v.type !== 'mod' && typeof v.value === 'number');
   const d20 = roll.values.find((v) => v.type === 'd20' && !v.is_dropped);
+  const tApi = performance.now();
   if (roll.uuid) await untilSettled(roll.uuid);
+  const shown = roll.uuid ? appeared.get(roll.uuid) : undefined;
+  const sec = (ms: number) => `${(ms / 1000).toFixed(2)}s`;
+  console.info(
+    `[dddice] ${notation}: máy chủ dddice trả lời sau ${sec(tApi - t0)}` +
+      (shown ? `, xúc xắc hiện ra sau ${sec(shown - t0)}` : ', không thấy xúc xắc hiện ra') +
+      `, dừng lăn sau ${sec(performance.now() - t0)}`,
+  );
   return {
     total: toNumber(roll.total_value),
     faces: kept.map((v) => v.value),

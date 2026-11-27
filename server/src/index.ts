@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import express from 'express';
 import compression from 'compression';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
@@ -10,6 +10,7 @@ import { Room } from './room.js';
 import { clientIp, rateLimit, RateLimiter, securityHeaders, TokenBucket } from './security.js';
 import { accessConfigFromEnv, AuthIds, isDmAuth, makeAuthResolver, type TableAuth } from './accessAuth.js';
 import { Recordings, type TracksManifest } from './recordings.js';
+import * as soundboard from './soundboard.js';
 import { mixSession } from './mix.js';
 import {
   PROTOCOL_VERSION,
@@ -62,6 +63,8 @@ const LOREBOOK_FILE =
   join(__dirname, '..', '..', 'client', 'src', 'data', 'lorebook.local.json');
 // Imported map pack (scripts/import-maps.mjs): images + index.json, read-only, never bundled.
 const MAPS_DIR = process.env.MAPS_DIR ?? join(__dirname, '..', 'data', 'maps');
+/** Soundboard clips the DM uploaded (git-ignored, like uploads/). */
+const SOUNDS_DIR = process.env.SOUNDS_DIR ?? join(__dirname, '..', 'data', 'soundboard');
 // Local, git-ignored third-party classes (same file the client bundles). The server needs them for
 // Hit Dice / level-up / Extra Attack, so register them before the Room starts handling messages.
 const CLASSES_FILE =
@@ -165,6 +168,62 @@ app.post('/upload', rateLimit(40, 10 * 60_000, 'Tải ảnh quá nhiều, đợi
   }
   res.json({ url: `/uploads/${name}` });
 });
+
+// --- Soundboard (see soundboard.ts): the DM uploads clips; playing them goes over the socket ---
+mkdirSync(SOUNDS_DIR, { recursive: true });
+app.use(
+  '/soundboard-files',
+  express.static(SOUNDS_DIR, {
+    maxAge: '1y',
+    immutable: true,
+    setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  }),
+);
+
+function soundsDirBytes(): number {
+  let total = 0;
+  for (const f of readdirSync(SOUNDS_DIR)) {
+    try {
+      total += statSync(join(SOUNDS_DIR, f)).size;
+    } catch {
+      /* gone meanwhile */
+    }
+  }
+  return total;
+}
+
+/** DM: upload one clip (raw bytes; ?name=<file name>&type=<mime>). It joins the board for everyone. */
+app.post(
+  '/soundboard/upload',
+  rateLimit(120, 10 * 60_000, 'Tải âm thanh quá nhiều, đợi vài phút'),
+  express.raw({ type: 'application/octet-stream', limit: soundboard.MAX_BYTES }),
+  (req, res) => {
+    if (!dmFromRequest(req)) return res.status(403).json({ error: 'Chỉ DM tải được âm thanh lên soundboard' });
+    const fileName = String(req.query.name ?? '').slice(0, 200);
+    const ext = soundboard.audioExt(String(req.query.type ?? ''), fileName);
+    if (!ext) return res.status(415).json({ error: 'Chỉ nhận file âm thanh: MP3, OGG, WAV, M4A, AAC, FLAC, WebM' });
+    const buf = req.body as Buffer;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'File trống' });
+    if (!soundboard.looksLikeAudio(buf, ext)) return res.status(415).json({ error: 'File này không giống file âm thanh' });
+    if (soundboard.soundboardOf(room.state).sounds.length >= soundboard.MAX_SOUNDS) {
+      return res.status(409).json({ error: `Soundboard đã đủ ${soundboard.MAX_SOUNDS} âm thanh, xóa bớt rồi thêm` });
+    }
+    if (soundsDirBytes() + buf.length > soundboard.MAX_TOTAL_BYTES) return res.status(507).json({ error: 'Hết chỗ chứa âm thanh (3GB), xóa bớt rồi thêm' });
+    const file = `${nanoid(12)}.${ext}`;
+    try {
+      writeFileSync(join(SOUNDS_DIR, file), buf);
+    } catch (err) {
+      console.error('soundboard write failed:', err);
+      return res.status(500).json({ error: 'Không lưu được file' });
+    }
+    const sound = { id: nanoid(8), name: soundboard.nameFromFile(fileName), url: `/soundboard-files/${file}` };
+    soundboard.addSound(room.state, sound);
+    room.state.rev++;
+    broadcastState();
+    scheduleSave();
+    res.json({ id: sound.id });
+  },
+);
 
 // --- Session recording (the DM's recording window uploads its video here; see recordings.ts) ---
 const RECORDINGS_DIR = process.env.RECORDINGS_DIR ?? join(__dirname, '..', 'data', 'recordings');
@@ -861,6 +920,29 @@ wss.on('connection', (ws, req) => {
         // a far-away / slow socket still flushing earlier data skips this frame instead of queueing it
         if (other.bufferedAmount > 64 * 1024) continue;
         other.send(msg);
+      }
+      return;
+    }
+
+    if (soundboard.isSoundboardAction(action)) {
+      const r = soundboard.applySoundboard(room.state, actor, action);
+      if (r.error) return send(ws, { t: 'error', message: r.error });
+      if (r.removedUrl?.startsWith('/soundboard-files/')) {
+        try {
+          unlinkSync(join(SOUNDS_DIR, r.removedUrl.slice('/soundboard-files/'.length).replace(/[\\/]/g, '')));
+        } catch {
+          /* already gone */
+        }
+      }
+      const ev: ServerEvent | null = r.play ? { t: 'sfx', id: r.play.id, by: actor.id } : r.stopAll ? { t: 'sfxStop' } : null;
+      if (ev) {
+        const msg = JSON.stringify(ev);
+        for (const other of sockets.keys()) if (other.readyState === WebSocket.OPEN) other.send(msg);
+      }
+      if (r.changed) {
+        room.state.rev++;
+        broadcastState();
+        scheduleSave();
       }
       return;
     }

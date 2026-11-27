@@ -1193,6 +1193,27 @@ export interface LevelUpRound {
   claimed: string[];
 }
 
+/** One clip of the soundboard. The audio file lives on the server (`url`), never in the repo. */
+export interface SoundboardSound {
+  id: string;
+  name: string;
+  /** Served path of the uploaded file, e.g. "/soundboard-files/ab12.mp3". */
+  url: string;
+  emoji?: string;
+  /** This clip's own level, 0..1 (default 1), on top of each listener's soundboard volume. */
+  volume?: number;
+  /** Background track: plays on repeat for everyone (late joiners too) until stopped. */
+  loop?: boolean;
+}
+
+export interface SoundboardState {
+  sounds: SoundboardSound[];
+  /** Players may press the clips too (the DM always can). Only the DM adds / edits / removes. */
+  playersCanPlay?: boolean;
+  /** Ids of the looping clips playing right now. */
+  looping?: string[];
+}
+
 export interface RoomState {
   version: number; // schema version
   /** In-world clock (seconds since the campaign clock started). Combat rounds add 6 s; the DM
@@ -1231,6 +1252,8 @@ export interface RoomState {
   homebrew: HomebrewEntry[];
   /** Homebrew God's Bane party artifact (see `godsBane.ts`). Unset / `enabled: false` = every hook is a no-op. */
   godsBane?: GodsBaneState;
+  /** The table's soundboard (DM-uploaded clips anyone may be allowed to play for everyone). */
+  soundboard?: SoundboardState;
   /** The setting moon currently in the sky (DM-set). Keys/names come from the local moon data. */
   moon?: SkyMoon | null;
   /** Light across the scene (DM-set). Unset = not tracked; with a moon in the sky it counts as moonlight. */

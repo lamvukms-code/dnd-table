@@ -77,6 +77,7 @@ import {
   setLocalKey as persistDddiceKey,
 } from './dddice.js';
 import { shareStructure } from './share.js';
+import { playOneShot, stopOneShots } from './soundboard.js';
 
 const PID_KEY = 'dnd-table.participantId';
 const SECRET_KEY = 'dnd-table.secret';
@@ -311,6 +312,12 @@ export const useStore = create<StoreState>((set, get) => {
         );
       } else if (event.t === 'speaking') {
         set({ speaking: event.ids });
+      } else if (event.t === 'sfx') {
+        // the recording window doesn't play it: the DM's own tab does, and the recorder hears that
+        const clip = STREAM_MODE ? undefined : get().room?.soundboard?.sounds.find((x) => x.id === event.id);
+        if (clip) playOneShot(clip);
+      } else if (event.t === 'sfxStop') {
+        if (!STREAM_MODE) stopOneShots();
       } else if (event.t === 'welcome') {
         // the server runs a newer build than this tab: load it (once, so a mismatch can't loop)
         if (event.protocol > PROTOCOL_VERSION) {

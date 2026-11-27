@@ -10,6 +10,8 @@ server/data/bestiary.json
 server/data/auth-ids.json
 server/data/*.log
 server/data/uploads/
+server/data/soundboard/
+server/data/room.json.bak-*
 client/src/data/subclasses.local.json
 client/src/data/lorebook.local.json
 client/src/data/homebrew.local.json

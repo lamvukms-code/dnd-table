@@ -20,6 +20,8 @@ import { RecBadge, openStreamWindow } from './components/RecBadge.js';
 import { applyLongRest, applyShortRest, fmtDuration } from '@dnd-table/shared';
 import { openCharacterBuilder, useCharacterBuilder } from './characterBuilder.js';
 import { GodsBanePanel } from './components/GodsBanePanel.js';
+import { SoundboardButton } from './components/SoundboardPanel.js';
+import { syncLoops } from './soundboard.js';
 
 // Panels opened now and then are loaded on first use, so the first page load stays small.
 const SettingsModal = lazy(() => import('./components/Settings.js').then((m) => ({ default: m.SettingsModal })));
@@ -107,6 +109,11 @@ export function App() {
   useEffect(() => {
     if (bestiaryFocus) setBestiaryOpen(true);
   }, [bestiaryFocus]);
+
+  // Soundboard background tracks: play what the room says is looping (late joiners too).
+  const board = useStore((s) => s.room?.soundboard);
+  useEffect(() => syncLoops(board), [board]);
+  useEffect(() => () => syncLoops(undefined), []);
 
   useEffect(() => {
     if (!error) return;
@@ -239,6 +246,7 @@ export function App() {
                 ]}
               />
               <DiceWindow />
+              <SoundboardButton />
               <button
                 className={dockOpen ? 'on' : ''}
                 title={dockOpen ? 'Ẩn character sheet' : 'Hiện character sheet'}
