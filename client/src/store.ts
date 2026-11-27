@@ -86,27 +86,6 @@ const IDENTITY_KEY = 'dnd-table.identity';
  *  with the DM's stored identity but receives the PLAYER view and sends nothing. */
 export const STREAM_MODE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('stream');
 
-/**
- * A `?dmkey=…` link (the server's DM_KEY): sent with the next join to take the DM seat, then dropped
- * from the address bar right away so it isn't left in the URL / history / a screen recording.
- */
-let pendingDmKey: string | undefined;
-if (typeof location !== 'undefined') {
-  const q = new URLSearchParams(location.search);
-  const k = q.get('dmkey');
-  if (k) {
-    pendingDmKey = k;
-    q.delete('dmkey');
-    const rest = q.toString();
-    history.replaceState(null, '', `${location.pathname}${rest ? `?${rest}` : ''}${location.hash}`);
-  }
-}
-function takeDmKey(): string | undefined {
-  const k = pendingDmKey;
-  pendingDmKey = undefined;
-  return k;
-}
-
 /** The id + secret this browser holds (the recording window proves it is the DM's with them). */
 export function storedCredentials(): { participantId: string | null; secret: string | null } {
   try {
@@ -309,7 +288,6 @@ export const useStore = create<StoreState>((set, get) => {
         rawSend({
           t: 'join',
           patch: true,
-          dmKey: takeDmKey(),
           name: identity.name,
           participantId: stored,
           secret: localStorage.getItem(SECRET_KEY) ?? undefined,
@@ -442,7 +420,6 @@ export const useStore = create<StoreState>((set, get) => {
         rawSend({
           t: 'join',
           patch: true,
-          dmKey: takeDmKey(),
           name: identity.name,
           participantId: localStorage.getItem(PID_KEY) ?? undefined,
           secret: localStorage.getItem(SECRET_KEY) ?? undefined,

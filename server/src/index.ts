@@ -1,13 +1,14 @@
 import { createServer } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import express from 'express';
 import compression from 'compression';
-import { WebSocketServer, WebSocket } from 'ws';
+import { WebSocketServer, WebSocket, type RawData } from 'ws';
 import { nanoid } from 'nanoid';
 import { Room } from './room.js';
+import { clientIp, rateLimit, RateLimiter, securityHeaders, TokenBucket } from './security.js';
+import { accessConfigFromEnv, AuthIds, isDmAuth, makeAuthResolver, type TableAuth } from './accessAuth.js';
 import { Recordings, type TracksManifest } from './recordings.js';
 import { mixSession } from './mix.js';
 import {
@@ -110,6 +111,10 @@ const PARTICIPANT_TTL = 1000 * 60 * 60 * 6; // prune stale participants after 6h
 
 const room = new Room(DATA_FILE, BESTIARY_FILE);
 const app = express();
+app.disable('x-powered-by');
+app.use(securityHeaders);
+// every IP: a generous ceiling (a page load pulls ~40 files, maps and portraits more)
+app.use(rateLimit(1500, 60_000));
 // gzip/deflate for JS/CSS/JSON (images are already compressed and skipped by the default filter).
 app.use(compression());
 app.use(express.json({ limit: '12mb' }));
@@ -141,8 +146,9 @@ if (existsSync(MAPS_DIR)) {
   );
 }
 
-/** Player/DM image upload (token portraits, map backgrounds). Kept on the server. */
-app.post('/upload', (req, res) => {
+/** Player/DM image upload (token portraits, map backgrounds). Kept on the server. Only for people at the table. */
+app.post('/upload', rateLimit(40, 10 * 60_000, 'Tải ảnh quá nhiều, đợi vài phút'), (req, res) => {
+  if (!participantFromRequest(req)) return res.status(403).json({ error: 'Vào bàn trước rồi mới tải ảnh lên được' });
   const dataUrl = (req.body as { dataUrl?: string })?.dataUrl;
   const m = /^data:([\w/+.-]+);base64,(.+)$/s.exec(dataUrl ?? '');
   if (!m) return res.status(400).json({ error: 'Expected { dataUrl: "data:<mime>;base64,…" }' });
@@ -606,21 +612,64 @@ function scheduleSave(): void {
   }, 1000);
 }
 
-/** Constant-time check of a join's DM key against DM_KEY (unset = feature off). */
-function dmKeyMatches(key: string): boolean {
-  const want = process.env.DM_KEY;
-  if (!want || want.length < 12) return false;
-  const a = Buffer.from(key);
-  const b = Buffer.from(want);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
 function getParticipant(id: string): Participant | undefined {
   return room.state.participants.find((p) => p.id === id);
 }
 
-wss.on('connection', (ws) => {
+// Abuse limits for the socket: connections per IP, new identities per IP, and a message budget per connection.
+const wsConnections = new Map<string, number>();
+const newIdentities = new RateLimiter(12, 10 * 60_000);
+const MAX_WS_PER_IP = 30;
+
+// Who may sit in the DM seat: a Cloudflare Access login with one of DM_EMAILS, or someone at the server itself.
+const accessCfg = accessConfigFromEnv();
+const resolveAuth = makeAuthResolver(accessCfg);
+const authIds = new AuthIds(process.env.AUTH_IDS_FILE ?? join(dirname(DATA_FILE), 'auth-ids.json'));
+if (accessCfg.teamDomain && accessCfg.aud) console.log(`Cloudflare Access login: on (${accessCfg.dmEmails.length} DM email)`);
+else console.log('Cloudflare Access login: off (DM = whoever opens http://localhost on this machine)');
+
+wss.on('connection', (ws, req) => {
+  const ip = clientIp(req);
+  const open = (wsConnections.get(ip) ?? 0) + 1;
+  if (open > MAX_WS_PER_IP) {
+    ws.close(1008, 'Quá nhiều kết nối');
+    return;
+  }
+  wsConnections.set(ip, open);
+  ws.on('close', () => {
+    const n = (wsConnections.get(ip) ?? 1) - 1;
+    if (n <= 0) wsConnections.delete(ip);
+    else wsConnections.set(ip, n);
+  });
+  // The login behind this connection is checked once (async); messages wait for it.
+  let auth: TableAuth | undefined;
+  const early: RawData[] = [];
+  resolveAuth(req)
+    .catch(() => ({ local: false }) as TableAuth)
+    .then((a) => {
+      auth = a;
+      for (const m of early.splice(0)) handle(m);
+    });
+  // bursts are fine (a dragged token streams ~20 previews/s), a flood is dropped
+  const budget = new TokenBucket(300, 60);
+  let warned = false;
   ws.on('message', (raw) => {
+    if (!auth) {
+      if (early.length < 20) early.push(raw);
+      return;
+    }
+    handle(raw);
+  });
+  const handle = (raw: RawData) => {
+    const me = auth!;
+    if (!budget.take()) {
+      if (!warned) {
+        warned = true;
+        console.warn(`ws flood from ${ip}: dropping messages`);
+        send(ws, { t: 'error', message: 'Gửi quá nhanh, một số thao tác bị bỏ qua' });
+      }
+      return;
+    }
     let envelope: ClientEnvelope;
     try {
       envelope = JSON.parse(raw.toString());
@@ -657,21 +706,41 @@ wss.on('connection', (ws) => {
 
     if (action.t === 'join') {
       const claimedId = action.participantId;
-      let participant = claimedId ? getParticipant(claimedId) : undefined;
-      // Once a participant holds a secret, only the client that holds it may resume that identity.
-      if (participant?.secret && participant.secret !== action.secret) participant = undefined;
+      if (typeof action.name === 'string') action.name = action.name.slice(0, 40);
+      const dmSeat = isDmAuth(me, accessCfg);
+      // the browser's own identity, if it proves it with the secret
+      let claimed = claimedId ? getParticipant(claimedId) : undefined;
+      if (claimed?.secret && claimed.secret !== action.secret) claimed = undefined;
+      let participant: Participant | undefined;
+      let reuseId: string | undefined;
+      if (me.email) {
+        // A Cloudflare-verified login: that email is the identity, on any device.
+        const mapped = authIds.get(me.email);
+        if (mapped) {
+          participant = getParticipant(mapped);
+          reuseId = mapped; // pruned meanwhile: come back under the same id (keeps its sheets)
+        } else if (claimed && !authIds.bound(claimed.id)) {
+          participant = claimed; // first login with this email: keep the identity this browser already had
+        }
+      } else {
+        participant = claimed;
+      }
+      if (!participant && !newIdentities.hit(ip)) {
+        send(ws, { t: 'error', message: 'Quá nhiều lượt vào bàn mới từ một địa chỉ, thử lại sau ít phút' });
+        return;
+      }
       if (!participant) {
-        // The server decides the role: the first person into a room without a DM
-        // becomes the DM; everyone else joins as a player. The client's `role`
-        // hint is ignored so a player cannot self-promote.
-        const hasDm = room.state.participants.some((p) => p.role === 'dm');
+        // The server decides the role (the client's hint is ignored, so nobody can self-promote): the
+        // DM seat is for DM_EMAILS logins and the server machine; everyone else joins as a player.
         participant = {
           // Re-use the id the browser already had (e.g. after the participant list was pruned or the
           // server restarted) so it keeps owning its character sheets; only a free, well-formed id.
-          id: claimedId && /^[\w-]{6,32}$/.test(claimedId) && !getParticipant(claimedId) ? claimedId : nanoid(10),
+          id:
+            reuseId ??
+            (claimedId && /^[\w-]{6,32}$/.test(claimedId) && !getParticipant(claimedId) && !(me.email && authIds.bound(claimedId)) ? claimedId : nanoid(10)),
           secret: nanoid(16),
           name: action.name || 'Người chơi',
-          role: hasDm ? 'player' : 'dm',
+          role: dmSeat ? 'dm' : 'player',
           color: pickColor(room.state.participants.length),
           connected: true,
           lastSeen: Date.now(),
@@ -684,15 +753,10 @@ wss.on('connection', (ws) => {
         participant.lastSeen = Date.now();
         participant.secret ??= nanoid(16);
       }
-      // A room must always have at least one DM (covers older rooms / all DMs pruned).
-      if (!room.state.participants.some((p) => p.role === 'dm')) {
+      if (me.email) authIds.set(me.email, participant.id);
+      if (dmSeat && participant.role !== 'dm') {
         participant.role = 'dm';
-      }
-      // The DM's own key (DM_KEY in server/.env, opened as a `?dmkey=` link) takes the DM seat
-      // back from any browser, e.g. after clearing site data or switching between localhost / https.
-      if (action.dmKey && dmKeyMatches(action.dmKey) && participant.role !== 'dm') {
-        participant.role = 'dm';
-        console.log(`DM key used: ${participant.name} is DM`);
+        console.log(`DM seat: ${participant.name} (${me.local ? 'on the server machine' : 'DM email login'})`);
       }
       room.state.rev++;
       sockets.set(ws, participant.id);
@@ -729,7 +793,7 @@ wss.on('connection', (ws) => {
     actor.lastSeen = Date.now();
 
     if (action.t === 'setName') {
-      actor.name = action.name || actor.name;
+      actor.name = (action.name || actor.name).slice(0, 40);
       room.state.rev++;
       broadcastState();
       scheduleSave();
@@ -775,7 +839,7 @@ wss.on('connection', (ws) => {
     }
     broadcastState();
     scheduleSave();
-  });
+  };
 
   ws.on('close', () => {
     const id = sockets.get(ws);

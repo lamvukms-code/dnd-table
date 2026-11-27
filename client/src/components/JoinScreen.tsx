@@ -26,8 +26,8 @@ export function JoinScreen({ connecting }: { connecting: boolean }) {
           />
         </label>
         <p className="hint">
-          Người vào phòng đầu tiên là DM (quản trò). Những người sau vào với vai trò
-          người chơi — DM có thể đổi vai trò trong Cài đặt.
+          Gõ tên rồi vào bàn với vai trò người chơi. DM (quản trò) được nhận ra qua email đăng nhập hoặc khi mở trên máy chủ;
+          DM có thể đổi vai trò người khác trong Cài đặt.
         </p>
         <button className="primary" disabled={!name.trim() || connecting} onClick={go}>
           {connecting ? 'Đang kết nối…' : 'Vào bàn'}

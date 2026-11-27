@@ -41,8 +41,6 @@ export type ClientAction =
       stream?: boolean;
       /** The client applies `patch` events (only what changed since its last push); older clients get full `state`. */
       patch?: boolean;
-      /** The server's DM key (DM_KEY in server/.env, from a `?dmkey=` link): joins / rejoins as DM. */
-      dmKey?: string;
     }
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }

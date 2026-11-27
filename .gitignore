@@ -7,6 +7,8 @@ build/
 !.env.example
 server/data/room.json
 server/data/bestiary.json
+server/data/auth-ids.json
+server/data/*.log
 server/data/uploads/
 client/src/data/subclasses.local.json
 client/src/data/lorebook.local.json
