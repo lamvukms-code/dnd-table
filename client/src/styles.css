@@ -1968,3 +1968,5 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 .sheet-dock .spk-opt { background: transparent; border-color: transparent; color: var(--text); }
 .sheet-dock .spk-opt.cur { background: var(--panel); border-color: var(--line); }
 .sheet-dock .spk-chips button.on { background: var(--accent); color: #fff6e6; border-color: var(--accent); }
+
+.participant-list button.link.danger { color: #e57373; }

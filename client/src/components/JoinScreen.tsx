@@ -1,10 +1,39 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 
 export function JoinScreen({ connecting }: { connecting: boolean }) {
   const join = useStore((s) => s.join);
   const existing = useStore((s) => s.identity);
   const [name, setName] = useState(existing?.name ?? '');
+  const [checking, setChecking] = useState(true);
+
+  // Logged in (Cloudflare Access email, or on the server machine) and already seated before?
+  // Then go straight back to that seat — no new name, no duplicate player.
+  useEffect(() => {
+    let live = true;
+    fetch('/api/whoami')
+      .then((r) => (r.ok ? r.json() : { known: false }))
+      .then((w: { known?: boolean; name?: string }) => {
+        if (!live) return;
+        if (w.known && w.name) join({ name: w.name });
+        else setChecking(false);
+      })
+      .catch(() => live && setChecking(false));
+    return () => {
+      live = false;
+    };
+  }, [join]);
+
+  if (checking) {
+    return (
+      <div className="join">
+        <div className="join-card">
+          <h1>D&D Table</h1>
+          <p>Đang vào bàn…</p>
+        </div>
+      </div>
+    );
+  }
 
   function go() {
     if (name.trim()) join({ name: name.trim() });

@@ -1,4 +1,4 @@
-import { createServer } from 'node:http';
+import { createServer, type IncomingMessage } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -331,6 +331,12 @@ app.get('/reference', (req, res) => {
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true, rev: room.state.rev }));
+// Already seated via a login (Cloudflare Access email / the server machine)? Then no name prompt.
+app.get('/api/whoami', (req, res) => {
+  knownSeat(req)
+    .then((seat) => res.json(seat ? { known: true, ...seat } : { known: false }))
+    .catch(() => res.json({ known: false }));
+});
 
 const clientDist = process.env.CLIENT_DIST ?? join(__dirname, '..', '..', 'client', 'dist');
 if (existsSync(clientDist)) {
@@ -616,6 +622,31 @@ function getParticipant(id: string): Participant | undefined {
   return room.state.participants.find((p) => p.id === id);
 }
 
+/** The DM seat a DM login should land in: a DM not tied to some other email login. */
+function existingDmSeat(): Participant | undefined {
+  const dms = room.state.participants.filter((p) => p.role === 'dm');
+  return dms.find((p) => !authIds.bound(p.id)) ?? dms[0];
+}
+
+/** Who this request already is at the table (so a logged-in player skips the name prompt). */
+async function knownSeat(req: IncomingMessage): Promise<{ name: string; dm: boolean } | null> {
+  const me = await resolveAuth(req).catch(() => ({ local: false }) as TableAuth);
+  const dm = isDmAuth(me, accessCfg);
+  if (me.email) {
+    const id = authIds.get(me.email);
+    if (id) {
+      const p = getParticipant(id);
+      const name = p?.name ?? authIds.nameOf(id);
+      if (name) return { name, dm: dm || p?.role === 'dm' };
+    }
+  }
+  if (dm) {
+    const seat = existingDmSeat();
+    if (seat) return { name: seat.name, dm: true };
+  }
+  return null;
+}
+
 // Abuse limits for the socket: connections per IP, new identities per IP, and a message budget per connection.
 const wsConnections = new Map<string, number>();
 const newIdentities = new RateLimiter(12, 10 * 60_000);
@@ -725,6 +756,8 @@ wss.on('connection', (ws, req) => {
       } else {
         participant = claimed;
       }
+      // The DM on a new device / browser: take the existing DM seat instead of adding another DM.
+      if (!participant && !reuseId && dmSeat) participant = existingDmSeat();
       if (!participant && !newIdentities.hit(ip)) {
         send(ws, { t: 'error', message: 'Quá nhiều lượt vào bàn mới từ một địa chỉ, thử lại sau ít phút' });
         return;
@@ -753,7 +786,7 @@ wss.on('connection', (ws, req) => {
         participant.lastSeen = Date.now();
         participant.secret ??= nanoid(16);
       }
-      if (me.email) authIds.set(me.email, participant.id);
+      if (me.email) authIds.set(me.email, participant.id, participant.name);
       if (dmSeat && participant.role !== 'dm') {
         participant.role = 'dm';
         console.log(`DM seat: ${participant.name} (${me.local ? 'on the server machine' : 'DM email login'})`);

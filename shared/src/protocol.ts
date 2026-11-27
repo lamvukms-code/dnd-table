@@ -44,6 +44,8 @@ export type ClientAction =
     }
   | { t: 'setName'; name: string }
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
+  /** DM: drop an offline participant from the room list (their sheets stay; they can come back). */
+  | { t: 'removeParticipant'; participantId: string }
   | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
   /** DM: madness saving throw (WIS + INT mod) for these tokens; a failure stuns and rolls the tier's table. */
   | { t: 'madnessSave'; targetTokenIds: string[]; dc: number; tier: MadnessTier; label?: string }

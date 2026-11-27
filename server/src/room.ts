@@ -2189,6 +2189,17 @@ export class Room {
         break;
       }
 
+      case 'removeParticipant': {
+        if (!isDm) return 'Chỉ DM được xóa người khỏi phòng';
+        const target = this.state.participants.find((p) => p.id === action.participantId);
+        if (!target) return 'Không tìm thấy người này trong phòng';
+        if (target.id === actor.id) return 'Không tự xóa mình được';
+        if (target.connected) return 'Người này đang online, chỉ xóa được người đã thoát';
+        this.state.participants = this.state.participants.filter((p) => p.id !== target.id);
+        this.touch();
+        break;
+      }
+
       case 'damage': {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Không tìm thấy token mục tiêu';

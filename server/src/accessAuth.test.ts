@@ -79,5 +79,7 @@ describe('AuthIds', () => {
     expect(a.bound('p1')).toBe(true);
     expect(readFileSync(file, 'utf8')).not.toMatch(/example/i);
     expect(new AuthIds(file).get('SOMEONE@example.com')).toBe('p1');
+    a.set('someone@example.com', 'p1', 'Aria');
+    expect(new AuthIds(file).nameOf('p1')).toBe('Aria');
   });
 });

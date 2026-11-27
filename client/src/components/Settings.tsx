@@ -11,6 +11,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const participants = useStore((s) => s.room!.participants);
   const meId = useStore((s) => s.participantId);
   const setRole = useStore((s) => s.setRole);
+  const removeParticipant = useStore((s) => s.removeParticipant);
   const dddiceKey = useStore((s) => s.dddiceKey);
   const setDddiceKey = useStore((s) => s.setDddiceKey);
   const connected = useStore((s) => s.dddiceConnected);
@@ -76,8 +77,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         <section className="settings-section">
           <h3>Người trong phòng</h3>
           <p className="hint">
-            Người vào đầu tiên là DM. DM có thể phân quyền lại. Người chơi chỉ xem và
-            chỉnh character sheet của mình.
+            DM được nhận ra qua email đăng nhập hoặc khi mở trên máy chủ, và có thể phân quyền lại. Người
+            chơi chỉ xem và chỉnh character sheet của mình. Người đã thoát có thể xóa khỏi danh sách (sheet
+            của họ vẫn giữ; đăng nhập lại là vào đúng chỗ cũ).
           </p>
           <ul className="participant-list">
             {participants.map((p) => (
@@ -96,6 +98,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     onClick={() => setRole(p.id, p.role === 'dm' ? 'player' : 'dm')}
                   >
                     {p.role === 'dm' ? '→ người chơi' : '→ DM'}
+                  </button>
+                )}
+                {isDm && p.id !== meId && !p.connected && (
+                  <button
+                    className="link danger"
+                    title="Xóa khỏi danh sách (người đã thoát)"
+                    onClick={() => {
+                      if (confirm(`Xóa "${p.name}" khỏi danh sách người trong phòng?`)) removeParticipant(p.id);
+                    }}
+                  >
+                    Xóa
                   </button>
                 )}
               </li>

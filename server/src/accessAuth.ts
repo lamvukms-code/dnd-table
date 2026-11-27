@@ -151,8 +151,9 @@ export function isDmAuth(auth: TableAuth, cfg: AccessConfig): boolean {
 export class AuthIds {
   private salt: string;
   private ids: Record<string, string>;
+  private names: Record<string, string>;
   constructor(private file: string) {
-    let data: { salt?: string; ids?: Record<string, string> } = {};
+    let data: { salt?: string; ids?: Record<string, string>; names?: Record<string, string> } = {};
     if (existsSync(file)) {
       try {
         data = JSON.parse(readFileSync(file, 'utf8'));
@@ -162,6 +163,7 @@ export class AuthIds {
     }
     this.salt = data.salt ?? randomBytes(32).toString('hex');
     this.ids = data.ids ?? {};
+    this.names = data.names ?? {};
     if (!data.salt) this.save();
   }
   private key(email: string): string {
@@ -174,15 +176,21 @@ export class AuthIds {
   bound(participantId: string): boolean {
     return Object.values(this.ids).includes(participantId);
   }
-  set(email: string, participantId: string): void {
+  set(email: string, participantId: string, name?: string): void {
     const k = this.key(email);
-    if (this.ids[k] === participantId) return;
+    const sameName = !name || this.names[participantId] === name;
+    if (this.ids[k] === participantId && sameName) return;
     this.ids[k] = participantId;
+    if (name) this.names[participantId] = name;
     this.save();
+  }
+  /** The display name last used by this participant (survives the participant list being pruned). */
+  nameOf(participantId: string): string | undefined {
+    return this.names[participantId];
   }
   private save(): void {
     try {
-      writeFileSync(this.file, JSON.stringify({ salt: this.salt, ids: this.ids }, null, 2));
+      writeFileSync(this.file, JSON.stringify({ salt: this.salt, ids: this.ids, names: this.names }, null, 2));
     } catch (err) {
       console.error('auth ids: cannot save', (err as Error).message);
     }
