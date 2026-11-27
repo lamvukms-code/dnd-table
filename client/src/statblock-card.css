@@ -1,0 +1,228 @@
+/*
+ * Statblock-style token inspector (`.inspector.sbx`): one night-black card in the manner of a printed
+ * monster statblock — thin double rule, small-caps heads, hairline dividers — instead of a parchment
+ * panel with a dark stat block pasted inside it. Ornaments are optional local images under
+ * /theme/sbx/ (git-ignored, cut from the setting's own art); without them the card still
+ * works, just plainer.
+ */
+
+.inspector.sbx {
+  --bg: #141312;
+  --panel: #1b1a18;
+  --panel-2: #262421;
+  --line: #57524b;
+  --text: #ece6da;
+  --muted: #aaa194;
+  --accent: #cdb98a;
+  --accent-2: #cdb98a;
+  --sb-rule: rgba(222, 214, 198, 0.38);
+  --sbx-ink: #0d0c0c;
+  color-scheme: dark;
+  color: var(--text);
+  width: 330px;
+  padding: 0 14px 54px;
+  gap: 8px;
+  border: 1px solid #8f897f;
+  border-radius: 3px;
+  outline: 1px solid #3c3934;
+  outline-offset: -6px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  /* dead-forest silhouette along the bottom of the content (scrolls with it), dimmed */
+  background-color: var(--sbx-ink);
+  background-image:
+    linear-gradient(to bottom, var(--sbx-ink) 0%, rgba(13, 12, 12, 0.45) 100%),
+    url('/theme/sbx/trees.webp'),
+    radial-gradient(130% 55% at 50% 0%, #22201e 0%, var(--sbx-ink) 70%);
+  background-size: 100% 70px, 100% 70px, auto;
+  background-position: bottom center, bottom center, 0 0;
+  background-repeat: no-repeat;
+  background-attachment: local;
+}
+
+/* controls on the dark card */
+.inspector.sbx button,
+.inspector.sbx select,
+.inspector.sbx input,
+.inspector.sbx textarea {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid #4e4943;
+  color: #ece6da;
+}
+.inspector.sbx button:hover { border-color: #d9d1c2; color: #fff; background: rgba(255, 255, 255, 0.07); }
+.inspector.sbx button.on { background: #ece6da; color: #141312; border-color: #ece6da; }
+.inspector.sbx button.link { background: none; border: none; color: var(--muted); }
+.inspector.sbx button.link:hover { color: #fff; }
+.inspector.sbx button.link.on { color: #f3d58a; background: none; }
+.inspector.sbx option { background: #1b1a18; color: #ece6da; }
+.inspector.sbx .hint { color: var(--muted); }
+.inspector.sbx .roll-btn { color: #ece6da; border-color: #6d665c; }
+.inspector.sbx .roll-btn.strong { background: #7a1d1b; border-color: #a8352f; color: #fbeedb; }
+.inspector.sbx label { color: #d8d0c2; }
+
+/* header: the horned-mask crest behind the name */
+.sbx-head {
+  position: relative;
+  margin: 0 -14px;
+  padding: 70px 14px 2px;
+}
+.sbx-crest {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 112px;
+  background: url('/theme/sbx/crest.webp') 50% 0 / auto 112px no-repeat;
+  opacity: 0.62;
+  -webkit-mask-image: radial-gradient(ellipse 60% 85% at 50% 15%, #000 40%, transparent 78%);
+  mask-image: radial-gradient(ellipse 60% 85% at 50% 15%, #000 40%, transparent 78%);
+  pointer-events: none;
+}
+.sbx-head-row { position: relative; display: flex; align-items: center; gap: 2px; }
+.inspector.sbx .sbx-name {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  padding: 2px 0;
+  font-family: var(--serif-body);
+  font-size: 23px;
+  line-height: 1.1;
+  color: #f4efe5;
+  text-shadow: 0 1px 6px #000;
+}
+.inspector.sbx .sbx-name:focus { outline: none; border-bottom-color: var(--sb-rule); }
+.sbx-head-row .link { font-size: 15px; padding: 2px 4px; }
+.sbx-tab sup { font-size: 9px; color: #f3d58a; margin-left: 1px; }
+.sbx-meta { position: relative; font-style: italic; font-size: 12.5px; color: var(--muted); margin-top: 1px; }
+.inspector.sbx .sb-art { margin: 2px 0 0; border-color: #3c3934; border-radius: 2px; }
+
+/* AC / HP / speed in the sheet's diamond frames */
+.sbx-core { display: flex; justify-content: center; align-items: flex-end; gap: 3px; margin: 4px 0 0; }
+.sbx-diamond {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 14px;
+}
+.sbx-diamond-frame { position: absolute; left: 0; right: 0; top: 14px; width: 100%; height: calc(100% - 14px); overflow: visible; }
+.sbx-df-outer { fill: #121110; stroke: #e9e3d8; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.sbx-df-inner { fill: none; stroke: #8f897f; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sbx-df-wedge { fill: #e9e3d8; }
+.sbx-df-cut { fill: none; stroke: #121110; stroke-width: 2.2; stroke-linejoin: miter; }
+.sbx-df-line { fill: none; stroke: #e9e3d8; stroke-width: 1.3; }
+.sbx-diamond-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #d9d1c2;
+}
+.sbx-diamond-value {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  font-family: var(--serif-body);
+  font-size: 15px;
+  color: #f6f1e7;
+  white-space: nowrap;
+  text-shadow: 0 0 3px #000, 0 0 6px #000;
+  /* max-width (inline, from StatDiamond) keeps it clear of the ornaments in the side corners */
+}
+.sbx-diamond-main { display: flex; align-items: baseline; justify-content: center; }
+.sbx-diamond-unit { font-size: 9.5px; letter-spacing: 0.08em; color: #b9b2a6; }
+.inspector.sbx .sbx-diamond input {
+  width: 2em;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px dotted transparent;
+  border-radius: 0;
+  text-align: center;
+  font: inherit;
+  color: #f6f1e7;
+  text-shadow: inherit;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.inspector.sbx .sbx-diamond input:hover,
+.inspector.sbx .sbx-diamond input:focus { outline: none; border-bottom-color: #8f897f; }
+.inspector.sbx .sbx-diamond input::-webkit-outer-spin-button,
+.inspector.sbx .sbx-diamond input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.inspector.sbx .sbx-diamond input.sbx-hp { width: 1.75em; }
+.inspector.sbx .sbx-diamond input.sbx-hp.max { color: #cfc8bb; }
+.sbx-slash { color: var(--muted); margin: 0 1px; }
+.sbx-eff { position: absolute; right: -16px; top: -8px; font-size: 10px; color: #f3d58a; }
+
+.sbx-move { display: flex; justify-content: center; align-items: center; gap: 8px; font-size: 12px; margin-top: -4px; }
+.sbx-move.over { color: #ff8b7b; }
+
+/* "Kháng … · Miễn …" lines and the like: printed-statblock style */
+.sbx-lines { font-size: 12.5px; line-height: 1.45; color: #ddd6c9; border-top: 1px solid var(--sb-rule); padding-top: 6px; }
+.sbx-lines b { color: #f6f1e7; font-weight: 600; }
+
+.sbx-chips { display: flex; flex-wrap: wrap; gap: 4px; cursor: pointer; }
+.sbx-chip { font-size: 11px; border: 1px solid #6d665c; border-radius: 10px; padding: 0 7px; color: #e8e0d2; background: rgba(255, 255, 255, 0.04); }
+.sbx-chip.conc { border-color: #8a7bd1; }
+
+/* the status / set-up panels opened from the header */
+.sbx-panel { border: 1px solid #4e4943; background: rgba(255, 255, 255, 0.03); padding: 8px 9px; border-radius: 2px; display: flex; flex-direction: column; gap: 8px; }
+.sbx-panel-title { font-family: var(--serif); text-transform: uppercase; letter-spacing: 0.1em; font-size: 12px; color: #efe9de; }
+.inspector.sbx .def-details { border-color: #4e4943; }
+
+/* the stat block body sits on the card itself: no second frame, a chevron rule above it */
+.inspector.sbx .sb-inspect,
+.inspector.sbx .sbx-body {
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  padding: 22px 0 0;
+  position: relative;
+}
+.inspector.sbx .sb-inspect::before,
+.inspector.sbx .sbx-body::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px auto;
+  height: 10px;
+  opacity: 0.85;
+  background: url('/theme/sbx/arrows.webp') center / auto 10px no-repeat, linear-gradient(var(--sb-rule), var(--sb-rule)) center / 100% 1px no-repeat;
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+}
+
+/* player-character stat block */
+.sbx-body { display: flex; flex-direction: column; gap: 8px; }
+.sbx-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; text-align: center; }
+.sbx-ab { display: flex; flex-direction: column; border: 1px solid #4e4943; padding: 3px 0; }
+.sbx-ab.prof { border-color: #b8ab8f; }
+.sbx-ab-name { font-family: var(--serif); font-size: 10px; letter-spacing: 0.1em; color: #d9d1c2; }
+.sbx-ab-score { font-size: 16px; color: #f6f1e7; line-height: 1.1; }
+.sbx-ab-mod { font-size: 11.5px; color: #e3d6b6; }
+.sbx-ab-save { font-size: 9.5px; color: var(--muted); }
+.sbx-panel .insp-grid > label:not(.chk) { grid-column: span 3; }
+.sbx-panel .insp-grid > label:not(.chk) select { width: 100%; }
+.sbx-panel label.chk { display: flex; flex-direction: row; align-items: center; gap: 6px; }
+
+/* abilities as the printed six-column row: check on top, save under it */
+.inspector.sbx .sb-ability-roll { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; }
+.inspector.sbx .sb-abr { display: flex; flex-direction: column; gap: 2px; }
+.inspector.sbx .sb-abr button { width: 100%; padding: 2px 0; text-align: center; }
+.inspector.sbx .sb-abr button:first-child { font-size: 11.5px; color: #f6f1e7; }
+.inspector.sbx .sb-abr button + button { font-size: 9.5px; color: var(--muted); }
+.inspector.sbx .sb-abr button.prof { color: #f3d58a; border-color: #8f7d55; }
+.inspector.sbx .sb-env label { display: flex; flex-direction: row; align-items: center; gap: 5px; }
+/* the statblock card is a little wider than the old 300px panel: keep the zoom bar beside it */
+.zoom-controls.beside-inspector { right: calc(var(--sheet-right, 0px) + 348px); }

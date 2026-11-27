@@ -9,6 +9,7 @@ const StreamView = lazy(() => import('./components/StreamView.js').then((m) => (
 import './styles.css';
 import './theme.css';
 import './gothic.css';
+import './statblock-card.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

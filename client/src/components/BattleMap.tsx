@@ -68,6 +68,7 @@ import {
   monsterMechanics,
   economyKindOf,
   exhaustionPenalty,
+  classLine,
 } from '@dnd-table/shared';
 import { STREAM_MODE, useStore } from '../store.js';
 import { ImageField } from './ImageField.js';
@@ -82,6 +83,7 @@ import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
 import { ZONE_LAYOUTS } from '../campaignData.js';
 import { ExhaustionStepper } from './Exhaustion.js';
+import { DefenseLine, EffectChips, PcStatblock, StatDiamond } from './InspectorParts.js';
 import { LIGHT_ICON } from './LightChip.js';
 
 /** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
@@ -1621,21 +1623,26 @@ function TokenInspector({
   const [multiPick, setMultiPick] = useState<{ actionId: string; ids: string[] } | null>(null);
   const [rolledLoot, setRolledLoot] = useState<Currency | null>(null);
   const [lootTargetSheetId, setLootTargetSheetId] = useState('');
-  const [settingsOpen, setSettingsOpen] = useState(() => {
+  // Everything that isn't the stat block (status: cover, exhaustion, effects…; set-up: look, visibility,
+  // bestiary sync…) folds into two panels opened from the header, so the stat block reads as one card.
+  const [panel, setPanel] = useState<'status' | 'setup' | null>(() => {
     try {
-      return localStorage.getItem('dnd.inspSettingsOpen') === '1';
+      const v = localStorage.getItem('dnd.inspPanel');
+      return v === 'status' || v === 'setup' ? v : null;
     } catch {
-      return false;
+      return null;
     }
   });
-  const rememberSettings = (open: boolean) => {
-    setSettingsOpen(open);
-    try {
-      localStorage.setItem('dnd.inspSettingsOpen', open ? '1' : '0');
-    } catch {
-      /* storage blocked */
-    }
-  };
+  const togglePanel = (p: 'status' | 'setup') =>
+    setPanel((cur) => {
+      const next = cur === p ? null : p;
+      try {
+        localStorage.setItem('dnd.inspPanel', next ?? '');
+      } catch {
+        /* storage blocked */
+      }
+      return next;
+    });
   // monster d20 tests carry the token's Exhaustion (PCs get it through their sheet bonuses)
   // light-dependent traits (Sunlight Sensitivity…) and Aversion-style effects put its d20s at disadvantage
   const sceneLight = useStore((s) => s.room?.light);
@@ -1926,10 +1933,37 @@ function TokenInspector({
     send({ t: 'updateToken', id: token.id, patch: p });
   }
 
+  const coverVi: Record<string, string> = { half: 'che ½', threequarters: 'che ¾', total: 'che hoàn toàn' };
+  const statusBits = [
+    token.cover && token.cover !== 'none' ? coverVi[token.cover] : '',
+    token.exhaustion ? `kiệt sức ${token.exhaustion}` : '',
+    (token.effects?.length ?? 0) > 0 ? `${token.effects!.length} hiệu ứng` : '',
+    token.concentration ? 'đang tập trung' : '',
+  ].filter(Boolean);
+  const headMeta =
+    sb?.meta ?? (linkedSheet ? [linkedSheet.species, linkedSheet.className && classLine(linkedSheet)].filter(Boolean).join(' · ') : '');
+  const showPcBlock = !sb && !!linkedSheet && (isDm || linkedSheet.ownerId === meId);
+
   return (
-    <div className="inspector">
-      <div className="insp-head">
-        <input value={token.label} onChange={(e) => patch({ label: e.target.value })} />
+    <div className={`inspector sbx ${canSeeStatblock || showPcBlock ? 'with-sb' : ''}`}>
+      <div className="sbx-head">
+        <span className="sbx-crest" aria-hidden />
+        <div className="sbx-head-row">
+        <input className="sbx-name" value={token.label} onChange={(e) => patch({ label: e.target.value })} />
+        <button
+          className={`link sbx-tab ${panel === 'status' ? 'on' : ''}`}
+          title={`Trạng thái${statusBits.length ? `: ${statusBits.join(', ')}` : ''} (che chắn, kiệt sức, hiệu ứng${isDm ? ", madness, God's Bane" : ''})`}
+          onClick={() => togglePanel('status')}
+        >
+          ⚔{statusBits.length > 0 && <sup>{statusBits.length}</sup>}
+        </button>
+        <button
+          className={`link sbx-tab ${panel === 'setup' ? 'on' : ''}`}
+          title="Thiết lập token: ảnh, cỡ, màu, ẩn / hiện, bestiary, phòng thủ"
+          onClick={() => togglePanel('setup')}
+        >
+          ⚙
+        </button>
         <button
           className="link"
           title="Nhân bản token (bản sao độc lập)"
@@ -1953,6 +1987,8 @@ function TokenInspector({
         <button className="link" onClick={onClose}>
           ✕
         </button>
+        </div>
+        {headMeta && <div className="sbx-meta">{headMeta}</div>}
       </div>
       {isDm && (token.statblock?.artUrl ?? linkedEntry?.artUrl) && (
         <a className="sb-art" href={token.statblock?.artUrl ?? linkedEntry?.artUrl} target="_blank" rel="noreferrer" title="Bấm để xem ảnh lớn">
@@ -1982,128 +2018,164 @@ function TokenInspector({
           </select>
         </label>
       )}
-      {canControl && (
-        <div className={`insp-move ${moveUsed > moveBudget ? 'over' : ''}`}>
-          <span title="Đã di chuyển trong lượt này / tốc độ">
-            🏃 {isActiveTurn ? `${moveUsed}/${moveBudget} ft` : `Tốc độ ${speed} ft`}
-            {tokenIsGrappled(token) ? ' · bị ghì (0)' : ''}
-          </span>
-          {isActiveTurn && (
-            <>
-              <button className="link" onClick={() => tokenDash(token.id)} title="Dùng action Dash">
-                ⚡ Dash
-              </button>
-              <button
-                className="link"
-                onClick={() => resetTokenMove(token.id)}
-                title="Trả token về vị trí đầu lượt"
-              >
-                ↺ Reset
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
       {statsHidden && token.healthTier && (
         <p className="hint insp-tier">
           {HEALTH_TIER_VI[token.healthTier].icon} Tình trạng: <strong>{HEALTH_TIER_VI[token.healthTier].text}</strong>
           <span> — AC / HP của kẻ địch được giấu</span>
         </p>
       )}
-      <div className="insp-grid">
-        {!statsHidden && (
-          <>
-        <label>
-          HP
-          <input
-            type="number"
-            value={token.currentHp ?? ''}
-            onChange={(e) =>
-              patch({ currentHp: e.target.value === '' ? undefined : Number(e.target.value) })
-            }
-          />
-        </label>
-        <label>
-          HP tối đa
-          <input
-            type="number"
-            value={token.maxHp ?? ''}
-            onChange={(e) =>
-              patch({ maxHp: e.target.value === '' ? undefined : Number(e.target.value) })
-            }
-          />
-        </label>
-        <label>
-          AC
-          <input
-            type="number"
-            value={token.armorClass ?? ''}
-            onChange={(e) =>
-              patch({ armorClass: e.target.value === '' ? undefined : Number(e.target.value) })
-            }
-          />
-          {/* Cover's +AC is applied automatically when an attack rolls to hit — it's kept off this
-              field itself (so the printed/base AC doesn't drift), just previewed here. */}
-          {typeof token.armorClass === 'number' && coverAcBonus(token.cover) > 0 && (
-            <span className="hint">
-              hiệu lực {token.armorClass + coverAcBonus(token.cover)} (do che chắn)
-            </span>
-          )}
-        </label>
-        {isDm && (
-          <label className="chk madness-save">
-            <button
-              className="roll-btn sm"
-              title="Bắt save madness (WIS + INT mod); trượt thì choáng và tung bảng madness lên sheet"
-              onClick={() => {
-                const dc = Number(window.prompt('Madness: DC save WIS?', '13'));
-                if (!dc) return;
-                const t = window.prompt('Cấp madness: 1 = ngắn hạn, 2 = dài hạn, 3 = vĩnh viễn', '1');
-                const tier = t === '3' ? 'indefinite' : t === '2' ? 'long' : 'short';
-                send({ t: 'madnessSave', targetTokenIds: [token.id], dc, tier, label: 'Madness' });
-              }}
-            >
-              🌀 Save madness
-            </button>
-          </label>
-        )}
-        {/* PCs keep Exhaustion on their sheet; a monster/NPC token keeps its own */}
-        {!sheets.some((s) => s.tokenId === token.id) && (
-          <label className="chk">
-            <ExhaustionStepper value={token.exhaustion} onChange={(v) => patch({ exhaustion: v })} />
-          </label>
-        )}
-          </>
-        )}
-        <label>
-          Che chắn (cover)
-          <select
-            value={token.cover ?? 'none'}
-            onChange={(e) => patch({ cover: e.target.value as CoverLevel })}
+      {!statsHidden && (
+        <div className="sbx-core">
+          <StatDiamond
+            label="AC"
+            title={typeof token.armorClass === 'number' && coverAcBonus(token.cover) > 0 ? `Hiệu lực ${token.armorClass + coverAcBonus(token.cover)} nhờ che chắn (tự cộng khi bị đánh)` : 'Armor Class'}
           >
-            <option value="none">Không che</option>
-            <option value="half">Nửa che (+2 AC)</option>
-            <option value="threequarters">3/4 che (+5 AC)</option>
-            <option value="total">Che hoàn toàn</option>
-          </select>
-        </label>
-      </div>
-
+            <input
+              type="number"
+              aria-label="AC"
+              value={token.armorClass ?? ''}
+              onChange={(e) => patch({ armorClass: e.target.value === '' ? undefined : Number(e.target.value) })}
+            />
+            {typeof token.armorClass === 'number' && coverAcBonus(token.cover) > 0 && (
+              <small className="sbx-eff">{token.armorClass + coverAcBonus(token.cover)}</small>
+            )}
+          </StatDiamond>
+          <StatDiamond label="HP" width={110} title="Hit Points hiện tại / tối đa">
+            <input
+              type="number"
+              aria-label="HP"
+              className="sbx-hp"
+              value={token.currentHp ?? ''}
+              onChange={(e) => patch({ currentHp: e.target.value === '' ? undefined : Number(e.target.value) })}
+            />
+            <span className="sbx-slash">/</span>
+            <input
+              type="number"
+              aria-label="HP tối đa"
+              className="sbx-hp max"
+              value={token.maxHp ?? ''}
+              onChange={(e) => patch({ maxHp: e.target.value === '' ? undefined : Number(e.target.value) })}
+            />
+          </StatDiamond>
+          <StatDiamond label="Tốc độ" width={110} unit="ft" title={isActiveTurn ? 'Đã đi / được đi trong lượt này' : 'Tốc độ đi bộ'}>
+            {isActiveTurn ? `${moveUsed}/${moveBudget}` : speed}
+          </StatDiamond>
+        </div>
+      )}
+      {canControl && isActiveTurn && (
+        <div className={`sbx-move ${moveUsed > moveBudget ? 'over' : ''}`}>
+          {tokenIsGrappled(token) && <span>bị ghì (tốc độ 0)</span>}
+          <button className="link" onClick={() => tokenDash(token.id)} title="Dùng action Dash">
+            ⚡ Dash
+          </button>
+          <button className="link" onClick={() => resetTokenMove(token.id)} title="Trả token về vị trí đầu lượt">
+            ↺ Reset
+          </button>
+        </div>
+      )}
+      {!statblockHidden && <DefenseLine defenses={token.defenses ?? sb?.defenses} />}
+      {panel !== 'status' && <EffectChips token={token} onOpen={() => togglePanel('status')} />}
       {token.cover === 'total' && (
         <p className="hint cover-total-note">
-          ⚠ Mục tiêu đang <strong>che hoàn toàn</strong> — không thể bị nhắm bởi đòn tầm xa.
+          ⚠ Mục tiêu đang <strong>che hoàn toàn</strong>: không thể bị nhắm bởi đòn tầm xa.
         </p>
       )}
 
+      {panel === 'status' && (
+        <div className="sbx-panel">
+          <div className="sbx-panel-title">⚔ Trạng thái</div>
+          <div className="insp-grid">
+            {isDm && !statsHidden && (
+              <label className="chk madness-save">
+                <button
+                  className="roll-btn sm"
+                  title="Bắt save madness (WIS + INT mod); trượt thì choáng và tung bảng madness lên sheet"
+                  onClick={() => {
+                    const dc = Number(window.prompt('Madness: DC save WIS?', '13'));
+                    if (!dc) return;
+                    const t = window.prompt('Cấp madness: 1 = ngắn hạn, 2 = dài hạn, 3 = vĩnh viễn', '1');
+                    const tier = t === '3' ? 'indefinite' : t === '2' ? 'long' : 'short';
+                    send({ t: 'madnessSave', targetTokenIds: [token.id], dc, tier, label: 'Madness' });
+                  }}
+                >
+                  🌀 Save madness
+                </button>
+              </label>
+            )}
+            {/* PCs keep Exhaustion on their sheet; a monster/NPC token keeps its own */}
+            {!statsHidden && !sheets.some((s) => s.tokenId === token.id) && (
+              <label className="chk">
+                <ExhaustionStepper value={token.exhaustion} onChange={(v) => patch({ exhaustion: v })} />
+              </label>
+            )}
+            <label>
+              Che chắn (cover)
+              <select value={token.cover ?? 'none'} onChange={(e) => patch({ cover: e.target.value as CoverLevel })}>
+                <option value="none">Không che</option>
+                <option value="half">Nửa che (+2 AC)</option>
+                <option value="threequarters">3/4 che (+5 AC)</option>
+                <option value="total">Che hoàn toàn</option>
+              </select>
+            </label>
+          </div>
+          {isDm && <GodsBaneTokenBox token={token} />}
+          <EffectsPanel token={token} />
+        </div>
+      )}
 
-      {isDm && <GodsBaneTokenBox token={token} />}
-
-      <EffectsPanel token={token} />
-
-      {/* Token set-up (look, visibility, bestiary sync, defenses): folded away so the stat block comes first */}
-      <details className="insp-settings" open={settingsOpen} onToggle={(e) => rememberSettings((e.currentTarget as HTMLDetailsElement).open)}>
-        <summary>⚙ Thiết lập token</summary>
+      {/* Token set-up (look, visibility, bestiary sync, defenses): opened from the header's ⚙ */}
+      {panel === 'setup' && (
+      <div className="sbx-panel">
+        <div className="sbx-panel-title">⚙ Thiết lập token</div>
+          {isDm && linkedEntry && (
+          <div className="loot-roller">
+            <button
+              className="roll-btn"
+              title="Roll nhanh tiền rơi ra theo CR — homebrew, không phải bảng DMG, chỉ để đỡ tự set tay. Vật phẩm ma thuật vẫn do DM tự thêm."
+              onClick={() => setRolledLoot(randomLootFor(linkedEntry.cr))}
+            >
+              🎲 random loot (CR {linkedEntry.cr})
+            </button>
+            {rolledLoot && (
+              <div className="loot-result">
+                <span>
+                  {COIN_TYPES.filter((c) => rolledLoot[c] > 0)
+                    .map((c) => `${rolledLoot[c]} ${c}`)
+                    .join(' · ') || '0'}
+                  {' '}(≈ {currencyInGp(rolledLoot).toFixed(2)} gp)
+                </span>
+                <select value={lootTargetSheetId} onChange={(e) => setLootTargetSheetId(e.target.value)}>
+                  <option value="">— cộng vào nhân vật —</option>
+                  {sheets.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="roll-btn strong"
+                  disabled={!lootTargetSheetId}
+                  onClick={() => {
+                    const target = sheets.find((s) => s.id === lootTargetSheetId);
+                    if (!target) return;
+                    send({
+                      t: 'upsertSheet',
+                      sheet: { ...target, currency: addCurrency(target.currency, rolledLoot) },
+                      base: target,
+                    });
+                    setRolledLoot(null);
+                    setLootTargetSheetId('');
+                  }}
+                >
+                  + cộng
+                </button>
+                <button className="link" onClick={() => setRolledLoot(null)}>
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       {!token.statblock && sheets.some((s) => s.tokenId === token.id) && mySheets.length > 0 && (
         <label className="insp-link">
           Gán token này cho nhân vật
@@ -2230,61 +2302,12 @@ function TokenInspector({
           />
         </details>
       )}
-      </details>
+      </div>
+      )}
 
+      {showPcBlock && linkedSheet && <PcStatblock sheet={linkedSheet} />}
       {canSeeStatblock && sb && (
         <div className="sb-inspect">
-          <div className="sb-title">{sb.name}</div>
-          {sb.meta && <div className="sb-meta">{sb.meta}</div>}
-          {isDm && linkedEntry && (
-            <div className="loot-roller">
-              <button
-                className="roll-btn"
-                title="Roll nhanh tiền rơi ra theo CR — homebrew, không phải bảng DMG, chỉ để đỡ tự set tay. Vật phẩm ma thuật vẫn do DM tự thêm."
-                onClick={() => setRolledLoot(randomLootFor(linkedEntry.cr))}
-              >
-                🎲 random loot (CR {linkedEntry.cr})
-              </button>
-              {rolledLoot && (
-                <div className="loot-result">
-                  <span>
-                    {COIN_TYPES.filter((c) => rolledLoot[c] > 0)
-                      .map((c) => `${rolledLoot[c]} ${c}`)
-                      .join(' · ') || '0'}
-                    {' '}(≈ {currencyInGp(rolledLoot).toFixed(2)} gp)
-                  </span>
-                  <select value={lootTargetSheetId} onChange={(e) => setLootTargetSheetId(e.target.value)}>
-                    <option value="">— cộng vào nhân vật —</option>
-                    {sheets.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="roll-btn strong"
-                    disabled={!lootTargetSheetId}
-                    onClick={() => {
-                      const target = sheets.find((s) => s.id === lootTargetSheetId);
-                      if (!target) return;
-                      send({
-                        t: 'upsertSheet',
-                        sheet: { ...target, currency: addCurrency(target.currency, rolledLoot) },
-                        base: target,
-                      });
-                      setRolledLoot(null);
-                      setLootTargetSheetId('');
-                    }}
-                  >
-                    + cộng
-                  </button>
-                  <button className="link" onClick={() => setRolledLoot(null)}>
-                    ✕
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
           <RollModeToggle mode={sbRollMode} onChange={setSbRollMode} />
 
           <div className="sb-ability-roll">
