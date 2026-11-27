@@ -90,6 +90,8 @@ import {
   recastOf,
 } from '@dnd-table/shared';
 import { flashError, useStore } from '../store.js';
+import { TurnActions } from './sheet/TurnActions.js';
+import { StatDiamond } from './InspectorParts.js';
 import { nanoIdish } from '../util.js';
 import { SUBCLASS_DEFS } from '../subclassData.js';
 import { SPECIES_DEFS } from '../speciesData.js';
@@ -992,10 +994,41 @@ function BasicTab({ draft, commit }: EditorCtx) {
             >
               ✨
             </button>
-            <div className="ac-badge">
-              <span className="ac-num">{ac.ac}</span>
-              <span className="ac-label">AC</span>
-              <span className="ac-src">{ac.source}</span>
+            {/* AC / HP / speed in the same diamond frames as the token statblock */}
+            <div className="sbx-core sheet-core">
+              <StatDiamond label="AC" width={72} title={`Armor Class: ${ac.source}`}>
+                {ac.ac}
+              </StatDiamond>
+              <StatDiamond
+                label="HP"
+                width={124}
+                title="Hit Points hiện tại / tối đa · dòng dưới: HP tạm"
+                unit={
+                  <label className="sheet-temp" title="HP tạm">
+                    tạm
+                    <input
+                      type="number"
+                      className="play-keep"
+                      aria-label="HP tạm"
+                      value={draft.tempHp}
+                      onChange={(e) => set('tempHp', Number(e.target.value))}
+                    />
+                  </label>
+                }
+              >
+                <input
+                  type="number"
+                  className="play-keep sbx-hp"
+                  aria-label="HP"
+                  value={draft.currentHp}
+                  onChange={(e) => set('currentHp', Number(e.target.value))}
+                />
+                <span className="sbx-slash">/</span>
+                <span className="sheet-hpmax">{draft.maxHp}</span>
+              </StatDiamond>
+              <StatDiamond label="Tốc độ" width={96} unit="ft" title={speedInfo.notes.length ? speedInfo.notes.join(', ') : 'Tốc độ đi bộ'}>
+                {speedInfo.speed}
+              </StatDiamond>
             </div>
             <label className="edit-only">
               AC ghi đè
@@ -1008,34 +1041,16 @@ function BasicTab({ draft, commit }: EditorCtx) {
                 }
               />
             </label>
-            <label>
-              HP
-              <input
-                type="number"
-                className="play-keep"
-                value={draft.currentHp}
-                onChange={(e) => set('currentHp', Number(e.target.value))}
-              />
-            </label>
-            <label>
-              / tối đa
+            <label className="edit-only">
+              HP tối đa
               <input
                 type="number"
                 value={draft.maxHp}
                 onChange={(e) => set('maxHp', Number(e.target.value))}
               />
             </label>
-            <label>
-              tạm
-              <input
-                type="number"
-                className="play-keep"
-                value={draft.tempHp}
-                onChange={(e) => set('tempHp', Number(e.target.value))}
-              />
-            </label>
-            <label>
-              Tốc độ
+            <label className="edit-only">
+              Tốc độ gốc
               <input
                 type="number"
                 value={draft.speed}
@@ -1172,6 +1187,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
 
         <FeatureRiderBar sheet={draft} commit={commit} />
         <EconomyBar token={linkedToken} sheet={draft} />
+        <TurnActions sheet={draft} token={linkedToken} targetId={targetId} rollMode={rollMode} />
 
         {(['action', 'bonus', 'reaction'] as ActionType[]).map((type) => {
           const list = actions.filter((a) => a.actionType === type);

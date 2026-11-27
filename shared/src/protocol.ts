@@ -218,6 +218,17 @@ export type ClientAction =
   // movement tracker: snap a token back to its turn-start position / grant Dash
   | { t: 'resetTokenMove'; id: string }
   | { t: 'tokenDash'; id: string }
+  /** Standard actions of a turn (the client spends the economy): Dodge, Disengage, Hide (a Stealth roll vs
+   *  DC 15; `external` = dddice result of `notation`) and Help (an ally's next attack on `targetTokenId`
+   *  has advantage). */
+  | {
+      t: 'turnAction';
+      tokenId: string;
+      kind: 'dodge' | 'disengage' | 'hide' | 'help';
+      targetTokenId?: string;
+      notation?: string;
+      external?: ExternalRoll;
+    }
   | { t: 'initSet'; entries: InitiativeEntry[] }
   | { t: 'initRollAll' }
   | { t: 'initNext' }

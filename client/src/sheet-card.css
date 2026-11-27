@@ -1,0 +1,236 @@
+/*
+ * Character sheet in the same night-black statblock style as the token inspector (statblock-card.css):
+ * one dark page with a thin double rule instead of torn off-white paper, hairline section rules ending
+ * in a diamond, small-caps heads, framed ability boxes. Layered after gothic.css (it overrides that
+ * file's paper skin). The optional ornaments come from the git-ignored /theme/sbx/ folder.
+ */
+
+/* ------------------------------------------------------------------ the page */
+.sheet-dock .sd-body {
+  background: radial-gradient(80% 40% at 50% 0%, #1d1c1a, #0b0a0a 70%);
+  padding: 10px;
+}
+.sheet-dock .sd-body > .sheet-editor > div,
+.sheet-dock .sd-body > .empty {
+  --bg: #141312;
+  --panel: #1b1a18;
+  --panel-2: #262421;
+  --line: #57524b;
+  --text: #ece6da;
+  --muted: #aaa194;
+  --accent: #cdb98a;
+  --accent-2: #cdb98a;
+  --sb-rule: rgba(222, 214, 198, 0.34);
+  --sbx-ink: #0d0c0c;
+  color-scheme: dark;
+  position: relative;
+  clip-path: none;
+  color: var(--text);
+  border: 1px solid #8f897f;
+  border-radius: 3px;
+  outline: 1px solid #3c3934;
+  outline-offset: -6px;
+  padding: 18px 16px 70px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
+  background-color: var(--sbx-ink);
+  background-image:
+    linear-gradient(to bottom, var(--sbx-ink) 0%, rgba(13, 12, 12, 0.4) 100%),
+    url('/theme/sbx/trees.webp'),
+    radial-gradient(120% 40% at 50% 0%, #22201e 0%, var(--sbx-ink) 70%);
+  background-size: 100% 80px, 100% 80px, auto;
+  background-position: bottom center, bottom center, 0 0;
+  background-repeat: no-repeat;
+}
+
+/* ------------------------------------------------------------------ sections: hairline + diamond */
+.sheet-dock .bt-header,
+.sheet-dock .bt-col,
+.sheet-dock .bt-actions,
+.sheet-dock .st-head,
+.sheet-dock .currency-row,
+.sheet-dock .spell-head {
+  position: relative;
+  border: none;
+  border-top: 1px solid var(--sb-rule);
+  outline: none;
+  border-radius: 0;
+  padding: 12px 2px 4px;
+  background: transparent;
+}
+.sheet-dock .bt-col::before,
+.sheet-dock .bt-actions::before,
+.sheet-dock .st-head::before,
+.sheet-dock .currency-row::before,
+.sheet-dock .spell-head::before {
+  content: '';
+  position: absolute;
+  left: -3px;
+  top: -4px;
+  width: 7px;
+  height: 7px;
+  background: #d9d1c2;
+  transform: rotate(45deg);
+}
+
+/* header: the horned-mask crest behind the portrait and name */
+.sheet-dock .bt-header {
+  border-top: none;
+  padding-top: 64px;
+  margin: -18px -16px 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.sheet-dock .bt-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 118px;
+  background: url('/theme/sbx/crest.webp') 50% 0 / auto 118px no-repeat;
+  opacity: 0.55;
+  -webkit-mask-image: radial-gradient(ellipse 55% 85% at 50% 12%, #000 38%, transparent 76%);
+  mask-image: radial-gradient(ellipse 55% 85% at 50% 12%, #000 38%, transparent 76%);
+  pointer-events: none;
+}
+.sheet-dock .bt-header > * { position: relative; }
+.sheet-dock .bt-header::after {
+  /* the chevron rule under the header */
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: -14px;
+  height: 12px;
+  background: url('/theme/sbx/arrows.webp') center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.sheet-dock .bt-header + * { margin-top: 10px; }
+.sheet-dock .bt-name {
+  font-size: 23px;
+  font-family: var(--serif-body);
+  color: #f4efe5;
+  text-shadow: 0 1px 6px #000;
+}
+.sheet-dock .bt-avatar { border-color: #8f897f; box-shadow: 0 0 0 3px var(--sbx-ink), 0 0 0 4px #57524b; background: #1b1a18; }
+
+/* small-caps heads */
+.sheet-dock .bta-title,
+.sheet-dock .ag-label,
+.sheet-dock .hd-label,
+.sheet-dock .mp-title,
+.sheet-dock .ab-key,
+.sheet-dock .ac-label,
+.sheet-dock .ta-label {
+  font-family: var(--serif);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #d9d1c2;
+}
+.sheet-dock .bta-title { border-bottom: 1px solid var(--sb-rule); }
+
+/* ability boxes: framed, notched corners, light hairline */
+.sheet-dock .ab-cell {
+  background: linear-gradient(#1d1b19, #121110);
+  border: 1px solid #6d665c;
+  box-shadow: inset 0 0 0 2px var(--sbx-ink), inset 0 0 0 3px #3c3934;
+}
+.sheet-dock .ab-score { color: #f6f1e7; }
+
+/* AC: a ringed seal, silver on black */
+.sheet-dock .ac-badge {
+  border: 1.5px solid #d9d1c2;
+  box-shadow: 0 0 0 3px var(--sbx-ink), 0 0 0 4px #8f897f;
+  background: radial-gradient(circle at 50% 35%, #26231f, #0d0c0c 75%);
+  color: #f6f1e7;
+}
+.sheet-dock .insp-badge { background: #ece6da !important; color: #141312 !important; }
+.sheet-dock .bt-prof { border-color: #8f897f; color: #d9d1c2; }
+
+/* ------------------------------------------------------------------ controls on the dark page */
+.sheet-dock .sd-body button {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: #4e4943;
+  color: #ece6da;
+}
+.sheet-dock .sd-body button:hover { background: rgba(255, 255, 255, 0.08); border-color: #d9d1c2; color: #fff; }
+.sheet-dock .sd-body button.on,
+.sheet-dock .sd-body button.primary { background: #ece6da; color: #141312; border-color: #ece6da; }
+.sheet-dock .sd-body button.link { background: none; border-color: transparent; color: var(--muted); }
+.sheet-dock .sd-body button.link:hover { color: #fff; }
+.sheet-dock .sd-body button:disabled { opacity: 0.45; }
+.sheet-dock .sd-body .roll-btn.strong { background: #7a1d1b; border-color: #a8352f; color: #fbeedb; }
+.sheet-dock .sd-body input,
+.sheet-dock .sd-body select,
+.sheet-dock .sd-body textarea {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #57524b;
+  color: #ece6da;
+}
+.sheet-dock .sd-body input:focus,
+.sheet-dock .sd-body select:focus,
+.sheet-dock .sd-body textarea:focus { outline: none; border-color: #d9d1c2; }
+.sheet-dock .sd-body option { background: #1b1a18; color: #ece6da; }
+/* fields kept editable mid-game (HP, temp HP) */
+.sheet-dock.play .sd-body .play-keep {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: #8a3a35 !important;
+  color: #f6f1e7;
+}
+.sheet-dock .sd-body label { color: #cfc7b9; }
+.sheet-dock .sd-body .hint { color: var(--muted); }
+.sheet-dock .skill-table td,
+.sheet-dock .skill-table th { border-bottom: 1px solid rgba(222, 214, 198, 0.14); }
+
+/* ------------------------------------------------------------------ the band above the page */
+.sheet-dock .sd-tabs { background: #0d0c0c; border-bottom: 1px solid #3c3934; }
+
+/* ------------------------------------------------------------------ turn actions (Dash, Dodge, Hide…) */
+.turn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.turn-actions .ta-label { font-size: 11px; margin-right: 4px; color: var(--muted); }
+.turn-actions .ta-split { display: inline-flex; }
+.turn-actions .ta-btn { font-size: 12px; padding: 3px 8px; border-radius: 3px; }
+.turn-actions .ta-split .ta-btn:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.turn-actions .ta-split .ta-ba {
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 5px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ AC / HP / speed diamonds */
+.sheet-dock .sheet-core { flex: 0 0 100%; order: -1; justify-content: center; margin: 0 0 4px; }
+.sheet-dock .bt-combat .insp-badge { min-width: 34px; min-height: 34px; }
+.sheet-dock .sd-body .sbx-diamond input,
+.sheet-dock.play .sd-body .sbx-diamond input.play-keep {
+  width: 2em;
+  padding: 0;
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px dotted transparent !important;
+  border-radius: 0;
+  text-align: center;
+  font: inherit;
+  color: #f6f1e7;
+  text-shadow: inherit;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.sheet-dock .sd-body .sbx-diamond input:hover,
+.sheet-dock .sd-body .sbx-diamond input:focus { border-bottom-color: #8f897f !important; }
+.sheet-dock .sd-body .sbx-diamond input::-webkit-outer-spin-button,
+.sheet-dock .sd-body .sbx-diamond input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sheet-dock .sd-body .sbx-diamond input.sbx-hp { width: 1.75em; }
+.sheet-dock .sheet-hpmax { color: #cfc8bb; }
+.sheet-dock .sheet-temp { display: inline-flex; flex-direction: row; align-items: baseline; gap: 2px; font-size: 9.5px; color: #b9b2a6; }
+.sheet-dock .sd-body .sheet-temp input { width: 1.6em; font-size: 11px; color: #9fc2e6; }
+/* edit mode: two-digit scores fit the narrow ability box */
+.sheet-dock .sd-body .ab-cell input.ab-score { padding: 0 1px; font-size: 18px; }

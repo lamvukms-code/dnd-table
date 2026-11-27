@@ -573,6 +573,16 @@ export interface ActiveEffect {
   rollDisadvantage?: ('attack' | 'check' | 'save')[];
   /** Ends at the end of the bearer's own turn once this many of its turns have ended (1 = this/next one). */
   endsAfterOwnTurns?: number;
+  /** Ends when the turn of the token that applied it (`sourceTokenId`) starts again (Dodge, Help). */
+  untilSourceTurnStart?: boolean;
+  /** Attacks against the bearer have disadvantage (Dodge; not while it is incapacitated). */
+  attackersDisadvantage?: boolean;
+  /** The next attack against the bearer by someone other than the source has advantage, then it clears (Help). */
+  attackersAdvantage?: boolean;
+  /** The bearer's movement provokes no Opportunity Attacks (Disengage). */
+  noOpportunityAttacks?: boolean;
+  /** Hidden by the Hide action: the Stealth total a searcher's Perception has to beat; ends when the bearer attacks. */
+  hiddenStealth?: number;
 }
 
 /** What a token is currently concentrating on (one at a time). */

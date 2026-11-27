@@ -653,6 +653,10 @@ describe('thin-auto conditions', () => {
   it('target advantage / attacker disadvantage / cancel', () => {
     expect(conditionAttackMode([], ['restrained']).mode).toBe('advantage');
     expect(conditionAttackMode(['blinded'], []).mode).toBe('disadvantage');
+    // invisible / hidden (Hide action): attacker unseen = advantage, target unseen = disadvantage, both = cancel
+    expect(conditionAttackMode(['invisible'], []).mode).toBe('advantage');
+    expect(conditionAttackMode([], ['invisible']).mode).toBe('disadvantage');
+    expect(conditionAttackMode(['invisible'], ['invisible']).mode).toBe('normal');
     expect(conditionAttackMode(['poisoned'], ['stunned']).mode).toBe('normal'); // adv+dis cancel
     expect(conditionAttackMode([], []).mode).toBe('normal');
   });

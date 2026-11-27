@@ -10,6 +10,7 @@ import './styles.css';
 import './theme.css';
 import './gothic.css';
 import './statblock-card.css';
+import './sheet-card.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

@@ -1352,6 +1352,13 @@ export class Room {
     if (tokenConditions(token).some((c) => INCAPACITATING.includes(c))) this.endDownEffects(token, 'mất khả năng hành động');
     this.monsterTurnHooks(token, phase === 'start-of-turn' ? 'start' : 'end');
     if (phase === 'start-of-turn') {
+      // Dodge / Help last until the turn of whoever took them comes round again
+      for (const t of this.state.tokens) {
+        const gone = (t.effects ?? []).filter((e) => e.untilSourceTurnStart && e.sourceTokenId === token.id);
+        if (!gone.length) continue;
+        t.effects = (t.effects ?? []).filter((e) => !gone.includes(e));
+        for (const e of gone) this.systemLog(`${t.label}: hết ${e.name}`);
+      }
       const ending = (this.state.hazards ?? []).filter((h) => h.sourceTokenId === token.id);
       if (ending.length) {
         this.state.hazards = (this.state.hazards ?? []).filter((h) => h.sourceTokenId !== token.id);
@@ -2057,6 +2064,7 @@ export class Room {
       return meleeReach(t, reachWeapon);
     };
     if (mechanicsOfKind(this.mechOf(mover), 'flyby').length) return; // flies out of reach without provoking
+    if (mover.effects?.some((e) => e.noOpportunityAttacks)) return; // Disengage
     const reactors = opportunityReactors(mover, from, mover, this.state.tokens, (t) => this.isPlayerSide(t), reachOf);
     for (const r of reactors) {
       const list = (this.state.oaPrompts ??= []);
@@ -2640,6 +2648,19 @@ export class Room {
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
         if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
+        {
+          // Help is spent by the first ally attack on its target; attacking gives a hidden attacker away.
+          const attacker = action.attackerTokenId
+            ? this.state.tokens.find((t) => t.id === action.attackerTokenId)
+            : this.state.tokens.find((t) => this.state.sheets.some((x) => x.id === action.attackerSheetId && x.tokenId === t.id));
+          const help = target.effects?.find((e) => e.attackersAdvantage && e.sourceTokenId !== attacker?.id);
+          if (help) target.effects = target.effects!.filter((e) => e !== help);
+          const hid = attacker?.effects?.find((e) => e.hiddenStealth != null);
+          if (attacker && hid) {
+            attacker.effects = attacker.effects!.filter((e) => e !== hid);
+            this.systemLog(`${attacker.label}: lộ vị trí (tấn công khi đang ẩn nấp)`);
+          }
+        }
         // God's Bane: a divine weapon attacking a creature within 5 ft of the blade has disadvantage.
         const divineDis = this.divineDisadvantage(target, action.damageParts);
         let divineNote = '';
@@ -3272,6 +3293,72 @@ export class Room {
           label: `${token.label}: Dash (+${this.tokenSpeed(token)} ft di chuyển lượt này)`,
           result: externalRollResult('', { total: 0, faces: [] }),
         });
+        this.touch();
+        break;
+      }
+
+      case 'turnAction': {
+        const token = this.state.tokens.find((tk) => tk.id === action.tokenId);
+        if (!token) return 'Token không tồn tại';
+        if (!isDm && token.controllerId !== actor.id && this.linkedSheet(token)?.ownerId !== actor.id) return 'Bạn không điều khiển token này';
+        const log = (label: string, result = externalRollResult('', { total: 0, faces: [] })) =>
+          this.pushRoll({ id: nanoid(8), ts: Date.now(), actorId: actor.id, actorName: actor.name, label, result });
+        const effects = (token.effects ??= []);
+        if (action.kind === 'dodge') {
+          token.effects = effects.filter((e) => !(e.attackersDisadvantage && e.sourceTokenId === token.id));
+          token.effects.push({
+            id: nanoid(8),
+            name: 'Dodge',
+            sourceTokenId: token.id,
+            attackersDisadvantage: true,
+            saveAdvantage: ['dex'],
+            untilSourceTurnStart: true,
+            note: 'Đòn đánh vào bạn bị bất lợi, bạn lợi thế cứu DEX, tới đầu lượt sau (mất nếu bị mất khả năng hành động)',
+          });
+          log(`🛡 ${token.label}: Dodge — đòn đánh vào ${token.label} bị bất lợi, lợi thế cứu DEX tới đầu lượt sau`);
+        } else if (action.kind === 'disengage') {
+          if (!effects.some((e) => e.noOpportunityAttacks)) {
+            effects.push({ id: nanoid(8), name: 'Disengage', sourceTokenId: token.id, noOpportunityAttacks: true, endsAfterOwnTurns: 1, note: 'Di chuyển không bị Opportunity Attack tới hết lượt' });
+          }
+          log(`🏃 ${token.label}: Disengage — di chuyển không bị Opportunity Attack tới hết lượt`);
+        } else if (action.kind === 'hide') {
+          const notation = action.notation || '1d20';
+          let result: RollResult;
+          try {
+            result = action.external ? externalRollResult(notation, action.external) : rollNotation(notation);
+          } catch (err) {
+            return (err as Error).message;
+          }
+          const ok = result.total >= 15;
+          token.effects = effects.filter((e) => e.hiddenStealth == null);
+          if (ok) {
+            token.effects.push({
+              id: nanoid(8),
+              name: 'Ẩn nấp (Hide)',
+              sourceTokenId: token.id,
+              condition: 'invisible',
+              hiddenStealth: result.total,
+              note: `Stealth ${result.total}: kẻ tìm cần Perception (Search) ≥ ${result.total}. Lộ khi tấn công, ra phép có lời hoặc gây tiếng động lớn`,
+            });
+          }
+          log(
+            `👁 ${token.label}: Hide — Stealth ${result.total} vs DC 15 ${ok ? `✔ ẩn nấp (kẻ tìm cần Perception ≥ ${result.total})` : '✘ không ẩn được (cần chỗ che khuất / ngoài tầm nhìn)'}`,
+            result,
+          );
+        } else if (action.kind === 'help') {
+          const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
+          if (!target) return 'Chọn mục tiêu để Help';
+          target.effects = (target.effects ?? []).filter((e) => !(e.attackersAdvantage && e.sourceTokenId === token.id));
+          target.effects.push({
+            id: nanoid(8),
+            name: `Bị Help nhắm (${token.label})`,
+            sourceTokenId: token.id,
+            attackersAdvantage: true,
+            untilSourceTurnStart: true,
+            note: `Đòn đánh kế tiếp của đồng minh ${token.label} vào mục tiêu này có lợi thế (tới đầu lượt sau của ${token.label})`,
+          });
+          log(`🤝 ${token.label}: Help — đòn đánh kế tiếp của đồng minh vào ${target.label} có lợi thế`);
+        }
         this.touch();
         break;
       }

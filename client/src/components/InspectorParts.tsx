@@ -64,7 +64,7 @@ export function StatDiamond({
   label: string;
   title?: string;
   children: ReactNode;
-  unit?: string;
+  unit?: ReactNode;
   width?: number;
 }) {
   const clear = Math.round(width - 68 * (84 / 120)); // px left between the two side ornaments

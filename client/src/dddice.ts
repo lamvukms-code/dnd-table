@@ -64,6 +64,36 @@ export interface TablePresence {
 
 let current: EngineState | null = null;
 
+// Rolls whose 3D dice have settled on this screen, and the rollers waiting for that. A roll only
+// resolves once its dice land, so a sequence (attack → damage → next attack) plays out in order
+// instead of every die of a Multiattack tumbling at once.
+const settled = new Set<string>();
+const waiters = new Map<string, () => void>();
+function onRollFinished(roll: { uuid?: string }) {
+  if (!roll?.uuid) return;
+  const w = waiters.get(roll.uuid);
+  if (w) {
+    waiters.delete(roll.uuid);
+    w();
+  } else {
+    settled.add(roll.uuid);
+    if (settled.size > 50) settled.delete(settled.values().next().value as string);
+  }
+}
+/** Wait for a roll's dice to land (or `maxMs`, in case the animation never reports back). */
+function untilSettled(uuid: string, maxMs = 6000): Promise<void> {
+  if (settled.delete(uuid)) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      waiters.delete(uuid);
+      resolve();
+    };
+    const timer = setTimeout(done, maxMs);
+    waiters.set(uuid, done);
+  });
+}
+
 function sizeCanvas(canvas: HTMLCanvasElement): void {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 800;
@@ -84,7 +114,7 @@ export async function connect(
   }
   teardown();
   try {
-    const { ThreeDDice } = await loadModule();
+    const { ThreeDDice, ThreeDDiceRollEvent } = await loadModule();
     // Become a participant of the table's room first (a fresh account/guest isn't one yet),
     // under this player's table name + colour so their dice are labelled/outlined as them.
     await joinRoom(apiKey, roomSlug, me);
@@ -92,6 +122,7 @@ export async function connect(
     const engine = new ThreeDDice(canvas, apiKey, { autoClear: 3 } as never);
     engine.start();
     engine.connect(roomSlug);
+    engine.on(ThreeDDiceRollEvent.RollFinished, onRollFinished as never);
     const boxThemes = listThemes(apiKey)
       .then((t) => t.map((x) => x.id))
       .catch(() => [] as string[]);
@@ -148,7 +179,7 @@ export function dddiceErrorText(err: unknown): string {
 
 /**
  * Roll an equation through dddice (animates on every connected client) and
- * return the resolved values in our ExternalRoll shape.
+ * return the resolved values in our ExternalRoll shape — once the dice have landed here.
  */
 export async function rollEquation(notation: string): Promise<ExternalRoll> {
   if (!current) throw new Error('dddice chưa kết nối');
@@ -185,6 +216,7 @@ export async function rollEquation(notation: string): Promise<ExternalRoll> {
   // log's per-die breakdown ("8, 4" for 2d6) is meant to show.
   const kept = roll.values.filter((v) => !v.is_dropped && v.type !== 'mod' && typeof v.value === 'number');
   const d20 = roll.values.find((v) => v.type === 'd20' && !v.is_dropped);
+  if (roll.uuid) await untilSettled(roll.uuid);
   return {
     total: toNumber(roll.total_value),
     faces: kept.map((v) => v.value),

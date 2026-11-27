@@ -262,6 +262,10 @@ interface StoreState {
   resetTokenMove: (id: string) => void;
   /** Grant the token an extra Speed of movement this turn (Dash). */
   tokenDash: (id: string) => void;
+  /** Dodge / Disengage / Help of a token (economy spent by the caller). */
+  turnAction: (tokenId: string, kind: 'dodge' | 'disengage' | 'help', targetTokenId?: string) => void;
+  /** Hide: a Stealth check (dddice when on) vs DC 15, resolved by the server. */
+  hideAction: (tokenId: string, stealthBonus: number, mode?: RollMode) => Promise<void>;
   /** 2024 Unarmed Strike Grapple: server rolls the target's save, applies Grappled. */
   grapple: (p: {
     targetTokenId: string;
@@ -453,16 +457,24 @@ export const useStore = create<StoreState>((set, get) => {
     setRole: (participantId, role) => rawSend({ t: 'setRole', participantId, role }),
     resetTokenMove: (id) => rawSend({ t: 'resetTokenMove', id }),
     tokenDash: (id) => rawSend({ t: 'tokenDash', id }),
+    turnAction: (tokenId, kind, targetTokenId) => rawSend({ t: 'turnAction', tokenId, kind, targetTokenId }),
+    hideAction: async (tokenId, stealthBonus, mode = 'normal') => {
+      const notation = d20Check(stealthBonus, mode);
+      const external = await externalRoll(notation);
+      rawSend({ t: 'turnAction', tokenId, kind: 'hide', notation, external: external ?? undefined });
+    },
     grapple: (p) => rawSend({ t: 'grapple', ...p }),
 
     damageRoll: async (label, damageParts, targetTokenId, attacker) => {
       let external: { total: number; faces: number[] }[] | undefined;
       if (dddiceActive()) {
-        external = [];
-        for (const p of damageParts) {
-          const ext = await externalRoll(p.dice);
-          external.push(ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(p.dice).total, faces: [] });
-        }
+        // all damage dice of one hit go together (piercing + psychic land side by side)
+        external = await Promise.all(
+          damageParts.map(async (p) => {
+            const ext = await externalRoll(p.dice);
+            return ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(p.dice).total, faces: [] };
+          }),
+        );
       }
       rawSend({
         t: 'damage',
@@ -543,6 +555,18 @@ export const useStore = create<StoreState>((set, get) => {
         });
         const reasons = [...cm.reasons];
         let mode = cm.mode;
+        // Turn actions on the target: Dodge (attacks against it at disadvantage while it can act), Help (an ally's next attack has advantage).
+        const tgtFx = tgtTok?.effects ?? [];
+        const tgtDown = tokenConditions(tgtTok).some((c) => ['incapacitated', 'paralyzed', 'stunned', 'unconscious', 'petrified'].includes(c));
+        if (!tgtDown && tgtFx.some((e) => e.attackersDisadvantage)) {
+          mode = combineRollModes(mode, 'disadvantage');
+          reasons.push('mục tiêu đang Dodge');
+        }
+        const help = tgtFx.find((e) => e.attackersAdvantage && e.sourceTokenId !== atkTok?.id);
+        if (help) {
+          mode = combineRollModes(mode, 'advantage');
+          reasons.push(help.name.replace(/^Bị Help nhắm/, 'Help'));
+        }
         // Ranged attack made at close quarters (target within 5 ft): Disadvantage.
         const atkSheet = attackerSheetId ? room?.sheets.find((s) => s.id === attackerSheetId) : undefined;
         if (
@@ -697,12 +721,14 @@ export const useStore = create<StoreState>((set, get) => {
       const effectiveCrit = (nat20 || (hit && autoCrit)) && !critImmune;
       let partTotals: { total: number; faces: number[] }[] | undefined;
       if (hit) {
-        partTotals = [];
-        for (const p of damageParts) {
-          const n = effectiveCrit ? homebrewCritDamage(p.dice) : p.dice;
-          const ext = await externalRoll(n);
-          partTotals.push(ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(n).total, faces: [] });
-        }
+        // the d20 has landed (externalRoll waits for it); now this hit's damage dice, all together
+        partTotals = await Promise.all(
+          damageParts.map(async (p) => {
+            const n = effectiveCrit ? homebrewCritDamage(p.dice) : p.dice;
+            const ext = await externalRoll(n);
+            return ext ? { total: ext.total, faces: ext.faces } : { total: rollNotation(n).total, faces: [] };
+          }),
+        );
       }
       rawSend({
         t: 'attack',

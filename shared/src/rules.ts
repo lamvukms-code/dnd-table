@@ -1094,6 +1094,15 @@ export function conditionAttackMode(
       reasons.push(`bạn ${CONDITION_VI[c]}`);
     }
   }
+  // Invisible (also: hidden by the Hide action): the attacker can't be seen = advantage; can't see the target = disadvantage.
+  if (attackerConds.includes('invisible')) {
+    adv = true;
+    reasons.push('bạn tàng hình / ẩn nấp');
+  }
+  if (targetConds.includes('invisible')) {
+    dis = true;
+    reasons.push('mục tiêu tàng hình / ẩn nấp');
+  }
   for (const c of targetConds) {
     if (TARGET_GRANTS_ADVANTAGE.includes(c)) {
       adv = true;
