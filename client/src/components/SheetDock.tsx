@@ -27,6 +27,9 @@ import {
   rescaleCantripSpell,
   CONDITIONS,
   derivedSubclassFeatures,
+  pickCount,
+  type SubclassFeatureDef,
+  SRD_FEATS_DRAFT,
   druidLevel,
   grappleDc,
   hasFeat,
@@ -2193,6 +2196,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
                     </em>
                   )}{' '}
                   {f.description}
+                  {f.id.endsWith('-fighting-style') && <FightingStylePick featureId={f.id} draft={draft} commit={commit} />}
                   {f.choices && (
                     <select
                       className="cf-choice"
@@ -2404,6 +2408,65 @@ function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
   );
 }
 
+const FIGHTING_STYLES = SRD_FEATS_DRAFT.filter((x) => x.category === 'fighting-style');
+const isStyleFeat = (name: string) => FIGHTING_STYLES.some((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+
+/** The Fighting Style feature's pick: puts the chosen Fighting Style feat on the sheet (swapping the old one). */
+function FightingStylePick({ featureId, draft, commit }: EditorCtx & { featureId: string }) {
+  // the feat this feature gave, else one the player added by hand from the Feat tab
+  const mine = draft.feats.find((x) => x.fromFeature === featureId) ?? draft.feats.find((x) => !x.fromFeature && !x.fromBackground && isStyleFeat(x.name));
+  const cur = mine ? FIGHTING_STYLES.find((x) => x.name.toLowerCase() === mine.name.trim().toLowerCase()) : undefined;
+  return (
+    <select
+      className={`cf-choice ${cur ? '' : 'need'}`}
+      value={cur?.id ?? ''}
+      title="Chọn Fighting Style — app thêm feat đó vào tab Feat và tự áp cơ chế"
+      onChange={(e) => {
+        const def = FIGHTING_STYLES.find((x) => x.id === e.target.value);
+        const rest = draft.feats.filter((x) => x !== mine);
+        commit({
+          ...draft,
+          feats: def ? [...rest, { id: nanoIdish(), name: def.name, description: def.guidance, fromFeature: featureId }] : rest,
+        });
+      }}
+    >
+      <option value="">— chọn Fighting Style —</option>
+      {FIGHTING_STYLES.map((x) => (
+        <option key={x.id} value={x.id} title={x.guidance}>
+          {x.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** A feature that teaches only some of its options: tick which ones the character knows. */
+function FeaturePicker({ f, draft, commit }: EditorCtx & { f: SubclassFeatureDef }) {
+  const max = pickCount(f, draft);
+  const picked = (draft.featurePicks?.[f.id] ?? []).filter((l) => f.pickOptions!.some((a) => a.label === l));
+  const known = picked.slice(0, max);
+  const toggle = (label: string) => {
+    const next = known.includes(label) ? known.filter((l) => l !== label) : [...known, label];
+    commit({ ...draft, featurePicks: { ...(draft.featurePicks ?? {}), [f.id]: next } });
+  };
+  return (
+    <span className={`cf-picks ${known.length < max ? 'need' : ''}`}>
+      <em>
+        Đã chọn {known.length}/{max}
+        {known.length < max ? ' — chọn thêm' : ''}:
+      </em>
+      {f.pickOptions!.map((a) => {
+        const on = known.includes(a.label);
+        return (
+          <label key={a.label} className={`chk ${on ? 'on' : ''}`}>
+            <input type="checkbox" checked={on} disabled={!on && known.length >= max} onChange={() => toggle(a.label)} /> {a.label}
+          </label>
+        );
+      })}
+    </span>
+  );
+}
+
 /** Subclass features, from the DM's local subclass data file. Separate from class features. */
 function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: string }) {
   // subclass features + local feats that carry buttons / uses (setting feats…)
@@ -2429,6 +2492,7 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
               <span className="cf-lvl">L{f.level}</span>
               <span className="cf-body">
                 <strong>{f.name}.</strong> {f.description}
+                {f.pickOptions && <FeaturePicker f={f} draft={draft} commit={commit} />}
                 {f.uses && (
                   <span className="cf-uses">
                     <FocusPips max={max} used={u} onChange={(n) => setUse(f.id, n)} />

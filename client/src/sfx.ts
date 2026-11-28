@@ -92,9 +92,10 @@ function tone(t: number, dur: number, peak: number, f0: number, f1: number = f0,
   o.start(t);
   o.stop(t + dur + 0.05);
 }
-function clip(t: number, re: RegExp, vol: number, rate = 1) {
+/** Play a matching clip; false when the server has none (the caller falls back to synthesis). */
+function clip(t: number, re: RegExp, vol: number, rate = 1): boolean {
   const url = clipUrl(re);
-  if (!url) return;
+  if (!url) return false;
   void loadClip(url).then((buf) => {
     if (!buf || !ctx) return;
     const s = ctx.createBufferSource();
@@ -105,25 +106,31 @@ function clip(t: number, re: RegExp, vol: number, rate = 1) {
     s.connect(g).connect(master!);
     s.start(Math.max(t, ctx.currentTime));
   });
+  return true;
 }
 
 const whoosh = (t: number, dur = 0.22, peak = 0.35) => noiseBurst(t, dur, peak, { type: 'bandpass', f0: 500, f1: 2400, q: 1.4 });
 const thump = (t: number, f = 110, peak = 0.6, dur = 0.18) => tone(t, dur, peak, f, f * 0.45);
 
 const ELEMENT_SOUND: Record<Element, (t: number, big: boolean) => void> = {
+  // recorded spell impacts (lentikula, CC0) when the server has them; the synthesis underneath
   fire: (t, big) => {
-    noiseBurst(t, big ? 0.9 : 0.55, 0.45, { type: 'lowpass', f0: 2600, f1: 400 });
+    const rec = clip(t, /lk_fire_impact/, 0.8) || clip(t, /spell_fire/, 0.6);
+    noiseBurst(t, big ? 0.9 : 0.55, rec ? 0.18 : 0.45, { type: 'lowpass', f0: 2600, f1: 400 });
     thump(t, 70, 0.4, 0.3);
-    clip(t, /spell_fire/, 0.6);
   },
   cold: (t) => {
-    for (let i = 0; i < 5; i++) tone(t + i * 0.03, 0.5, 0.08, 2400 + i * 330, 1400 + i * 200, 'triangle');
-    noiseBurst(t, 0.35, 0.18, { type: 'highpass', f0: 5000 });
-    clip(t + 0.05, /impactGlass_light/, 0.5);
+    const rec = clip(t, /lk_ice_impact/, 0.8);
+    for (let i = 0; i < 5; i++) tone(t + i * 0.03, 0.5, rec ? 0.03 : 0.08, 2400 + i * 330, 1400 + i * 200, 'triangle');
+    if (!rec) {
+      noiseBurst(t, 0.35, 0.18, { type: 'highpass', f0: 5000 });
+      clip(t + 0.05, /impactGlass_light/, 0.5);
+    }
   },
   lightning: (t) => {
-    for (let i = 0; i < 7; i++) noiseBurst(t + i * 0.035 + Math.random() * 0.02, 0.04, 0.5, { type: 'highpass', f0: 2500 });
-    tone(t, 0.25, 0.12, 900, 120, 'sawtooth');
+    const rec = clip(t, /lk_lightning_impact/, 0.8);
+    for (let i = 0; i < 7; i++) noiseBurst(t + i * 0.035 + Math.random() * 0.02, 0.04, rec ? 0.15 : 0.5, { type: 'highpass', f0: 2500 });
+    if (!rec) tone(t, 0.25, 0.12, 900, 120, 'sawtooth');
     thump(t + 0.05, 60, 0.5, 0.4);
   },
   thunder: (t, big) => {
@@ -131,6 +138,7 @@ const ELEMENT_SOUND: Record<Element, (t: number, big: boolean) => void> = {
     thump(t, 55, 0.8, 0.6);
   },
   acid: (t) => {
+    clip(t, /lk_water_impact/, 0.6, 1.25);
     noiseBurst(t, 0.7, 0.3, { type: 'bandpass', f0: 3200, q: 3 });
     for (let i = 0; i < 4; i++) tone(t + i * 0.09, 0.06, 0.12, 700 + Math.random() * 500, 300, 'sine');
   },
@@ -208,7 +216,7 @@ function playImpact(t: number, e: FxEvent) {
   const big = !!e.crit || (e.amount ?? 0) >= 20;
   switch (e.cue) {
     case 'heal':
-      [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.08, 0.6, 0.12, f, f, 'sine'));
+      if (!clip(t, /lk_heal_/, 0.8)) [523, 659, 784, 1047].forEach((f, i) => tone(t + i * 0.08, 0.6, 0.12, f, f, 'sine'));
       return;
     case 'bite':
       // jaws: a wet crunch, a low thud, sometimes the creature's snarl

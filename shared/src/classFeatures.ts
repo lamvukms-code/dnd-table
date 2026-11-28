@@ -69,6 +69,14 @@ export interface SubclassFeatureDef {
   };
   /** Buttons this feature puts on the sheet (see featureActions.ts). */
   actions?: FeatureAction[];
+  /**
+   * The buttons are options the player learns only some of (3 at level 3, more later):
+   * `count` uses the same specs as `uses.max` ("tbl:fighter:3=3,7=4"). The picks live in
+   * `sheet.featurePicks[id]` (button labels); only the picked buttons show, the rest wait in `pickOptions`.
+   */
+  pick?: { count: number | string };
+  /** Set by derivedSubclassFeatures on a `pick` feature: every option, picked or not. */
+  pickOptions?: FeatureAction[];
   /** Always-on mechanics: AC, speed, resistances, extra damage… (see featurePassives.ts). */
   passive?: FeaturePassive;
   /** Ids of base class features this one takes away once gained (a subclass that swaps out
@@ -582,7 +590,7 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
 ];
 
 const FIGHTER: Omit<ClassFeatureDef, 'class'>[] = [
-  { id: 'fighter-fighting-style', level: 1, name: 'Fighting Style', description: 'Chọn 1 feat Fighting Style (tab Đặc điểm → Feat). Archery, Defense, Dueling, GWF, TWF, Protection, Interception… đã tự áp.' },
+  { id: 'fighter-fighting-style', level: 1, name: 'Fighting Style', description: 'Chọn 1 feat Fighting Style ở ô bên cạnh (app tự thêm vào tab Feat). Archery, Defense, Dueling, GWF, TWF, Protection, Interception… đã tự áp.' },
   {
     id: 'fighter-second-wind',
     level: 1,
@@ -1003,11 +1011,23 @@ export function derivedSubclassFeatures(
         cls.includes(norm(d.class)) &&
         (norm(d.subclass) === sub || sub.includes(norm(d.subclass)) || norm(d.subclass).includes(sub))
       ) {
-        out.push(d);
+        out.push(d.pick && d.actions ? withPicks(d, sheet) : d);
       }
     }
   }
   return out.sort((a, b) => a.level - b.level);
+}
+
+/** How many options a `pick` feature lets this sheet learn. */
+export function pickCount(f: SubclassFeatureDef, sheet: CharacterSheet): number {
+  return f.pick ? subclassUsesMax(f.pick.count, sheet) : 0;
+}
+
+/** A `pick` feature with only the picked buttons (all options kept in `pickOptions`). */
+function withPicks(d: SubclassFeatureDef, sheet: CharacterSheet): SubclassFeatureDef {
+  const all = d.actions ?? [];
+  const chosen = new Set((sheet.featurePicks?.[d.id] ?? []).slice(0, pickCount(d, sheet)));
+  return { ...d, pickOptions: all, actions: all.filter((a) => chosen.has(a.label)) };
 }
 
 /** Resolve a `uses.max` spec against a sheet. */

@@ -171,6 +171,8 @@ export interface Feat {
   /** Set when this feat was auto-granted by picking a Background (its `name`) — lets a later
    *  background swap cleanly remove it, the same way `Spell.fromSpecies` works for species. */
   fromBackground?: string;
+  /** Set when a class feature's pick put this feat here (the Fighting Style feature's id). */
+  fromFeature?: string;
 }
 
 export type HeirloomTier = 'rare' | 'veryRare' | 'legendary';
@@ -389,6 +391,8 @@ export interface CharacterSheet {
   wildShape?: WildShapeState | null;
   /** Choices made for class features that offer options (Elemental Fury, Blessed Strikes…), by feature id. */
   featureChoices?: Record<string, string>;
+  /** Options learned for features that teach only some of their list, by feature id: button labels. */
+  featurePicks?: Record<string, string[]>;
   /** Rogue: Cunning Strike options chosen for the next Sneak Attack. */
   cunningArmed?: string[];
   /** Barbarian: Brutal Strike options chosen for the next Reckless melee attack. */

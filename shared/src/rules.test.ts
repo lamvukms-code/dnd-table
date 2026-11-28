@@ -632,6 +632,21 @@ describe('class features (Rogue / Barbarian)', () => {
     expect(subclassUsesMax(3, s)).toBe(3);
   });
 
+  it('a pick feature shows only the options learned, up to its count by level', () => {
+    const opt = (label: string) => ({ label, kind: 'damage' as const, dice: '2d6', type: 'fire' });
+    const defs: SubclassFeatureDef[] = [
+      { id: 'shots', class: 'fighter', subclass: 'Archer', level: 3, name: 'Shots', description: '', pick: { count: 'tbl:fighter:3=2,7=3' }, actions: ['A', 'B', 'C', 'D'].map(opt) },
+    ];
+    const none = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 3 }), defs)[0];
+    expect(none.actions).toEqual([]);
+    expect(none.pickOptions?.map((a) => a.label)).toEqual(['A', 'B', 'C', 'D']);
+    const picks = { shots: ['D', 'A', 'B'] };
+    const l3 = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 3, featurePicks: picks }), defs)[0];
+    expect(l3.actions?.map((a) => a.label)).toEqual(['A', 'D']); // only 2 known at level 3
+    const l7 = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 7, featurePicks: picks }), defs)[0];
+    expect(l7.actions?.map((a) => a.label)).toEqual(['A', 'B', 'D']);
+  });
+
   it('Druid: Wild Shape uses 2/3/4, features derive, rests recover', () => {
     expect(wildShapeMax(sheet({ className: 'Druid', level: 1 }))).toBe(0);
     expect(wildShapeMax(sheet({ className: 'Druid', level: 2 }))).toBe(2);

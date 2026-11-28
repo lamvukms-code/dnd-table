@@ -2113,6 +2113,12 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 .cf-auto-tag { color: var(--accent, #8bd); font-size: 11px; font-style: normal; }
 .strike-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cf-choice { margin-left: 6px; }
+.cf-choice.need { outline: 1px solid #e0a040; }
+.cf-picks { display: flex; flex-wrap: wrap; gap: 3px 12px; margin: 4px 0; }
+.cf-picks > em { width: 100%; font-size: 0.85em; opacity: 0.8; }
+.cf-picks.need > em { color: #e0a040; opacity: 1; }
+.cf-picks label { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; font-size: 0.9em; white-space: nowrap; }
+.cf-picks input { width: auto; margin: 0; flex: none; }
 
 /* dynamic fog & sight */
 .fog-layer { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 40; filter: blur(3px); }
