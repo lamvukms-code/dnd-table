@@ -53,3 +53,32 @@ export function inventoryItemFromHomebrew(entry: HomebrewEntry, newId: () => str
     notes: tag ? `${body}${body ? '\n' : ''}(${tag})` : body,
   };
 }
+
+/** SRD 5.2.1 armor (CC-BY-4.0): base AC, category, Stealth disadvantage. Keys are lowercase names. */
+const SRD_ARMOR: Record<string, { base: number; category: 'light' | 'medium' | 'heavy'; stealth?: boolean }> = {
+  'padded': { base: 11, category: 'light', stealth: true },
+  'leather': { base: 11, category: 'light' },
+  'studded leather': { base: 12, category: 'light' },
+  'hide': { base: 12, category: 'medium' },
+  'chain shirt': { base: 13, category: 'medium' },
+  'scale mail': { base: 14, category: 'medium', stealth: true },
+  'breastplate': { base: 14, category: 'medium' },
+  'half plate': { base: 15, category: 'medium', stealth: true },
+  'ring mail': { base: 14, category: 'heavy', stealth: true },
+  'chain mail': { base: 16, category: 'heavy', stealth: true },
+  'splint': { base: 17, category: 'heavy', stealth: true },
+  'plate': { base: 18, category: 'heavy', stealth: true },
+};
+
+/**
+ * An inventory line typed as plain gear whose name is exactly an SRD armor or a shield ("Studded leather",
+ * "Chain Mail Armor", "Shield") becomes that armor, with its AC numbers — a sheet made from text (PDF import,
+ * typed by hand) otherwise wears it with no effect on AC. Anything else comes back unchanged.
+ */
+export function recognizeArmorItem(it: InventoryItem): InventoryItem {
+  if (it.type !== 'gear' || it.armorBase != null) return it;
+  const n = it.name.toLowerCase().replace(/\(.*?\)/g, '').replace(/\barmou?r\b/g, '').replace(/\s+/g, ' ').trim();
+  if (n === 'shield' || n === 'khiên') return { ...it, type: 'shield', armorBase: 2 };
+  const a = SRD_ARMOR[n];
+  return a ? { ...it, type: 'armor', armorBase: a.base, armorCategory: a.category, stealthDisadvantage: a.stealth || undefined } : it;
+}

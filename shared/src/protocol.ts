@@ -314,6 +314,9 @@ export type ClientAction =
    *  already on the active scene, otherwise spawns a fresh one there (e.g. after switching maps)
    *  and re-links the sheet to it. DM or the sheet's own owner only. */
   | { t: 'placeSheetToken'; sheetId: string; x: number; y: number }
+  /** Token library: put an entry on the active map / take it out of the library. */
+  | { t: 'tokenLibPlace'; id: string; x: number; y: number }
+  | { t: 'tokenLibRemove'; id: string }
   // map zones (DM only) — a drawn region on the active scene's map + its read-aloud/DM text
   | { t: 'zoneUpsert'; zone: MapZone }
   | { t: 'zoneRemove'; id: string }

@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
+import { IconChest, IconCog, IconHelm, IconHood, IconLantern, IconPawnPlus, IconPawns, IconPortrait, IconRoomPlan, IconSkull, IconSwords } from './Icons.js';
 import { cameraFollow, forgetLastCamera, onCameraMessage, postCamera, requestCamera } from '../cameraSync.js';
 import {
   groupBestiary,
@@ -720,7 +721,8 @@ function BattleMapImpl() {
     const sbId = e.dataTransfer.getData('text/statblock-id');
     const id = e.dataTransfer.getData('text/token-id');
     const sheetId = e.dataTransfer.getData('text/sheet-id');
-    if (!id && !sbId && !sheetId) return;
+    const libId = e.dataTransfer.getData('text/lib-id');
+    if (!id && !sbId && !sheetId && !libId) return;
     e.preventDefault();
     const rect = boardRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.round((e.clientX - rect.left) / (CELL * zoom) - 0.5));
@@ -731,6 +733,10 @@ function BattleMapImpl() {
     }
     if (sheetId) {
       send({ t: 'placeSheetToken', sheetId, x, y });
+      return;
+    }
+    if (libId) {
+      send({ t: 'tokenLibPlace', id: libId, x, y });
       return;
     }
     send({ t: 'copyToken', id, x, y });
@@ -754,10 +760,10 @@ function BattleMapImpl() {
           to their right (one at a time; a tap elsewhere closes them). */}
       <div className="map-tools" ref={toolsRef}>
         <button className="mt-btn" onClick={addToken} title="Thêm token">
-          ＋
+          <IconPawnPlus />
         </button>
         <label className="mt-btn" title="Tạo token từ ảnh: chọn ảnh → căn khung tròn → lưu (tự đổi sang WebP) và đặt lên bản đồ">
-          🖼
+          <IconPortrait />
           <input
             type="file"
             accept="image/*"
@@ -790,12 +796,13 @@ function BattleMapImpl() {
           />
         )}
         <CharacterPalette />
+        <TokenLibraryPalette />
         {isDm && <BestiaryPalette />}
         {isDm && <NpcPalette />}
         {isDm && (
           <details className="mt-item" {...MT_GROUP}>
             <summary className={`mt-btn ${map.fog?.enabled ? 'on' : ''}`} title="Fog & tầm nhìn: tường, cửa, đèn">
-              🌫
+              <IconLantern />
             </summary>
             <div className="token-palette mt-flyout">
               <FogTools map={map} tool={fogTool} setTool={setFogTool} />
@@ -805,7 +812,7 @@ function BattleMapImpl() {
         {tokens.length > 0 && (
           <details className="mt-item" {...MT_GROUP}>
             <summary className="mt-btn" title="Kéo token để nhân bản">
-              ⧉
+              <IconPawns />
             </summary>
             <div className="token-palette mt-flyout">
               <div className="mt-flyout-title">⧉ Kéo để nhân bản</div>
@@ -842,7 +849,7 @@ function BattleMapImpl() {
               onClick={() => (groupMode ? exitGroup() : setGroupMode(true))}
               title={groupMode ? 'Đang chọn nhóm init — bấm để thoát' : 'Chọn nhiều token để tung initiative'}
             >
-              ⊕
+              <IconSwords />
             </button>
             <button
               className={`mt-btn ${zoneDraw ? 'on' : ''}`}
@@ -853,11 +860,11 @@ function BattleMapImpl() {
                   : 'Vẽ vùng: bấm-kéo lên bản đồ để vẽ 1 phòng/khu vực; bấm vào vùng đã vẽ (khi tắt chế độ này) để xem mô tả'
               }
             >
-              📐
+              <IconRoomPlan />
             </button>
             <details className="mt-item" {...MT_GROUP}>
               <summary className="mt-btn" title="Bản đồ & cảnh: lưới, ảnh nền, sương mù…">
-                ⚙
+                <IconCog />
               </summary>
               <div className="map-toolbar-wrap mt-flyout">
                 <div className="mt-flyout-title">⚙ Bản đồ &amp; cảnh</div>
@@ -979,7 +986,7 @@ function BattleMapImpl() {
           }}
           onDragOver={(e) => {
             const types = e.dataTransfer.types;
-            if (types.includes('text/token-id') || types.includes('text/statblock-id') || types.includes('text/sheet-id')) {
+            if (types.includes('text/token-id') || types.includes('text/statblock-id') || types.includes('text/sheet-id') || types.includes('text/lib-id')) {
               e.preventDefault();
               e.dataTransfer.dropEffect = 'copy';
             }
@@ -3050,7 +3057,8 @@ function BestiaryPalette() {
   return (
     <details className="mt-item" {...MT_GROUP}>
       <summary className="mt-btn" title={`Kéo quái vào bản đồ (${bestiary.length})`}>
-        👹<span className="mt-count">{bestiary.length}</span>
+        <IconSkull />
+        <span className="mt-count">{bestiary.length}</span>
       </summary>
       <div className="token-palette bestiary-palette mt-flyout">
         <div className="mt-flyout-title">👹 Kéo quái vào bản đồ</div>
@@ -3123,7 +3131,8 @@ function NpcPalette() {
   return (
     <details className="mt-item" {...MT_GROUP}>
       <summary className="mt-btn" title={`Kéo NPC vào bản đồ (${npcs.length})`}>
-        🧑‍🤝‍🧑<span className="mt-count">{npcs.length}</span>
+        <IconHood />
+        <span className="mt-count">{npcs.length}</span>
       </summary>
       <div className="token-palette npc-palette mt-flyout">
       <div className="mt-flyout-title">🧑‍🤝‍🧑 Kéo NPC vào bản đồ</div>
@@ -3172,7 +3181,8 @@ function CharacterPalette() {
   return (
     <details className="mt-item" {...MT_GROUP}>
       <summary className="mt-btn" title={`Kéo nhân vật vào bản đồ (${list.length})`}>
-        🧑<span className="mt-count">{list.length}</span>
+        <IconHelm />
+        <span className="mt-count">{list.length}</span>
       </summary>
       <div className="token-palette mt-flyout">
       <div className="mt-flyout-title">🧑 Kéo nhân vật vào bản đồ</div>
@@ -3188,11 +3198,65 @@ function CharacterPalette() {
             }}
             title={`Kéo "${s.name}" vào bản đồ — đặt token đại diện tại đây (dùng lại token cũ nếu đã có trên map này)`}
           >
-            <span className="tp-dot" style={{ background: '#c0392b' }} />
+            <span
+              className="tp-dot"
+              style={s.tokenLook?.imageUrl ? { background: `center/cover url(${s.tokenLook.imageUrl})` } : { background: s.tokenLook?.color ?? '#c0392b' }}
+            />
             {s.name}
           </div>
         ))}
       </div>
+      </div>
+    </details>
+  );
+}
+
+const NO_LIB: never[] = [];
+
+/** The room's token library: saved token art (made with 🖼, or deleted from a map) — drag one back onto the map. */
+function TokenLibraryPalette() {
+  const lib = useStore((s) => s.room?.tokenLibrary) ?? NO_LIB;
+  const isDm = useStore((s) => s.isDm());
+  const meId = useStore((s) => s.participantId);
+  const send = useStore((s) => s.send);
+  if (lib.length === 0) return null;
+  return (
+    <details className="mt-item" {...MT_GROUP}>
+      <summary className="mt-btn" title={`Kho token: kéo token đã lưu vào bản đồ (${lib.length})`}>
+        <IconChest />
+        <span className="mt-count">{lib.length}</span>
+      </summary>
+      <div className="token-palette mt-flyout">
+        <div className="mt-flyout-title">🗃 Kho token — kéo vào bản đồ</div>
+        <div className="tp-list">
+          {lib.map((e) => (
+            <div
+              key={e.id}
+              className="tp-chip"
+              draggable
+              onDragStart={(ev) => {
+                ev.dataTransfer.setData('text/lib-id', e.id);
+                ev.dataTransfer.effectAllowed = 'copy';
+              }}
+              title={`Kéo "${e.label}" vào bản đồ để đặt lại token này`}
+            >
+              <span className="tp-dot" style={{ background: `center/cover url(${e.imageUrl})` }} />
+              {e.label}
+              {(isDm || e.ownerId === meId) && (
+                <button
+                  className="tp-x"
+                  title="Xóa khỏi kho (token đang trên bản đồ không bị ảnh hưởng)"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    if (window.confirm(`Xóa "${e.label}" khỏi kho token?`)) send({ t: 'tokenLibRemove', id: e.id });
+                  }}
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </details>
   );

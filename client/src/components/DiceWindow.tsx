@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { IconD20 } from './Icons.js';
 import { d20Check, type RollLogEntry } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { DddiceAccount } from './DddiceAccount.js';
@@ -97,7 +98,7 @@ function DiceWindowImpl() {
         title={open ? 'Đóng khay xúc xắc' : 'Mở khay xúc xắc và lịch sử roll'}
         onClick={() => setOpen(!open)}
       >
-        🎲
+        <IconD20 />
         {last && (
           <span className={`fab-last ${last.cls}`}>
             {entries[0].attack ? (entries[0].attack.hit ? '✔ ' : '✘ ') : ''}
@@ -120,7 +121,7 @@ function DiceWindowImpl() {
       {open && (
     <div className="dice-window">
       <div className="dw-head">
-        <span>🎲 Xúc xắc{dddiceActive ? ' · 3D' : ''}</span>
+        <span><IconD20 /> Xúc xắc{dddiceActive ? ' · 3D' : ''}</span>
         <button className="link" onClick={() => setOpen(false)} title="Đóng">
           ✕
         </button>

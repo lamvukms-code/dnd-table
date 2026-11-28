@@ -1038,6 +1038,9 @@ details summary { cursor: pointer; margin-bottom: 6px; color: var(--muted); }
 }
 .tp-chip:active { cursor: grabbing; }
 .tp-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.tp-list .tp-dot[style*="url("] { width: 22px; height: 22px; }
+.tp-x { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 11px; }
+.tp-x:hover { color: var(--hit, #e55); }
 .insp-npc-note { border-left: 3px solid var(--accent); padding-left: 6px; }
 
 /* dice formula feedback */
@@ -2179,3 +2182,8 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 @keyframes vfx-float { from { transform: translate(-50%, -30%); opacity: 0; } 15% { opacity: 1; } to { transform: translate(-50%, -160%); opacity: 0; } }
 .vfx-crit { position: absolute; transform: translate(-50%, -50%); border-radius: 50%; border: 4px solid #ffd54a; box-shadow: 0 0 30px 10px rgba(255, 213, 74, 0.6); animation: vfx-burst 0.5s ease-out forwards; }
 @media (prefers-reduced-motion: reduce) { .vfx-layer { display: none; } }
+
+/* tabletop line icons (components/Icons.tsx) */
+.ico { width: 1.25em; height: 1.25em; vertical-align: -0.28em; flex: none; }
+.mt-btn .ico { width: 22px; height: 22px; }
+.hud-actions > button .ico, .hud-actions .top-menu > button .ico, .hud-dice > button .ico { width: 20px; height: 20px; }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { IconLyre } from './Icons.js';
 import type { SoundboardSound } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { getBoardVolume, setBoardVolume, uploadSound } from '../soundboard.js';
@@ -26,7 +27,8 @@ export function SoundboardButton() {
   return (
     <div className="hud-sbd">
       <button className={open ? 'on' : ''} title="Soundboard: bấm một âm thanh là cả bàn cùng nghe" onClick={() => setOpen(!open)}>
-        🔊<span className="hud-label"> Soundboard</span>
+        <IconLyre />
+        <span className="hud-label"> Soundboard</span>
         {looping > 0 && <span className="sbd-live" title={`${looping} nhạc nền đang phát`}>♪{looping}</span>}
       </button>
       {open && <SoundboardWindow onClose={() => setOpen(false)} />}

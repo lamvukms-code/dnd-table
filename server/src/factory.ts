@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { applySpellProgression, applyToughFeat, emptyCurrency, proficiencyByLevel, syncMagicItemSpells } from '@dnd-table/shared';
+import { applySpellProgression, applyToughFeat, emptyCurrency, recognizeArmorItem, proficiencyByLevel, syncMagicItemSpells } from '@dnd-table/shared';
 import type {
   Ability,
   CharacterSheet,
@@ -120,7 +120,7 @@ export function normalizeSheet(sheet: CharacterSheet): CharacterSheet {
     spells: sheet.spells ?? [],
     feats: sheet.feats ?? [],
     features: sheet.features ?? [],
-    inventory: sheet.inventory ?? [],
+    inventory: (sheet.inventory ?? []).map(recognizeArmorItem),
     currency: sheet.currency ?? emptyCurrency(),
   };
   delete (next as CharacterSheet & { attacks?: unknown }).attacks;

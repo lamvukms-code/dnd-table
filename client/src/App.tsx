@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { IconDmScreen, IconMap, IconScroll, IconSkull, IconTome } from './components/Icons.js';
 import { useStore } from './store.js';
 import { getSfxVolume, playForRollLogEntry, setSfxVolume } from './sound.js';
 import { JoinScreen } from './components/JoinScreen.js';
@@ -252,12 +253,14 @@ export function App() {
                 title={dockOpen ? 'Ẩn character sheet' : 'Hiện character sheet'}
                 onClick={() => setDockOpen((v) => !v)}
               >
-                📜<span className="hud-label"> Sheet</span>
+                <IconScroll />
+                <span className="hud-label"> Sheet</span>
               </button>
               <TopMenu
                 label={
                   <>
-                    📚<span className="hud-label"> Tra cứu</span>
+                    <IconTome />
+                    <span className="hud-label"> Tra cứu</span>
                   </>
                 }
                 title="Tra cứu"
@@ -280,15 +283,16 @@ export function App() {
               {isDm && (
                 <>
                   <button title="Quái (Bestiary)" onClick={() => setBestiaryOpen(true)}>
-                    👹
+                    <IconSkull />
                   </button>
                   <button title="Bản đồ & cảnh (thư viện theo chương)" onClick={() => setMapsOpen(true)}>
-                    🗺
+                    <IconMap />
                   </button>
                   <TopMenu
                     label={
                       <>
-                        🛠<span className="hud-label"> DM</span>
+                        <IconDmScreen />
+                        <span className="hud-label"> DM</span>
                       </>
                     }
                     title="Công cụ DM"

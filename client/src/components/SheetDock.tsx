@@ -229,10 +229,12 @@ const PLAY_KEY = 'dnd.sheetPlay';
 /** Small round face for a sheet: its token art, else its initials on the token colour. */
 function SheetFace({ sheet, token }: { sheet: CharacterSheet | null; token?: Token }) {
   if (!sheet) return <span className="sd-face empty">?</span>;
-  return token?.imageUrl ? (
-    <span className="sd-face" style={{ backgroundImage: `url(${token.imageUrl})` }} />
+  // the linked token, else the look remembered from the last one (it was deleted / is on another map)
+  const img = token ? token.imageUrl : sheet.tokenLook?.imageUrl;
+  return img ? (
+    <span className="sd-face" style={{ backgroundImage: `url(${img})` }} />
   ) : (
-    <span className="sd-face" style={{ background: token?.color ?? '#7a5a3a' }}>
+    <span className="sd-face" style={{ background: token?.color ?? sheet.tokenLook?.color ?? '#7a5a3a' }}>
       {sheet.name.slice(0, 2)}
     </span>
   );
@@ -769,7 +771,13 @@ function BasicTab({ draft, commit }: EditorCtx) {
   return (
     <div className="basic-tab">
       <div className="bt-header">
-        <TokenAvatar token={linkedToken} active={myTurn} />
+        <TokenAvatar
+          token={
+            linkedToken ??
+            (draft.tokenLook?.imageUrl ? { label: draft.name, color: draft.tokenLook.color ?? '#7a5a3a', imageUrl: draft.tokenLook.imageUrl } : null)
+          }
+          active={myTurn}
+        />
         <div className="bt-header-mid">
           <div className="bt-ident">
             <input

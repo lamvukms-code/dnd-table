@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { equipmentPresetFromDef, inventoryItemFromHomebrew } from './equipment.js';
+import { equipmentPresetFromDef, inventoryItemFromHomebrew, recognizeArmorItem } from './equipment.js';
+import { computeArmorClass } from './rules.js';
 import type { EquipmentPreset, HomebrewEntry } from './types.js';
 
 const id = () => 'gen-id';
@@ -72,5 +73,28 @@ describe('inventoryItemFromHomebrew', () => {
   it('works with just a description and no rarity/attunement tag', () => {
     const item = inventoryItemFromHomebrew(entry(), id);
     expect(item.notes).toBe('A dented tin lantern whose flame never dies.');
+  });
+});
+
+describe('recognizeArmorItem', () => {
+  const gear = (name: string) => ({ id: 'g', name, type: 'gear' as const, quantity: 1, weight: 0, equipped: true, notes: '' });
+  it('turns a plain-gear line named after SRD armor / a shield into that armor', () => {
+    expect(recognizeArmorItem(gear('Studded leather'))).toMatchObject({ type: 'armor', armorBase: 12, armorCategory: 'light' });
+    expect(recognizeArmorItem(gear('Chain Mail Armor'))).toMatchObject({ type: 'armor', armorBase: 16, armorCategory: 'heavy', stealthDisadvantage: true });
+    expect(recognizeArmorItem(gear('Shield'))).toMatchObject({ type: 'shield', armorBase: 2 });
+  });
+  it('leaves everything else alone (control: these must NOT become armor)', () => {
+    for (const n of ['Leather pouch', 'Bộ đồ thợ săn (20 đạn chì, dao găm bạc)', "Healer's kit", 'Plate of food']) {
+      expect(recognizeArmorItem(gear(n))).toEqual(gear(n));
+    }
+    const typed = { ...gear('Studded leather'), type: 'armor' as const, armorBase: 13 };
+    expect(recognizeArmorItem(typed)).toBe(typed); // a real armor row keeps its own numbers
+  });
+  it('a DEX 19 character in studded leather gets 12 + 4 = 16, not the unarmored 14', () => {
+    const base = { abilities: { str: 14, dex: 19, con: 13, int: 7, wis: 12, cha: 10 }, acOverride: null, className: 'Fighter', level: 3, feats: [] } as never as Parameters<typeof computeArmorClass>[0];
+    const before = computeArmorClass({ ...base, inventory: [gear('Studded leather')] });
+    const after = computeArmorClass({ ...base, inventory: [recognizeArmorItem(gear('Studded leather'))] });
+    expect(before.ac).toBe(14);
+    expect(after.ac).toBe(16);
   });
 });

@@ -393,6 +393,9 @@ export interface CharacterSheet {
   featureChoices?: Record<string, string>;
   /** Options learned for features that teach only some of their list, by feature id: button labels. */
   featurePicks?: Record<string, string[]>;
+  /** The look of the token last linked to this sheet (art, colour, size) — kept when that token is
+   *  deleted, so the sheet keeps its portrait and "📍 Đặt lên bản đồ" brings the same token back. */
+  tokenLook?: { imageUrl?: string; color?: string; size?: TokenSize };
   /** Rogue: Cunning Strike options chosen for the next Sneak Attack. */
   cunningArmed?: string[];
   /** Barbarian: Brutal Strike options chosen for the next Reckless melee attack. */
@@ -1421,6 +1424,22 @@ export interface RoomState {
   shops?: Shop[];
   /** Set while the DM is recording the session (everyone sees a REC badge). */
   recording?: { since: number } | null;
+  /** Saved token looks (art, colour, size): every token made with art lands here, and so does any
+   *  token with art when it is deleted — drag one back onto a map from the 🗃 tray. */
+  tokenLibrary?: TokenLibraryEntry[];
+}
+
+/** A token look kept in the room's token library (see `RoomState.tokenLibrary`). */
+export interface TokenLibraryEntry {
+  id: string;
+  label: string;
+  imageUrl: string;
+  color: string;
+  size: TokenSize;
+  /** Who saved it (players only remove their own). */
+  ownerId?: string;
+  /** Saved by the DM: kept out of the players' view (could be a hidden NPC's art). */
+  dm?: boolean;
 }
 
 /** One line of a shop's stock: a catalog item snapshot, its price and how many are left. */

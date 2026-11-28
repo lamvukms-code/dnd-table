@@ -531,6 +531,7 @@ function playerView(): RoomState {
     scenes: (st.scenes ?? []).map((sc) => ({ ...sc, zones: [], tokens: redact(sc.tokens) })),
     rollLog: rollLogForPlayers(st.rollLog, visibleIds),
     shops: (st.shops ?? []).filter((sh) => sh.open).map((sh) => ({ ...sh, dmNote: undefined })),
+    tokenLibrary: (st.tokenLibrary ?? []).filter((e) => !e.dm),
   };
 }
 

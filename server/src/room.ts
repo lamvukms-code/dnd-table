@@ -341,8 +341,31 @@ export class Room {
     for (const sheet of this.state.sheets) {
       if (!sheet.tokenId) continue;
       const tk = this.tokenAnywhere(sheet.tokenId);
-      if (tk) tk.armorClass = effectiveArmorClass(sheet, tk.effects).ac;
+      if (!tk) continue;
+      tk.armorClass = effectiveArmorClass(sheet, tk.effects).ac;
+      // remember the look, so the sheet keeps its portrait (and gets the same token back) after a delete
+      const look = sheet.tokenLook;
+      const size = sheet.wildShape ? (look?.size ?? 'medium') : tk.size; // a beast form isn't the character's own size
+      if (look?.imageUrl !== tk.imageUrl || look?.color !== tk.color || look?.size !== size)
+        sheet.tokenLook = { imageUrl: tk.imageUrl, color: tk.color, size };
     }
+  }
+
+  /** Keep a token's look in the token library (one entry per piece of art; the newest name wins). */
+  private librarySave(tk: Token, ownerId: string | undefined, dm: boolean): void {
+    if (!tk.imageUrl || tk.statblock) return;
+    const lib = this.state.tokenLibrary ?? [];
+    const old = lib.find((e) => e.imageUrl === tk.imageUrl);
+    const entry = {
+      id: old?.id ?? nanoid(8),
+      label: tk.label,
+      imageUrl: tk.imageUrl,
+      color: tk.color,
+      size: tk.size,
+      ownerId: old?.ownerId ?? ownerId,
+      dm: old ? old.dm : dm || undefined,
+    };
+    this.state.tokenLibrary = old ? lib.map((e) => (e === old ? entry : e)) : [...lib, entry];
   }
 
   /** Copy a linked sheet's HP pools onto its token (sheet is the source of truth). */
@@ -3882,6 +3905,26 @@ export class Room {
           controllerId: isDm ? action.token.controllerId : actor.id,
         });
         this.state.tokens.push(token);
+        this.librarySave(token, actor.id, isDm && !token.controllerId);
+        this.touch();
+        break;
+      }
+
+      case 'tokenLibPlace': {
+        const e = (this.state.tokenLibrary ?? []).find((x) => x.id === action.id);
+        if (!e || (e.dm && !isDm)) return 'Không còn token này trong kho';
+        this.state.tokens.push(
+          createToken({ label: e.label, x: action.x, y: action.y, size: e.size, color: e.color, imageUrl: e.imageUrl, controllerId: isDm ? undefined : actor.id }),
+        );
+        this.touch();
+        break;
+      }
+
+      case 'tokenLibRemove': {
+        const e = (this.state.tokenLibrary ?? []).find((x) => x.id === action.id);
+        if (!e) return null;
+        if (!isDm && e.ownerId !== actor.id) return 'Bạn chỉ xóa được token mình lưu';
+        this.state.tokenLibrary = (this.state.tokenLibrary ?? []).filter((x) => x.id !== action.id);
         this.touch();
         break;
       }
@@ -4126,6 +4169,8 @@ export class Room {
         if (target && !isDm && target.controllerId !== actor.id) {
           return 'Bạn chỉ xóa được token của mình';
         }
+        // a token with art is kept in the library, so deleting it never loses the art
+        if (target) this.librarySave(target, target.controllerId ?? actor.id, !target.controllerId);
         // Mutate in place so the active-scene alias stays valid.
         const idx = this.state.tokens.findIndex((tk) => tk.id === action.id);
         if (idx >= 0) this.state.tokens.splice(idx, 1);
@@ -5029,11 +5074,14 @@ export class Room {
           existing.y = gate.pos.y;
         } else {
           const owner = this.state.participants.find((p) => p.id === sheet.ownerId);
+          const look = sheet.tokenLook;
           const token = createToken({
             label: sheet.name,
             x: action.x,
             y: action.y,
-            color: owner?.color ?? '#c0392b',
+            color: look?.color ?? owner?.color ?? '#c0392b',
+            imageUrl: look?.imageUrl,
+            size: look?.size,
             controllerId: sheet.ownerId,
           });
           this.state.tokens.push(token);
