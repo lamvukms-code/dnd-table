@@ -54,6 +54,7 @@ describe('feats on the server', () => {
 
   it('Savage Attacker keeps the higher of two damage rolls, once per turn', () => {
     const room = setup([tok('pc', 0), tok('orc', 1, sb('Orc'))], [pc(['Savage Attacker'])]);
+    room.state.initiative.running = true; // turns are counted in combat (out of combat: no per-turn limit)
     room.apply(player, { t: 'attack', label: 'pc → orc', attackNotation: '1d20+5', damageParts: [{ dice: '1d10', type: 'slashing' }], targetTokenId: 'orc', attackerTokenId: 'pc', attackerSheetId: 'pc', attackRange: 'melee', external: { ...ext(20, 15), partTotals: [{ total: 1, faces: [1] }] } });
     expect(T(room, 'orc').currentHp).toBe(94); // 1 vs 6 → 6
     expect(T(room, 'pc').turnUsed?.featOnce).toContain('savage');
@@ -76,6 +77,7 @@ describe('feats on the server', () => {
 
   it('Boon of Combat Prowess turns one miss per turn into a hit', () => {
     const room = setup([tok('pc', 0), tok('orc', 1, sb('Orc'))], [pc(['Boon of Combat Prowess'])]);
+    room.state.initiative.running = true; // once per turn: a turn exists only in combat
     const miss = (): ClientAction => ({ t: 'attack', label: 'pc → orc', attackNotation: '1d20+0', damageParts: [{ dice: '5', type: 'slashing' }], targetTokenId: 'orc', attackerTokenId: 'pc', attackerSheetId: 'pc', attackRange: 'melee', external: ext(3, 3) });
     room.apply(player, miss());
     expect(T(room, 'orc').currentHp).toBe(95);

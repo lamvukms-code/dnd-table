@@ -1420,6 +1420,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   parts={rowParts}
                   onSpend={spendRow}
                   sheetName={draft.name}
+                  savage={passiveHas(draft, 'savageAttacker')}
                   attacker={{ sheetId: draft.id, tokenId: draft.tokenId || undefined }}
                   targetId={targetId}
                   targetName={targetName}
@@ -1584,6 +1585,7 @@ function ActionRow({
   onToggleRange,
   onDelete,
   cleaveReady,
+  savage,
 }: {
   action: SheetAction;
   parts: DamagePart[];
@@ -1592,12 +1594,14 @@ function ActionRow({
   targetId: string;
   targetName: string;
   rollMode: RollMode;
-  rollDice: (label: string, notation: string) => Promise<void>;
+  rollDice: (label: string, notation: string, opts?: { best2?: { why: string; sheetId?: string } }) => Promise<void>;
+  /** The sheet has Savage Attacker: a weapon damage roll with no target is rolled twice, the higher kept. */
+  savage?: boolean;
   attackRoll: (p: {
     label: string;
     attackNotation?: string;
     damageParts: DamagePart[];
-    targetTokenId: string;
+    targetTokenId?: string;
     attackBonus?: number;
     rollMode?: RollMode;
     attackerSheetId?: string;
@@ -1637,7 +1641,6 @@ function ActionRow({
 }) {
   const base = `${sheetName} · ${action.name}`;
   const isAttack = typeof action.attackBonus === 'number' && parts.length > 0;
-  const atkNotation = (bonus: number) => d20Check(bonus, rollMode);
   const combinedDamage = parts.map((p) => p.dice).join(' + ');
   const damageLabel = parts
     .map((p) => `${p.dice}${p.type ? ' ' + p.type : ''}`)
@@ -1721,9 +1724,21 @@ function ActionRow({
       {isAttack && !targetId && (
         <button
           className="roll-btn"
+          title="Chưa chọn mục tiêu: tung đòn đánh và tung luôn sát thương nếu trúng (20 tự nhiên = chí mạng). DM phân xử trúng hay trượt."
           onClick={() => {
             if (onSpend && !onSpend(true)) return;
-            void rollDice(`${base} (đánh)`, atkNotation(action.attackBonus!));
+            void attackRoll({
+              label: `${base} (đánh)`,
+              attackBonus: action.attackBonus!,
+              rollMode,
+              damageParts: parts,
+              attackerSheetId: attacker.sheetId,
+              attackerTokenId: attacker.tokenId,
+              attackRange: attackRangeOf(action),
+              attackKind: attackKindOf(action),
+              rangeText: action.range ?? action.description,
+            });
+            onFired?.(); // the damage is rolled with it: one-shot riders are spent
           }}
         >
           đánh
@@ -1737,7 +1752,7 @@ function ActionRow({
             if (targetId) void damageRoll(`${base} → ${targetName}`, parts, targetId, attacker);
             else {
               // No target: the server can't see the hit, so disarm the riders here.
-              void rollDice(`${base} (sát thương)`, combinedDamage);
+              void rollDice(`${base} (sát thương)`, combinedDamage, savage && attackKindOf(action) === 'weapon' ? { best2: { why: 'Savage Attacker', sheetId: attacker.sheetId } } : undefined);
               onFired?.();
             }
           }}

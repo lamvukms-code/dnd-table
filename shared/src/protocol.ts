@@ -59,6 +59,9 @@ export type ClientAction =
       /** A total below this counts as this (Indomitable Might); `floorWhy` names the feature. */
       totalMin?: number;
       floorWhy?: string;
+      /** Roll twice and keep the higher total (Savage Attacker on a damage roll with no target): the
+       *  feature's name, for the log. `sheetId` = whose once-per-turn use it spends in combat. */
+      best2?: { why: string; sheetId?: string };
     }
   /** DM: madness saving throw (WIS + INT mod) for these tokens; a failure stuns and rolls the tier's table. */
   | { t: 'madnessSave'; targetTokenIds: string[]; dc: number; tier: MadnessTier; label?: string }
@@ -86,7 +89,8 @@ export type ClientAction =
       /** On a hit: rider effects, each behind an optional save (Cunning Strike, Brutal Strike). */
       onHit?: OnHitEffect[];
       damageParts: DamagePart[];
-      targetTokenId: string;
+      /** Unset: an attack with no target picked — the server rolls it and its damage "if it hits". */
+      targetTokenId?: string;
       attackerSheetId?: string;
       attackerTokenId?: string;
       /** Melee or ranged delivery (drives Armor of Agathys retaliation, ranged-in-melee). */

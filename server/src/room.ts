@@ -388,8 +388,9 @@ export class Room {
     const sheet = this.linkedSheet(attackerTok);
     if (!sheet) return;
     const types = (action.damageParts ?? []).map((p) => (p.type || '').toLowerCase());
-    const used = attackerTok.turnUsed?.featOnce ?? [];
-    const mark = (k: string) => (attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), k] });
+    // out of combat there are no turns to count (see oncePerTurn)
+    const { once, markOnce: mark } = this.oncePerTurn(attackerTok);
+    const used = { includes: (k: string) => !once(k) };
     const round = this.state.initiative.round;
     if (passiveHas(sheet, 'crusher') && types.includes('bludgeoning')) {
       if (!used.includes('crusher')) {
@@ -1296,6 +1297,81 @@ export class Room {
   /** A hit landed: disarm the one-shot riders whose damage parts it carried (Sneak Attack,
    *  Booming Blade, an armed Jaeger Finisher — which expends all held Momentum). Done here, after the hit
    *  is known, so a miss keeps them armed for the next swing (Extra Attack) instead of wasting them. */
+  /**
+   * Once-per-turn feat riders (Savage Attacker, Piercer…). In combat they key on the attacker's token
+   * turn; out of combat (no initiative running) there are no turns to count, so every attack may use them.
+   */
+  private oncePerTurn(attackerTok: Token | undefined): { once: (k: string) => boolean; markOnce: (k: string) => void } {
+    const inCombat = !!this.state.initiative?.running;
+    return {
+      once: (k) => !inCombat || (!!attackerTok && !(attackerTok.turnUsed?.featOnce ?? []).includes(k)),
+      markOnce: (k) => {
+        if (inCombat && attackerTok) attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), k] };
+      },
+    };
+  }
+
+  /**
+   * An attack rolled with no target picked (no token on the map, theatre of the mind): the attack roll
+   * and, unless it is a natural 1, its damage "if it hits" — the table's crit damage (dice maxed + one more) on a natural 20
+   * (or the attacker's widened crit range) — with Savage Attacker applied like a targeted hit. The DM rules on the hit.
+   */
+  private freeAttack(actor: Participant, action: Extract<ClientAction, { t: 'attack' }>, isDm: boolean): string | null {
+    let attackRoll: RollResult;
+    try {
+      attackRoll = action.external ? externalRollResult(action.attackNotation, action.external.attack) : rollNotation(action.attackNotation);
+    } catch (err) {
+      return (err as Error).message;
+    }
+    const sheet = action.attackerSheetId ? this.state.sheets.find((x) => x.id === action.attackerSheetId) : undefined;
+    const attackerTok = action.attackerTokenId
+      ? this.state.tokens.find((t) => t.id === action.attackerTokenId)
+      : sheet?.tokenId
+        ? this.state.tokens.find((t) => t.id === sheet.tokenId)
+        : undefined;
+    const nat = attackRoll.d20?.natural;
+    const critFrom = Math.min(20, ...(attackerTok?.effects ?? []).map((e) => e.critMin ?? 20));
+    const crit = !!nat && nat >= critFrom;
+    const fumble = nat === 1;
+    this.pushRoll({
+      id: nanoid(8),
+      ts: Date.now(),
+      actorId: actor.id,
+      actorName: actor.name,
+      label: `${action.label}${crit ? ' · 💥 CHÍ MẠNG' : fumble ? ' · trượt (1 tự nhiên)' : ''}`,
+      result: attackRoll,
+    });
+    const parts = action.damageParts ?? [];
+    if (!fumble && parts.length) {
+      let rd: ReturnType<Room['rollDamageParts']>;
+      let note = '';
+      try {
+        rd = this.rollDamageParts(parts, crit, undefined);
+        const { once, markOnce } = this.oncePerTurn(attackerTok);
+        if (action.attackKind !== 'spell' && passiveHas(sheet, 'savageAttacker') && once('savage')) {
+          const again = this.rollDamageParts(parts, crit, undefined);
+          markOnce('savage');
+          note = ` · 🪓 Savage Attacker: ${rd.combined.total} / ${again.combined.total} → lấy ${Math.max(rd.combined.total, again.combined.total)}`;
+          if (again.combined.total > rd.combined.total) rd = again;
+        }
+      } catch (err) {
+        return (err as Error).message;
+      }
+      const base = action.label.replace(/ \(đánh\)$/, '');
+      this.pushRoll({
+        id: nanoid(8),
+        ts: Date.now(),
+        actorId: actor.id,
+        actorName: actor.name,
+        label: `${base} — sát thương nếu trúng${crit ? ' (chí mạng: xúc xắc tối đa + 1 viên)' : ''}${note}`,
+        result: rd.combined,
+      });
+      this.consumeHitRiders(action.attackerSheetId, parts, actor.id, isDm);
+    }
+    this.touch();
+    return null;
+  }
+
   private consumeHitRiders(sheetId: string | undefined, parts: DamagePart[], actorId: string, isDm: boolean): void {
     if (!sheetId) return;
     const sheet = this.state.sheets.find((x) => x.id === sheetId);
@@ -3230,6 +3306,23 @@ export class Room {
         }
         // God's Bane Cleaving Causality: a sworn player's own next d20 becomes a natural 20.
         let causalityNote = '';
+        // Savage Attacker on a damage roll with no target: roll again, the higher total stands
+        if (action.best2 && !action.external) {
+          const sh = action.best2.sheetId ? this.state.sheets.find((x) => x.id === action.best2!.sheetId) : undefined;
+          const tok = sh?.tokenId ? this.state.tokens.find((t) => t.id === sh.tokenId) : undefined;
+          const { once, markOnce } = this.oncePerTurn(tok);
+          if (once('savage')) {
+            markOnce('savage');
+            let again: RollResult;
+            try {
+              again = rollNotation(action.notation);
+            } catch (err) {
+              return (err as Error).message;
+            }
+            causalityNote += ` · 🪓 ${action.best2.why}: ${result.total} / ${again.total} → lấy ${Math.max(result.total, again.total)}`;
+            if (again.total > result.total) result = again;
+          }
+        }
         if (result.d20) {
           const own = this.godsBane()?.armed?.find(
             (a) => a.mode === 'crit' && this.state.sheets.some((x) => x.id === a.sheetId && x.ownerId === actor.id),
@@ -3271,6 +3364,7 @@ export class Room {
       }
 
       case 'attack': {
+        if (!action.targetTokenId) return this.freeAttack(actor, action, isDm);
         const target = this.state.tokens.find((tk) => tk.id === action.targetTokenId);
         if (!target) return 'Target token not found';
         if (target.godsBaneBlade) return "God's Bane không thể bị nhắm tới";
@@ -3410,9 +3504,10 @@ export class Room {
         const nat = attackRoll.d20?.natural;
         // Boon of Combat Prowess: once per turn a miss becomes a hit
         const prowessSheet = attackerTok ? this.linkedSheet(attackerTok) : undefined;
-        if (!res.hit && attackerTok && passiveHas(prowessSheet, 'missToHit') && !(attackerTok.turnUsed?.featOnce ?? []).includes('prowess')) {
+        const prowessOnce = this.oncePerTurn(attackerTok);
+        if (!res.hit && attackerTok && passiveHas(prowessSheet, 'missToHit') && prowessOnce.once('prowess')) {
           Object.assign(res, { hit: true, fumble: false });
-          attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), 'prowess'] };
+          prowessOnce.markOnce('prowess');
           if (action.external) action.external = { ...action.external, partTotals: undefined };
           this.pendingBaneLogs.push(`⚔ ${prowessSheet!.name} · Boon of Combat Prowess: trượt → TRÚNG`);
         }
@@ -3476,10 +3571,7 @@ export class Room {
           let rd;
           const atkSheetF = action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : attackerTok ? this.linkedSheet(attackerTok) : undefined;
           const weaponHit = action.attackKind !== 'spell';
-          const once = (k: string) => !!attackerTok && !(attackerTok.turnUsed?.featOnce ?? []).includes(k);
-          const markOnce = (k: string) => {
-            if (attackerTok) attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), k] };
-          };
+          const { once, markOnce } = this.oncePerTurn(attackerTok);
           // Piercer: once per turn the lowest piercing die is rolled again; a crit adds one more die
           const pi = weaponHit && passiveHas(atkSheetF, 'piercer') ? dmgParts.findIndex((p) => p.type === 'piercing' && /\d*d\d+/.test(p.dice)) : -1;
           if (pi >= 0) {

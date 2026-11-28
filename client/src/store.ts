@@ -139,7 +139,8 @@ interface AttackParams {
   attackBonus?: number;
   rollMode?: RollMode;
   damageParts: DamagePart[];
-  targetTokenId: string;
+  /** Unset: no target picked — the server rolls the attack and its damage "if it hits". */
+  targetTokenId?: string;
   attackerSheetId?: string;
   attackerTokenId?: string;
   /** Melee / ranged tag of the attack (ranged at ≤5 ft ⇒ Disadvantage). */
@@ -196,7 +197,11 @@ interface StoreState {
   setDddiceKey: (key: string | null) => void;
   setDddiceConnected: (connected: boolean) => void;
   /** Roll dice — via the dddice 3D engine when enabled, else server RNG. */
-  rollDice: (label: string, notation: string, opts?: { private?: boolean; d20Min?: number; totalMin?: number; floorWhy?: string }) => Promise<void>;
+  rollDice: (
+    label: string,
+    notation: string,
+    opts?: { private?: boolean; d20Min?: number; totalMin?: number; floorWhy?: string; best2?: { why: string; sheetId?: string } },
+  ) => Promise<void>;
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
   /** Level-up round keys (`<roundId>:<sheetId>`) already claimed from this browser — hides the button at once. */
@@ -554,6 +559,7 @@ export const useStore = create<StoreState>((set, get) => {
         ...(opts?.d20Min ? { d20Min: opts.d20Min } : {}),
         ...(opts?.totalMin ? { totalMin: opts.totalMin } : {}),
         ...(opts?.floorWhy ? { floorWhy: opts.floorWhy } : {}),
+        ...(opts?.best2 ? { best2: opts.best2 } : {}),
       });
     },
 
