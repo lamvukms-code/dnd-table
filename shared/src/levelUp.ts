@@ -1,5 +1,6 @@
 import { classDefaults } from './classDefaults.js';
 import { abilityMod, sheetClasses, totalLevelOf } from './rules.js';
+import { passiveMaxHpBonus } from './featurePassives.js';
 import type { CharacterSheet } from './types.js';
 
 export const MAX_LEVEL = 20;
@@ -47,7 +48,19 @@ export const hasToughFeat = (sheet: Pick<CharacterSheet, 'feats'>): boolean =>
 /** Tough (2024): +2 max HP per character level — granted retroactively when the feat is taken and
  *  again for every level gained after. Tracks what it already granted in `toughBonus` so it is applied
  *  exactly once, and removed if the feat is. Pure. */
-export function applyToughFeat(sheet: CharacterSheet): CharacterSheet {
+export function applyToughFeat(sheet0: CharacterSheet): CharacterSheet {
+  // features that raise max HP (Boon of Fortitude) are kept in step the same way
+  const featWant = passiveMaxHpBonus(sheet0);
+  const featHave = sheet0.featHpBonus ?? 0;
+  const sheet =
+    featWant === featHave
+      ? sheet0
+      : {
+          ...sheet0,
+          featHpBonus: featWant || undefined,
+          maxHp: Math.max(1, sheet0.maxHp + featWant - featHave),
+          currentHp: Math.min(Math.max(1, sheet0.maxHp + featWant - featHave), featWant > featHave ? sheet0.currentHp + featWant - featHave : sheet0.currentHp),
+        };
   const want = hasToughFeat(sheet) ? 2 * totalLevelOf(sheet) : 0;
   const have = sheet.toughBonus ?? 0;
   if (want === have) return sheet;

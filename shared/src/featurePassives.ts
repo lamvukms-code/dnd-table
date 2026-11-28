@@ -121,6 +121,22 @@ export interface FeaturePassive {
   auraSave?: { ability: Ability; radius: Record<number, number> };
   /** Half the Proficiency Bonus on ability checks without proficiency, Initiative included (Jack of All Trades). */
   jackOfAllTrades?: boolean;
+  /** Spells (by name) cast at will without a slot (Mask of Many Faces → Disguise Self…). */
+  freeCast?: string[];
+  /** Spells cast once per long rest without a slot (Gift of the Depths → Water Breathing). */
+  freeCastDaily?: string[];
+  /** Once per turn, a missed attack roll hits instead (Boon of Combat Prowess). */
+  missToHit?: boolean;
+  /** Maximum HP higher by this much (Boon of Fortitude). */
+  maxHpBonus?: number;
+  /** Bludgeoning / piercing / slashing damage ignores resistance; a natural 20 adds the STR/DEX score (Boon of Irresistible Offense). */
+  irresistibleOffense?: boolean;
+  /** Once per long rest, dropping to 0 HP leaves the character at 1 HP and heals half its maximum (Boon of Recovery). */
+  lastStand?: boolean;
+  /** Proficient in every skill (Boon of Skill). */
+  allSkills?: boolean;
+  /** A level 1–4 slot is kept when 1d4 matches its level (Boon of Spell Recall). */
+  spellRecall?: boolean;
 }
 
 /** A reaction to being attacked in melee, answered by the player before the roll. */
@@ -538,7 +554,12 @@ export function passiveHas(
     | 'polearmMaster'
     | 'dualWielder'
     | 'tavernBrawler'
-    | 'jackOfAllTrades',
+    | 'jackOfAllTrades'
+    | 'missToHit'
+    | 'irresistibleOffense'
+    | 'lastStand'
+    | 'allSkills'
+    | 'spellRecall',
 ): boolean {
   return !!sheet && activePassives(sheet).some((p) => !!p.passive[key]);
 }
@@ -625,4 +646,19 @@ export function auraSaveBonusFor<T extends { id: string; x: number; y: number; s
     if (!best || aura.bonus > best.bonus) best = { bonus: aura.bonus, name: `${aura.name} (${sheet.name})` };
   }
   return best;
+}
+
+/** A spell the sheet casts without a slot: 'atWill', 'daily' (once per long rest), or null. */
+export function passiveFreeCast(sheet: CharacterSheet | undefined, spellName: string): 'atWill' | 'daily' | null {
+  if (!sheet) return null;
+  const n = spellName.trim().toLowerCase();
+  const ps = activePassives(sheet);
+  if (ps.some((p) => p.passive.freeCast?.some((x) => x.toLowerCase() === n))) return 'atWill';
+  if (ps.some((p) => p.passive.freeCastDaily?.some((x) => x.toLowerCase() === n))) return 'daily';
+  return null;
+}
+
+/** Extra maximum HP from features (Boon of Fortitude). */
+export function passiveMaxHpBonus(sheet: CharacterSheet): number {
+  return activePassives(sheet).reduce((n, p) => n + (p.passive.maxHpBonus ?? 0), 0);
 }

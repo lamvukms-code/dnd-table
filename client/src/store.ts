@@ -8,6 +8,7 @@ import {
   metamagicLabel,
   sorceryPointsLeft,
   type MetamagicKey,
+  passiveFreeCast,
   type OnHitEffect,
   BRUTAL_STRIKES,
   CUNNING_STRIKES,
@@ -1012,6 +1013,14 @@ export const useStore = create<StoreState>((set, get) => {
         if (meta.length) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch }, base: sheet });
         return true; // re-use of a lasting spell: the first cast paid the slot
       }
+      // an invocation's free cast: at will, or once per long rest (then the usual slot)
+      const free = spell.level > 0 ? passiveFreeCast(sheet, spell.name) : null;
+      const dailyKey = `free:${spell.name.toLowerCase()}`;
+      if (free === 'atWill' || (free === 'daily' && !sheet.subclassUses?.[dailyKey])) {
+        const usesPatch = free === 'daily' ? { subclassUses: { ...(sheet.subclassUses ?? {}), [dailyKey]: 1 } } : {};
+        if (meta.length || free === 'daily') rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch, ...usesPatch }, base: sheet });
+        return true;
+      }
       // Mystic Arcanum: a Warlock's level 6+ spell, once per long rest without a slot
       if (spell.level >= 6 && casterTypeOf(sheet) === 'pact') {
         const used = sheet.arcanumUsed ?? [];
@@ -1019,7 +1028,14 @@ export const useStore = create<StoreState>((set, get) => {
         rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch, arcanumUsed: [...new Set([...used, spell.level])] }, base: sheet });
         return true;
       }
-      const slot = spendSpellSlot(sheet, spell.level, castAtLevel);
+      let slot = spendSpellSlot(sheet, spell.level, castAtLevel);
+      // Boon of Spell Recall: a level 1–4 slot is kept when 1d4 shows its level
+      const slotLvl = Math.max(spell.level, castAtLevel ?? spell.level);
+      if (slot.available && slotLvl <= 4 && casterTypeOf(sheet) !== 'pact' && passiveHas(sheet, 'spellRecall')) {
+        const d4 = 1 + Math.floor(Math.random() * 4);
+        rawSend({ t: 'roll', label: `${sheet.name} · Boon of Spell Recall (ô cấp ${slotLvl}): d4 = ${d4}${d4 === slotLvl ? ' — giữ lại ô' : ''}`, notation: String(d4) });
+        if (d4 === slotLvl) slot = { available: true, patch: {} };
+      }
       // remember the slot level so later recasts roll that level's dice
       const keepLevel =
         spell.level > 0 && recastOf(spell)

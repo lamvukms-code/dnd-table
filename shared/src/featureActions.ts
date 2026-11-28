@@ -43,6 +43,8 @@ export interface FeatureAction {
   effect?: FeatureEffect;
   /** A second effect placed with the first (Reckless Attack: advantage now, attackers' advantage until your turn). */
   extraEffect?: FeatureEffect;
+  /** poolHeal: the pool holds dice of this size — the player spends N of them and heals Nd<die> (Boon of Recovery). */
+  poolDie?: string;
   /** Focus Points it costs (Superior Defense). */
   focusCost?: number;
   /** Also give back every Focus Point (Uncanny Metabolism). */

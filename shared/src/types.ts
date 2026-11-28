@@ -74,6 +74,8 @@ export interface DamagePart {
   rerollBelow?: number;
   /** Up to this many of the lowest damage dice (below the die's average) are rolled again once (Empowered Spell). */
   rerollLowest?: number;
+  /** This part ignores the target's resistance (Boon of Irresistible Offense). */
+  ignoreResist?: boolean;
 }
 
 /**
@@ -433,6 +435,8 @@ export interface CharacterSheet {
   /** Max HP currently granted by the Tough feat (2 × level) — lets the server apply it exactly once
    *  and keep it in step as the character levels. Server-maintained. */
   toughBonus?: number;
+  /** Max HP currently granted by features (Boon of Fortitude) — server-maintained like `toughBonus`. */
+  featHpBonus?: number;
   /** Present (true) only on the empty placeholder a player receives for ANOTHER player's sheet:
    *  id / owner / name / linked token survive, every stat is blanked. Never stored. */
   redacted?: boolean;

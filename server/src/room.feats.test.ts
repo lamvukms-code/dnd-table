@@ -73,4 +73,21 @@ describe('feats on the server', () => {
     room.apply(dm, { t: 'spellSave', targetTokenId: 'pc', ability: 'dex', dc: 15, label: 'Fireball', damageOnFail: [{ dice: '20', type: 'fire' }], damageHalfOnSave: true });
     expect(room.state.sheets[0].currentHp).toBe(40);
   });
+
+  it('Boon of Combat Prowess turns one miss per turn into a hit', () => {
+    const room = setup([tok('pc', 0), tok('orc', 1, sb('Orc'))], [pc(['Boon of Combat Prowess'])]);
+    const miss = (): ClientAction => ({ t: 'attack', label: 'pc → orc', attackNotation: '1d20+0', damageParts: [{ dice: '5', type: 'slashing' }], targetTokenId: 'orc', attackerTokenId: 'pc', attackerSheetId: 'pc', attackRange: 'melee', external: ext(3, 3) });
+    room.apply(player, miss());
+    expect(T(room, 'orc').currentHp).toBe(95);
+    room.apply(player, miss());
+    expect(T(room, 'orc').currentHp).toBe(95);
+  });
+
+  it('Boon of Recovery keeps the character up once per long rest', () => {
+    const room = setup([tok('orc', 1, sb('Orc')), tok('pc', 0)], [pc(['Boon of Recovery'])]);
+    room.apply(dm, { t: 'attack', label: 'orc → pc', attackNotation: '1d20+100', damageParts: [{ dice: '60', type: 'slashing' }], targetTokenId: 'pc', attackerTokenId: 'orc', attackRange: 'melee' });
+    expect(room.state.sheets[0].currentHp).toBe(21);
+    room.apply(dm, { t: 'attack', label: 'orc → pc', attackNotation: '1d20+100', damageParts: [{ dice: '60', type: 'slashing' }], targetTokenId: 'pc', attackerTokenId: 'orc', attackRange: 'melee' });
+    expect(room.state.sheets[0].currentHp).toBe(0);
+  });
 });

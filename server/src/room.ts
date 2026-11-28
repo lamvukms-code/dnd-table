@@ -441,6 +441,17 @@ export class Room {
     return true;
   }
 
+  /** Boon of Recovery: once per long rest, 0 HP becomes 1 HP plus half the maximum. */
+  private lastStand(sheet: CharacterSheet): boolean {
+    const key = 'boon-recovery-last-stand';
+    if (!passiveHas(sheet, 'lastStand') || sheet.subclassUses?.[key]) return false;
+    sheet.currentHp = Math.min(sheet.maxHp, 1 + Math.floor(sheet.maxHp / 2));
+    sheet.subclassUses = { ...(sheet.subclassUses ?? {}), [key]: 1 };
+    this.mirrorSheetToToken(sheet);
+    this.pendingBaneLogs.push(`✨ ${sheet.name} · Boon of Recovery: trụ lại, hồi lên ${sheet.currentHp} HP`);
+    return true;
+  }
+
   /** Wild Shape changes the linked token's size; leaving the form puts the old size back. */
   private syncWildShapeSize(before: CharacterSheet | undefined, after: CharacterSheet): void {
     if (!after.tokenId) return;
@@ -470,7 +481,7 @@ export class Room {
       sheet.tempHp = r.temp;
       this.mirrorSheetToToken(sheet);
       const throughTemp = amount - r.absorbed;
-      if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0 && this.relentlessRage(token, sheet)) {
+      if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0 && (this.relentlessRage(token, sheet) || this.lastStand(sheet))) {
         // stayed on its feet
       } else if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0) {
         if (sheet.wildShape) {
@@ -3322,6 +3333,14 @@ export class Room {
         // Monster mechanics on this attack: a wider crit range, or an automatic crit (target grappled by it).
         const atkMechs = this.mechOf(attackerTok);
         const nat = attackRoll.d20?.natural;
+        // Boon of Combat Prowess: once per turn a miss becomes a hit
+        const prowessSheet = attackerTok ? this.linkedSheet(attackerTok) : undefined;
+        if (!res.hit && attackerTok && passiveHas(prowessSheet, 'missToHit') && !(attackerTok.turnUsed?.featOnce ?? []).includes('prowess')) {
+          Object.assign(res, { hit: true, fumble: false });
+          attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), 'prowess'] };
+          if (action.external) action.external = { ...action.external, partTotals: undefined };
+          this.pendingBaneLogs.push(`⚔ ${prowessSheet!.name} · Boon of Combat Prowess: trượt → TRÚNG`);
+        }
         // a wider crit range: monster mechanics, or an effect on the attacker (a minute of 19–20…)
         const fxCrit = Math.min(20, ...(attackerTok?.effects ?? []).map((e) => e.critMin ?? 20));
         const critFrom = Math.min(atkMechs.length ? critMin(atkMechs, action.actionName) : 20, fxCrit);
@@ -3398,6 +3417,12 @@ export class Room {
               const die = /d(\d+)/.exec(dmgParts[pi].dice)?.[1];
               if (die) dmgParts.push({ dice: `1d${die}`, type: 'piercing', label: 'Piercer (chí mạng)' });
             }
+          }
+          // Boon of Irresistible Offense: B/P/S ignore resistance; a natural 20 adds the STR/DEX score
+          if (weaponHit && passiveHas(atkSheetF, 'irresistibleOffense')) {
+            for (let i = 0; i < dmgParts.length; i++)
+              if (['bludgeoning', 'piercing', 'slashing'].includes((dmgParts[i].type || '').toLowerCase())) dmgParts[i] = { ...dmgParts[i], ignoreResist: true };
+            if (nat === 20 && atkSheetF) dmgParts.push({ dice: String(Math.max(atkSheetF.abilities.str, atkSheetF.abilities.dex)), type: dmgParts[0]?.type ?? '', label: 'Irresistible Offense', ignoreResist: true });
           }
           try {
             rd = this.rollDamageParts(dmgParts, effectiveCrit, action.external?.partTotals);

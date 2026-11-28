@@ -114,6 +114,7 @@ import { MadnessPanel } from './sheet/MadnessPanel.js';
 import { StrikeChips } from './sheet/StrikeChips.js';
 import { ArcaneRecoveryPanel, MetamagicBar, SorcererPanel, SpellbookBar, WildShapePanel, type ScribeMode } from './sheet/CasterFeatures.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
+import { passiveFreeCast } from '@dnd-table/shared';
 import { auraSaveBonusFor, classLevelOf, edgeFeet, passiveCheckFloor, passiveHas, passiveSaveAdvantage, tokenSpan } from '@dnd-table/shared';
 import { canCastAsRitual, isSpellbookSpell, scribeSpell, sorcererLevel, spellbookCounts, wizardLevel } from '@dnd-table/shared';
 import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, attackKindOf, featFeatureDefs, featureAttackMod, jaegerLevel } from '@dnd-table/shared';
@@ -2740,6 +2741,7 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 onCast={(castAtLevel) => beginCast(draft.id, sp, castAtLevel)}
                 onRitual={canCastAsRitual(draft, sp) ? () => beginCast(draft.id, sp, undefined, false, { ritual: true }) : undefined}
                 inBook={wiz && isSpellbookSpell(draft, sp) ? (sp.scribed ?? 'free') : undefined}
+                freeCast={sp.level > 0 ? passiveFreeCast(draft, sp.name) : null}
                 onRecast={
                   canRecastNow(sp, concOn)
                     ? () => {
@@ -2785,6 +2787,7 @@ function SpellRow({
   onRecast,
   onRitual,
   inBook,
+  freeCast,
   recastHint,
   onChange,
   onRescale,
@@ -2795,6 +2798,8 @@ function SpellRow({
   onRitual?: () => void;
   /** Wizard spellbook: how this spell got into the book. */
   inBook?: 'free' | 'copied';
+  /** Cast without a slot through a feature (at will / once per long rest). */
+  freeCast?: 'atWill' | 'daily' | null;
   canCast: boolean;
   /** Multiclass: the sheet's casting classes (a spell picks one → its ability / DC). */
   castingClasses: string[];
@@ -2852,6 +2857,11 @@ function SpellRow({
         />
         {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
         {sp.ritual && <span className="sr-tag" title="Ritual: đúc thêm 10 phút, không tốn ô">R</span>}
+        {freeCast && (
+          <span className="sr-tag" title={freeCast === 'atWill' ? 'Đúc không tốn ô (invocation)' : 'Đúc không tốn ô 1 lần mỗi nghỉ dài (invocation)'}>
+            {freeCast === 'atWill' ? '∞' : '1×'}
+          </span>
+        )}
         {inBook && (
           <span className="sr-tag" title={inBook === 'copied' ? 'Trong sổ phép: chép (đã trả vàng)' : 'Trong sổ phép: miễn phí khi lên cấp'}>
             📖

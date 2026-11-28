@@ -79,12 +79,15 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       const who = targetId || self;
       if (!who) return useStore.setState({ error: 'Chọn mục tiêu ở ô 🎯 Mục tiêu (hoặc gắn token cho nhân vật).' });
       const left = usesLeft ?? 0;
-      const raw = window.prompt(`${a.label}: hồi bao nhiêu HP? (còn ${left} trong quỹ)`, String(Math.min(left, 10)));
+      const raw = window.prompt(
+        a.poolDie ? `${a.label}: dùng bao nhiêu viên ${a.poolDie}? (còn ${left})` : `${a.label}: hồi bao nhiêu HP? (còn ${left} trong quỹ)`,
+        String(a.poolDie ? Math.min(left, 1) : Math.min(left, 10)),
+      );
       const n = Math.floor(Number(raw));
       if (!raw || !Number.isFinite(n) || n <= 0) return;
       if (spendUse && !spendUse(n)) return;
       if (a.cost && !spendEconomy(self, a.cost)) return;
-      void healRoll(`${sheet.name} · ${a.label} (${n} HP)`, String(n), who, sheet.id);
+      void healRoll(`${sheet.name} · ${a.label} (${a.poolDie ? `${n}${a.poolDie}` : `${n} HP`})`, a.poolDie ? `${n}${a.poolDie}` : String(n), who, sheet.id);
       return;
     }
     const tgt = a.target === 'self' ? self : targetId || undefined;

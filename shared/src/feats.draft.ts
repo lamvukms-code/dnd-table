@@ -531,6 +531,7 @@ const FIGHTING_STYLE: FeatDef[] = [
 const EPIC_BOON: FeatDef[] = [
   {
     id: 'feat-boon-of-combat-prowess',
+    passive: { missToHit: true },
     name: 'Boon of Combat Prowess',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -556,6 +557,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-fate',
+    uses: { max: 1, recharge: 'short' },
     name: 'Boon of Fate',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -565,6 +567,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-fortitude',
+    passive: { maxHpBonus: 40 },
     name: 'Boon of Fortitude',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -573,6 +576,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-irresistible-offense',
+    passive: { irresistibleOffense: true },
     name: 'Boon of Irresistible Offense',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -582,6 +586,9 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-recovery',
+    passive: { lastStand: true },
+    actions: [{ label: 'Hồi bằng d10', kind: 'poolHeal', target: 'self', cost: 'bonus', poolDie: 'd10' }],
+    uses: { max: 10, recharge: 'long' },
     name: 'Boon of Recovery',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -591,6 +598,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-skill',
+    passive: { allSkills: true },
     name: 'Boon of Skill',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -599,6 +607,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-speed',
+    passive: { speed: { bonus: 30 } },
     name: 'Boon of Speed',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+',
@@ -607,6 +616,7 @@ const EPIC_BOON: FeatDef[] = [
   },
   {
     id: 'feat-boon-of-spell-recall',
+    passive: { spellRecall: true },
     name: 'Boon of Spell Recall',
     category: 'epic-boon',
     prerequisite: 'Cấp 19+, có Spellcasting',

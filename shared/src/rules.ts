@@ -92,7 +92,7 @@ export function skillBonus(sheet: CharacterSheet, skill: string): number {
   const base = abilityMod(sheet.abilities[ability]);
   let bonus = base;
   if (sheet.skillExpertise.includes(skill)) bonus += sheet.proficiencyBonus * 2;
-  else if (sheet.skillProficiencies.includes(skill)) bonus += sheet.proficiencyBonus;
+  else if (sheet.skillProficiencies.includes(skill) || passiveHas(sheet, 'allSkills')) bonus += sheet.proficiencyBonus;
   // Jack of All Trades: half the Proficiency Bonus on a skill without proficiency
   else if (passiveHas(sheet, 'jackOfAllTrades')) bonus += Math.floor(sheet.proficiencyBonus / 2);
   return bonus + passiveCheckBonus(sheet, ability, skill) + exhaustionPenalty(sheet.exhaustion);
@@ -1341,7 +1341,9 @@ export function resolveDamageParts(
   let totalFinal = 0;
   const parts: PartOutcome[] = [];
   for (const { part, raw } of rolled) {
-    const o = applyDamageDefenses(raw, part.type, def, part.traits);
+    // Irresistible Offense: this part's type isn't resisted
+    const d = part.ignoreResist && def ? { ...def, resistances: def.resistances.filter((t) => t.toLowerCase() !== (part.type || '').toLowerCase()), conditional: def.conditional?.filter((c) => c.kind !== 'resist') } : def;
+    const o = applyDamageDefenses(raw, part.type, d, part.traits);
     totalRaw += o.raw;
     totalFinal += o.final;
     parts.push({

@@ -55,6 +55,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
   },
   {
     id: 'inv-ascendant-step',
+    passive: { freeCast: ['Levitate'] },
     name: 'Ascendant Step',
     prerequisite: 'Warlock cấp 5+',
     guidance: 'Cast Levitate lên bản thân không tốn spell slot.',
@@ -111,6 +112,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
   },
   {
     id: 'inv-gift-of-the-depths',
+    passive: { freeCastDaily: ['Water Breathing'] },
     name: 'Gift of the Depths',
     prerequisite: 'Warlock cấp 5+',
     guidance:
@@ -147,30 +149,35 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
   },
   {
     id: 'inv-mask-of-many-faces',
+    passive: { freeCast: ['Disguise Self'] },
     name: 'Mask of Many Faces',
     prerequisite: 'Warlock cấp 2+',
     guidance: 'Cast Disguise Self không tốn spell slot.',
   },
   {
     id: 'inv-master-of-myriad-forms',
+    passive: { freeCast: ['Alter Self'] },
     name: 'Master of Myriad Forms',
     prerequisite: 'Warlock cấp 5+',
     guidance: 'Cast Alter Self không tốn spell slot.',
   },
   {
     id: 'inv-misty-visions',
+    passive: { freeCast: ['Silent Image'] },
     name: 'Misty Visions',
     prerequisite: 'Warlock cấp 2+',
     guidance: 'Cast Silent Image không tốn spell slot.',
   },
   {
     id: 'inv-one-with-shadows',
+    passive: { freeCast: ['Invisibility'] },
     name: 'One with Shadows',
     prerequisite: 'Warlock cấp 5+',
     guidance: 'Khi đang đứng trong Dim Light/Darkness: cast Invisibility lên bản thân không tốn spell slot.',
   },
   {
     id: 'inv-otherworldly-leap',
+    passive: { freeCast: ['Jump'] },
     name: 'Otherworldly Leap',
     prerequisite: 'Warlock cấp 2+',
     guidance: 'Cast Jump lên bản thân không tốn spell slot.',
@@ -184,6 +191,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
   },
   {
     id: 'inv-pact-of-the-chain',
+    passive: { freeCast: ['Find Familiar'] },
     name: 'Pact of the Chain',
     guidance:
       'Học Find Familiar, cast được như Magic action không tốn slot. Khi cast có thể chọn thêm dạng đặc biệt: Imp, Pseudodragon, Quasit, Skeleton, Slaad Tadpole, Sphinx of Wonder, Sprite, Venomous Snake. Khi dùng Attack action, có thể bỏ 1 đòn của mình để familiar tấn công bằng Reaction của nó.',
@@ -211,12 +219,14 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
   },
   {
     id: 'inv-visions-of-distant-realms',
+    passive: { freeCast: ['Arcane Eye'] },
     name: 'Visions of Distant Realms',
     prerequisite: 'Warlock cấp 9+',
     guidance: 'Cast Arcane Eye không tốn spell slot.',
   },
   {
     id: 'inv-whispers-of-the-grave',
+    passive: { freeCast: ['Speak with Dead'] },
     name: 'Whispers of the Grave',
     prerequisite: 'Warlock cấp 7+',
     guidance: 'Cast Speak with Dead không tốn spell slot.',
