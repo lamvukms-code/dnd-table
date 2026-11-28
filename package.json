@@ -13,7 +13,8 @@
     "start": "npm run start -w @dnd-table/server",
     "build": "npm run build -w @dnd-table/client",
     "typecheck": "npm run typecheck -w @dnd-table/server && npm run typecheck -w @dnd-table/client",
-    "test": "npm run test -w @dnd-table/shared"
+    "test": "npm run test -w @dnd-table/shared",
+    "check:pages": "node client/scripts/check-pages.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0",

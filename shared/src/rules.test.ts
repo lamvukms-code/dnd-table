@@ -645,6 +645,13 @@ describe('class features (Rogue / Barbarian)', () => {
     expect(l3.actions?.map((a) => a.label)).toEqual(['A', 'D']); // only 2 known at level 3
     const l7 = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 7, featurePicks: picks }), defs)[0];
     expect(l7.actions?.map((a) => a.label)).toEqual(['A', 'B', 'D']);
+    // an option gated to a higher level is neither offered nor usable before it
+    const gated: SubclassFeatureDef[] = [{ ...defs[0], actions: [opt('A'), { ...opt('Late'), pickLevel: 6 }] }];
+    const g3 = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 3, featurePicks: { shots: ['Late', 'A'] } }), gated)[0];
+    expect(g3.pickOptions?.map((a) => a.label)).toEqual(['A']);
+    expect(g3.actions?.map((a) => a.label)).toEqual(['A']);
+    const g7 = derivedSubclassFeatures(sheet({ subclass: 'Archer', level: 7, featurePicks: { shots: ['Late', 'A'] } }), gated)[0];
+    expect(g7.actions?.map((a) => a.label)).toEqual(['A', 'Late']);
   });
 
   it('Druid: Wild Shape uses 2/3/4, features derive, rests recover', () => {

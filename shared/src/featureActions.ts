@@ -16,6 +16,8 @@ export interface FeatureAction {
   kind: 'attack' | 'damage' | 'save' | 'aoe' | 'effect' | 'tempHp' | 'heal' | 'summon' | 'form' | 'surge' | 'poolHeal';
   /** form: the form this button puts the character in (`sheet.activeForm`); passives with `whileForm` follow it. */
   form?: string;
+  /** On a `pick` feature: this option can be learned only from this class level on. */
+  pickLevel?: number;
   /** Action economy spent (default: none). */
   cost?: 'action' | 'bonus' | 'reaction';
   /** Spend one use of the feature's own `uses` pool (default true when the feature has one). */

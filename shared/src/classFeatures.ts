@@ -1025,7 +1025,8 @@ export function pickCount(f: SubclassFeatureDef, sheet: CharacterSheet): number 
 
 /** A `pick` feature with only the picked buttons (all options kept in `pickOptions`). */
 function withPicks(d: SubclassFeatureDef, sheet: CharacterSheet): SubclassFeatureDef {
-  const all = d.actions ?? [];
+  const lv = classLevelOf(sheet, d.class);
+  const all = (d.actions ?? []).filter((a) => !a.pickLevel || lv >= a.pickLevel);
   const chosen = new Set((sheet.featurePicks?.[d.id] ?? []).slice(0, pickCount(d, sheet)));
   return { ...d, pickOptions: all, actions: all.filter((a) => chosen.has(a.label)) };
 }
