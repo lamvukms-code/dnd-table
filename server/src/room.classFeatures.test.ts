@@ -140,4 +140,26 @@ describe('class feature passives on the server', () => {
     room2.apply(dm, { t: 'spellSave', targetTokenId: 'far', ability: 'dex', dc: 14, label: 'Trap', damageOnFail: [{ dice: '10', type: 'fire' }] });
     expect(T(room2, 'far').currentHp).toBe(90);
   });
+
+  it('on-hit effects: a failed save places the effect, a push needs no save', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0); // saves roll 1
+    const room = setup([tok('pc', 0), tok('orc', 1, sb('Orc'))], [pc('Rogue', 5)]);
+    room.apply(player, {
+      t: 'attack', label: 'pc → orc', attackNotation: '1d20+100', damageParts: [{ dice: '4', type: 'piercing' }], targetTokenId: 'orc', attackerTokenId: 'pc', attackerSheetId: 'pc', attackRange: 'melee',
+      external: { attack: { total: 25, faces: [15], d20Natural: 15, source: 'dddice' }, crit: false, partTotals: [{ total: 4, faces: [] }] },
+      onHit: [
+        { label: 'Poison', save: { ability: 'con', dc: 15 }, effect: { id: '', name: 'Poisoned (Cunning Strike)', condition: 'poisoned' } },
+        { label: 'Forceful', pushFeet: 10 },
+      ],
+    });
+    expect(T(room, 'orc').effects?.some((e) => e.condition === 'poisoned')).toBe(true);
+    expect(T(room, 'orc').x).toBe(3);
+  });
+
+  it('Reckless: attacks against the bearer keep advantage (not used up like Help)', () => {
+    const room = setup([tok('orc', 1, sb('Orc')), tok('pc', 0)], [pc('Barbarian', 2)]);
+    T(room, 'pc').effects = [{ id: 'r', name: 'Reckless (bị lợi thế)', sourceTokenId: 'pc', attackersAdvantage: true, attackersAdvantageKeep: true }];
+    room.apply(dm, hit('5'));
+    expect(T(room, 'pc').effects?.some((e) => e.id === 'r')).toBe(true);
+  });
 });

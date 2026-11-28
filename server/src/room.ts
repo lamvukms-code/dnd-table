@@ -396,6 +396,25 @@ export class Room {
     return auraSaveBonusFor(token, sources, (a, b) => edgeFeet(a, tokenSpan(a), b, tokenSpan(b)), (a, b) => this.isPlayerSide(a) === this.isPlayerSide(b));
   }
 
+  /** Effects an attack carries for a hit (Cunning Strike, Brutal Strike): each maybe behind a save. */
+  private applyOnHit(list: NonNullable<Extract<ClientAction, { t: 'attack' }>['onHit']>, target: Token, attackerTok: Token | undefined): void {
+    for (const o of list) {
+      let failed = true;
+      let note = '';
+      if (o.save) {
+        const s = this.rollTokenSave(target, o.save.ability, o.save.dc);
+        failed = !s.pass;
+        note = ` · ${o.save.ability.toUpperCase()} save ${s.total} vs DC ${o.save.dc}${s.modeNote} — ${s.pass ? 'đỗ' : 'TRƯỢT'}`;
+      }
+      if (failed && o.effect) target.effects = [...(target.effects ?? []), { ...o.effect, id: nanoid(8) }];
+      if (failed && o.pushFeet && attackerTok) {
+        const fm = this.forceMove(target, attackerTok, 'push', o.pushFeet);
+        note += ` · đẩy ${fm.feet} ft`;
+      }
+      this.pendingBaneLogs.push(`✦ ${o.label}${note}${o.note ? ` · ${o.note}` : ''}`);
+    }
+  }
+
   /** A token that can't take actions or reactions right now. */
   private incapacitated(token: Token): boolean {
     return (token.effects ?? []).some((e) => e.condition && ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(e.condition));
@@ -3188,7 +3207,7 @@ export class Room {
           const attacker = action.attackerTokenId
             ? this.state.tokens.find((t) => t.id === action.attackerTokenId)
             : this.state.tokens.find((t) => this.state.sheets.some((x) => x.id === action.attackerSheetId && x.tokenId === t.id));
-          const help = target.effects?.find((e) => e.attackersAdvantage && e.sourceTokenId !== attacker?.id);
+          const help = target.effects?.find((e) => e.attackersAdvantage && !e.attackersAdvantageKeep && e.sourceTokenId !== attacker?.id);
           if (help) target.effects = target.effects!.filter((e) => e !== help);
           // Sap: disadvantage on the bearer's next attack only. Vex: advantage on this attacker's next attack on it.
           if (attacker?.effects?.some((e) => e.consumeOnAttack)) attacker.effects = attacker.effects.filter((e) => !e.consumeOnAttack);
@@ -3542,6 +3561,7 @@ export class Room {
           }
           this.maybeBreakConcentration(target, outcome.totalFinal, passiveHas(attackerTok ? this.linkedSheet(attackerTok) : undefined, 'mageSlayer') ? 'Mage Slayer' : undefined);
           if (outcome.totalFinal > 0) this.featHitEffects(action, target, attackerTok, effectiveCrit);
+          if (action.onHit?.length) this.applyOnHit(action.onHit, target, attackerTok);
           const critTag = effectiveCrit
             ? autoCrit && !res.crit
               ? ' (chí mạng — mục tiêu tê liệt/bất tỉnh)'

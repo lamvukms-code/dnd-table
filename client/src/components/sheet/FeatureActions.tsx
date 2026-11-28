@@ -7,6 +7,8 @@ import {
   resolveFeatureAttack,
   resolveFeatureDc,
   resolveFeatureNumber,
+  monkFocusMax,
+  wildShapeMax,
   type CharacterSheet,
   type FeatureAction,
   type SheetAction,
@@ -21,8 +23,10 @@ interface Props {
   actions: FeatureAction[];
   /** The sheet's current target (the "🎯 Mục tiêu" bar). */
   targetId?: string;
-  /** Spend `n` uses (default 1) of the feature's own pool; false = cancelled (not enough left and the player declined). */
-  spendUse?: (n?: number) => boolean;
+  /** Spend `n` uses (default 1) of the feature's own pool, saving `extra` sheet changes in the same edit; false = cancelled. */
+  spendUse?: (n?: number, extra?: Partial<CharacterSheet>) => boolean;
+  /** Save sheet changes a button makes (Focus Points, slots) when it spends no use. */
+  patch?: (p: Partial<CharacterSheet>) => void;
   /** Uses left in the pool (Lay On Hands' HP). */
   usesLeft?: number;
   /** A weapon-style feature attack was rolled (armed riders it carried are now spent). */
@@ -32,7 +36,7 @@ interface Props {
 }
 
 /** Buttons a feature declares in local data, run through the app's usual attack / save / area flows. */
-export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, usesLeft, onWeaponFired, setForm }: Props) {
+export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, patch, usesLeft, onWeaponFired, setForm }: Props) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
@@ -52,6 +56,16 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       return;
     }
     const self = sheet.tokenId;
+    // resources the button moves (Focus Points, Pact slots, Wild Shape ⇄ slot)
+    const extra = resourcePatch(a, sheet);
+    if (typeof extra === 'string') return useStore.setState({ error: `${a.label}: ${extra}` });
+    if (a.restorePact || a.convert) {
+      if ((a.spendsUse ?? true) && spendUse) {
+        if (!spendUse(1, extra)) return;
+      } else patch?.(extra);
+      send({ t: 'roll', label: `${sheet.name} · ${a.label}`, notation: '0' });
+      return;
+    }
     // Action Surge: one more Action this turn
     if (a.kind === 'surge') {
       if (!self) return useStore.setState({ error: 'Nhân vật chưa có token trên bản đồ.' });
@@ -83,8 +97,10 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       useStore.setState({ error: 'Nhân vật chưa có token trên bản đồ.' });
       return;
     }
-    if ((a.spendsUse ?? true) && spendUse && !spendUse()) return;
     if (a.cost && !spendEconomy(self, a.cost)) return;
+    if ((a.spendsUse ?? true) && spendUse) {
+      if (!spendUse(1, extra)) return;
+    } else if (Object.keys(extra).length) patch?.(extra);
 
     const label = `${sheet.name} · ${a.label}`;
     const tgtName = tokens.find((t) => t.id === tgt)?.label;
@@ -157,6 +173,9 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       case 'effect': {
         const fx = effect();
         if (fx) send({ t: 'applyEffect', targetTokenId: tgt!, effect: fx });
+        // a second effect from the same button (Reckless Attack)
+        const fx2 = a.extraEffect ? buildFeatureEffect({ ...a, effect: a.extraEffect }, sheet, classKey, round, featureName) : undefined;
+        if (fx2) send({ t: 'applyEffect', targetTokenId: tgt!, effect: fx2 });
         break;
       }
       case 'save':
@@ -221,4 +240,35 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       ))}
     </span>
   );
+}
+
+/** Sheet changes a button makes besides its roll (or why it can't be used now). */
+function resourcePatch(a: FeatureAction, sheet: CharacterSheet): Partial<CharacterSheet> | string {
+  const out: Partial<CharacterSheet> = {};
+  if (a.focusCost) {
+    const left = monkFocusMax(sheet) - (sheet.focusUsed ?? 0);
+    if (left < a.focusCost) return `cần ${a.focusCost} Focus Points (còn ${left})`;
+    out.focusUsed = (sheet.focusUsed ?? 0) + a.focusCost;
+  }
+  if (a.refillFocus) out.focusUsed = 0;
+  if (a.restorePact) {
+    const p = sheet.pactSlots;
+    if (!p || p.used === 0) return 'ô Pact Magic đang đầy';
+    out.pactSlots = { ...p, used: Math.max(0, p.used - Math.ceil(p.max / 2)) };
+  }
+  if (a.convert === 'slotToWildShape') {
+    if (!(sheet.wildShapeUsed ?? 0)) return 'Wild Shape đang đầy';
+    const slot = [...sheet.spellSlots].sort((x, y) => x.level - y.level).find((x) => x.used < x.max);
+    if (!slot) return 'hết ô phép';
+    out.spellSlots = sheet.spellSlots.map((x) => (x.level === slot.level ? { ...x, used: x.used + 1 } : x));
+    out.wildShapeUsed = (sheet.wildShapeUsed ?? 0) - 1;
+  }
+  if (a.convert === 'wildShapeToSlot') {
+    if ((sheet.wildShapeUsed ?? 0) >= wildShapeMax(sheet)) return 'hết lượt Wild Shape';
+    const l1 = sheet.spellSlots.find((x) => x.level === 1);
+    if (!l1 || l1.used === 0) return 'ô cấp 1 đang đầy';
+    out.spellSlots = sheet.spellSlots.map((x) => (x.level === 1 ? { ...x, used: x.used - 1 } : x));
+    out.wildShapeUsed = (sheet.wildShapeUsed ?? 0) + 1;
+  }
+  return out;
 }

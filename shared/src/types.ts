@@ -385,6 +385,14 @@ export interface CharacterSheet {
   wildShapeForms?: string[];
   /** Druid: the beast form currently taken, with what it replaced (put back when it ends). */
   wildShape?: WildShapeState | null;
+  /** Choices made for class features that offer options (Elemental Fury, Blessed Strikes…), by feature id. */
+  featureChoices?: Record<string, string>;
+  /** Rogue: Cunning Strike options chosen for the next Sneak Attack. */
+  cunningArmed?: string[];
+  /** Barbarian: Brutal Strike options chosen for the next Reckless melee attack. */
+  brutalArmed?: string[];
+  /** Warlock: Mystic Arcanum spell levels already cast since the last long rest. */
+  arcanumUsed?: number[];
   /** Sorcerer: Sorcery Points spent (max = Sorcerer level). */
   sorceryUsed?: number;
   /** Sorcerer: Metamagic options known. */
@@ -634,6 +642,8 @@ export interface ActiveEffect {
   attackersDisadvantage?: boolean;
   /** The next attack against the bearer by someone other than the source has advantage, then it clears (Help). */
   attackersAdvantage?: boolean;
+  /** With `attackersAdvantage`: every attack against the bearer has it while the effect lasts (Reckless Attack). */
+  attackersAdvantageKeep?: boolean;
   /** The bearer's movement provokes no Opportunity Attacks (Disengage). */
   noOpportunityAttacks?: boolean;
   /** Hidden by the Hide action: the Stealth total a searcher's Perception has to beat; ends when the bearer attacks. */

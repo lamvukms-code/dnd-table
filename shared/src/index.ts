@@ -40,3 +40,4 @@ export * from './bestiaryGroups.js';
 export * from './sorcerer.js';
 export * from './spellbook.js';
 export * from './wildShape.js';
+export * from './strikeOptions.js';

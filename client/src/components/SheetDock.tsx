@@ -111,6 +111,7 @@ import { AbilitiesTab, FeatsTab } from './sheet/ListTabs.js';
 import { SpellAdder } from './sheet/SpellAdder.js';
 import { FirearmControls } from './sheet/FirearmControls.js';
 import { MadnessPanel } from './sheet/MadnessPanel.js';
+import { StrikeChips } from './sheet/StrikeChips.js';
 import { ArcaneRecoveryPanel, MetamagicBar, SorcererPanel, SpellbookBar, WildShapePanel, type ScribeMode } from './sheet/CasterFeatures.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
 import { auraSaveBonusFor, classLevelOf, edgeFeet, passiveCheckFloor, passiveHas, passiveSaveAdvantage, tokenSpan } from '@dnd-table/shared';
@@ -1282,7 +1283,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
                     const jaegerArmed = !!draft.jaeger?.armedFinisher;
                     const featArmed = (draft.featureRidersArmed ?? []).length > 0;
                     const onceOn = draft.damageRiders.some((r) => r.once && r.enabled);
-                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed && !jaegerArmed && !featArmed && !onceOn) return;
+                    const strikeArmed = !!draft.cunningArmed?.length || !!draft.brutalArmed?.length;
+                    if (!draft.sneakAttackArmed && !draft.boomingBladeArmed && !jaegerArmed && !featArmed && !onceOn && !strikeArmed) return;
                     commit({
                       ...draft,
                       featureRidersArmed: [],
@@ -1290,6 +1292,8 @@ function BasicTab({ draft, commit }: EditorCtx) {
                       damageRiders: draft.damageRiders.map((r) => (r.once && r.enabled ? { ...r, enabled: false } : r)),
                       sneakAttackArmed: false,
                       boomingBladeArmed: false,
+                      cunningArmed: [],
+                      brutalArmed: [],
                       // an armed Jaeger Finisher expends all Momentum dice once its damage is rolled
                       ...(jaegerArmed ? { jaeger: expendJaegerMomentum(draft) } : {}),
                     });
@@ -2006,6 +2010,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           </button>
           <span className="cf-label">Rage charge:</span>
           <FocusPips max={rMax} used={rUsed} onChange={(u) => set({ rageUsed: u })} />
+          <StrikeChips draft={draft} commit={commit} kind="brutal" />
         </div>
       )}
 
@@ -2138,6 +2143,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
             Gạt trước khi tung đòn finesse/tầm xa; tự cộng vào damage rồi tự tắt. Cunning Action:
             Bonus Action Dash / Disengage / Hide.
           </span>
+          <StrikeChips draft={draft} commit={commit} kind="cunning" />
         </div>
       )}
 
@@ -2179,13 +2185,30 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
                 <span className="cf-lvl">L{f.level}</span>
                 <span className="cf-body">
                   <strong>{f.name}.</strong>
-                  {(f.passive || f.actions || f.automation) && (
+                  {(f.passive || f.actions || f.automation || f.choices) && (
                     <em className="cf-auto-tag" title="App tự áp năng lực này">
                       {' '}
                       ⚙ tự động
                     </em>
                   )}{' '}
                   {f.description}
+                  {f.choices && (
+                    <select
+                      className="cf-choice"
+                      value={draft.featureChoices?.[f.id] ?? ''}
+                      title="Chọn lựa chọn của năng lực này — app áp cơ chế của lựa chọn đó"
+                      onChange={(e) =>
+                        commit({ ...draft, featureChoices: { ...(draft.featureChoices ?? {}), [f.id]: e.target.value } })
+                      }
+                    >
+                      <option value="">— chọn —</option>
+                      {f.choices.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </span>
               </div>
             ))}
@@ -2429,13 +2452,14 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
                     }}
                     spendUse={
                       f.uses
-                        ? (n = 1) => {
+                        ? (n = 1, extra = {}) => {
                             if (u + n > max && !window.confirm(`${f.name}: không đủ lượt dùng (còn ${Math.max(0, max - u)}). Vẫn dùng?`)) return false;
-                            setUse(f.id, Math.min(max, u + n));
+                            commit({ ...draft, ...extra, subclassUses: { ...used, [f.id]: Math.min(max, u + n) } });
                             return true;
                           }
                         : undefined
                     }
+                    patch={(p) => commit({ ...draft, ...p })}
                     usesLeft={f.uses ? Math.max(0, max - u) : undefined}
                   />
                 )}

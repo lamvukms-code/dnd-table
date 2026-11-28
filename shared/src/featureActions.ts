@@ -41,6 +41,16 @@ export interface FeatureAction {
   range?: 'melee' | 'ranged';
   /** effect placed on the target (effect kind), or on a failed save (save / aoe). */
   effect?: FeatureEffect;
+  /** A second effect placed with the first (Reckless Attack: advantage now, attackers' advantage until your turn). */
+  extraEffect?: FeatureEffect;
+  /** Focus Points it costs (Superior Defense). */
+  focusCost?: number;
+  /** Also give back every Focus Point (Uncanny Metabolism). */
+  refillFocus?: boolean;
+  /** Regain half the Pact Magic slots, rounded up (Magical Cunning). */
+  restorePact?: 'half';
+  /** Trade resources: a spell slot for a Wild Shape use, or a Wild Shape use for a level 1 slot (Wild Resurgence). */
+  convert?: 'slotToWildShape' | 'wildShapeToSlot';
 }
 
 /** An effect a feature button applies (formulas allowed for numbers and dice). */
@@ -76,6 +86,8 @@ export interface FeatureEffect {
   untilEndOfTurn?: boolean;
   /** Ends when the character who applied it starts its next turn. */
   untilYourNextTurn?: boolean;
+  /** Attack rolls against the bearer have advantage while it lasts. */
+  attackersAdvantage?: boolean;
 }
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
@@ -187,6 +199,8 @@ export function buildFeatureEffect(
     saveAdvantage: e.saveAdvantage,
     endsWhenDown: e.endsWhenDown,
     rollAdvantage: e.rollAdvantage,
+    attackersAdvantage: e.attackersAdvantage,
+    attackersAdvantageKeep: e.attackersAdvantage ? true : undefined,
     speedPenalty: e.speedPenalty,
     critMin: e.critMin,
     endsAfterOwnTurns: e.untilEndOfTurn ? 1 : undefined,

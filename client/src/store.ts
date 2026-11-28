@@ -8,6 +8,13 @@ import {
   metamagicLabel,
   sorceryPointsLeft,
   type MetamagicKey,
+  type OnHitEffect,
+  BRUTAL_STRIKES,
+  CUNNING_STRIKES,
+  brutalOnHit,
+  brutalStrikeDice,
+  cunningCost,
+  cunningOnHit,
   combineRollModes,
   conditionAttackMode,
   conditionAutoCrit,
@@ -155,6 +162,8 @@ interface AttackParams {
   cleave?: boolean;
   /** Seeking Spell: a miss rolls the d20 again once. */
   rerollMiss?: boolean;
+  /** Effects applied on a hit (Cunning Strike, Brutal Strike). */
+  onHit?: OnHitEffect[];
 }
 
 export interface AoeMode {
@@ -564,9 +573,35 @@ export const useStore = create<StoreState>((set, get) => {
       grappleOnHit,
       mastery,
       cleave,
-      rerollMiss,
+      rerollMiss,      onHit,
     }) => {
       const room = get().room;
+      // Cunning Strike (paid from Sneak Attack dice) and Brutal Strike (gives up Reckless advantage)
+      let brutalForgo = false;
+      if (attackKind !== 'spell' && attackerSheetId && room) {
+        const sh = room.sheets.find((x) => x.id === attackerSheetId);
+        const tokId = attackerTokenId ?? sh?.tokenId;
+        const ctx = { round: room.initiative.round ?? 1, attackerTokenId: tokId, sheetId: sh?.id };
+        const extraHit: OnHitEffect[] = [];
+        if (sh?.sneakAttackArmed && sh.cunningArmed?.length) {
+          const cost = cunningCost(sh.cunningArmed);
+          damageParts = damageParts.flatMap((p) => {
+            if (p.label !== 'Sneak Attack') return [p];
+            const n = Number(/^(\d+)d6/.exec(p.dice)?.[1] ?? 0) - cost;
+            return n > 0 ? [{ ...p, dice: `${n}d6` }] : [];
+          });
+          extraHit.push(...cunningOnHit(sh, sh.cunningArmed, ctx));
+          label = `${label} · ${sh.cunningArmed.map((k) => CUNNING_STRIKES.find((o) => o.key === k)?.name ?? k).join(' + ')} (−${cost}d6)`;
+        }
+        const reckless = room.tokens.find((t) => t.id === tokId)?.effects?.some((e) => e.name === 'Reckless Attack');
+        if (sh?.brutalArmed?.length && attackRange === 'melee' && reckless) {
+          brutalForgo = true;
+          damageParts = [...damageParts, { dice: brutalStrikeDice(sh), type: damageParts[0]?.type ?? '', label: 'Brutal Strike' }];
+          extraHit.push(...brutalOnHit(sh.brutalArmed, ctx));
+          label = `${label} · Brutal Strike: ${sh.brutalArmed.map((k) => BRUTAL_STRIKES.find((o) => o.key === k)?.name ?? k).join(' + ')}`;
+        }
+        if (extraHit.length) onHit = [...(onHit ?? []), ...extraHit];
+      }
       // Fold condition-implied advantage/disadvantage into the manual roll mode.
       let notation = attackNotation ?? '1d20';
       let condNote = '';
@@ -592,7 +627,7 @@ export const useStore = create<StoreState>((set, get) => {
           mode = combineRollModes(mode, 'disadvantage');
           reasons.push('mục tiêu đang Dodge');
         }
-        const help = tgtFx.find((e) => e.attackersAdvantage && e.sourceTokenId !== atkTok?.id);
+        const help = tgtFx.find((e) => e.attackersAdvantage && (e.attackersAdvantageKeep || e.sourceTokenId !== atkTok?.id));
         if (help) {
           mode = combineRollModes(mode, 'advantage');
           reasons.push(help.name.replace(/^Bị Help nhắm/, 'Help'));
@@ -648,6 +683,8 @@ export const useStore = create<StoreState>((set, get) => {
           }
           // the attacker's own effects that give advantage (taking aim…)
           const advWhy = (atkTok.effects ?? [])
+            // Brutal Strike gives up Reckless Attack's advantage for this attack
+            .filter((e) => !(brutalForgo && e.name === 'Reckless Attack'))
             .filter((e) => e.rollAdvantage?.includes('attack') || (attackKind === 'spell' && e.spellAttackAdvantage))
             .map((e) => e.name);
           if (advWhy.length) {
@@ -721,7 +758,7 @@ export const useStore = create<StoreState>((set, get) => {
           grappleOnHit,
           mastery,
           cleave,
-          rerollMiss,
+          rerollMiss,          onHit,
         });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(notation);
@@ -749,7 +786,7 @@ export const useStore = create<StoreState>((set, get) => {
           grappleOnHit,
           mastery,
           cleave,
-          rerollMiss,
+          rerollMiss,          onHit,
           external: { attack },
         });
       }
@@ -805,7 +842,7 @@ export const useStore = create<StoreState>((set, get) => {
         grappleOnHit,
         mastery,
         cleave,
-        rerollMiss,
+        rerollMiss,        onHit,
         external: { attack, crit: effectiveCrit, partTotals },
       });
     },
@@ -974,6 +1011,13 @@ export const useStore = create<StoreState>((set, get) => {
       if (repeat) {
         if (meta.length) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch }, base: sheet });
         return true; // re-use of a lasting spell: the first cast paid the slot
+      }
+      // Mystic Arcanum: a Warlock's level 6+ spell, once per long rest without a slot
+      if (spell.level >= 6 && casterTypeOf(sheet) === 'pact') {
+        const used = sheet.arcanumUsed ?? [];
+        if (used.includes(spell.level) && !window.confirm(`Mystic Arcanum cấp ${spell.level} đã dùng từ lần nghỉ dài trước. Vẫn đúc?`)) return false;
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch, arcanumUsed: [...new Set([...used, spell.level])] }, base: sheet });
+        return true;
       }
       const slot = spendSpellSlot(sheet, spell.level, castAtLevel);
       // remember the slot level so later recasts roll that level's dice

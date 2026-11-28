@@ -1594,6 +1594,7 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     focusUsed: 0,
     jaeger: jaegerAfterRest(sheet, 'long'),
     wildShapeUsed: 0,
+    arcanumUsed: [],
     // Sorcerer: points back, restoration ready, slots made with Font of Magic vanish
     ...(sheet.sorceryUsed || sheet.sorcRestoreUsed || Object.keys(sheet.createdSlots ?? {}).length || sheet.metamagicArmed?.length
       ? sorcererLongRest({ ...sheet, spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })) })

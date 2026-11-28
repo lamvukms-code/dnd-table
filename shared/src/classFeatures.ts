@@ -33,6 +33,8 @@ export interface ClassFeatureDef {
     | 'sorcery'
     | 'spellbook'
     | 'builtin';
+  /** Options the player picks between; the chosen one's passive / buttons apply (sheet.featureChoices[id]). */
+  choices?: { value: string; label: string; passive?: FeaturePassive; actions?: FeatureAction[] }[];
   /** Mechanics the app runs for this feature (same shapes as subclass features). */
   passive?: FeaturePassive;
   actions?: FeatureAction[];
@@ -213,6 +215,7 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'barb-reckless-attack',
+    actions: [{ label: 'Reckless Attack', kind: 'effect', target: 'self', effect: { name: 'Reckless Attack', rollAdvantage: ['attack'], untilEndOfTurn: true, note: 'Lợi thế đòn cận chiến STR lượt này' }, extraEffect: { name: 'Reckless (bị lợi thế)', attackersAdvantage: true, untilYourNextTurn: true, note: 'Đòn đánh vào bạn có lợi thế đến lượt kế' } }],
     level: 2,
     name: 'Reckless Attack',
     description:
@@ -329,6 +332,8 @@ const MONK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'monk-uncanny-metabolism',
+    actions: [{ label: 'Uncanny Metabolism', kind: 'heal', target: 'self', diceByLevel: { 2: '1d6+lvl', 5: '1d8+lvl', 11: '1d10+lvl', 17: '1d12+lvl' }, refillFocus: true }],
+    uses: { max: 1, recharge: 'long' },
     level: 2,
     name: 'Uncanny Metabolism',
     description: 'Một lần mỗi nghỉ dài, khi lăn initiative: hồi hết Focus Points và hồi HP = tung Martial Arts die + cấp Monk.',
@@ -409,6 +414,7 @@ const MONK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'monk-superior-defense',
+    actions: [{ label: 'Superior Defense', kind: 'effect', target: 'self', focusCost: 3, effect: { name: 'Superior Defense', rounds: 10, resist: ['acid', 'bludgeoning', 'cold', 'fire', 'lightning', 'necrotic', 'piercing', 'poison', 'psychic', 'radiant', 'slashing', 'thunder'] } }],
     level: 18,
     name: 'Superior Defense',
     description: 'Đầu lượt, dùng 3 Focus Point: 1 phút kháng mọi sát thương trừ Force.',
@@ -439,6 +445,8 @@ const WARLOCK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'warlock-magical-cunning',
+    actions: [{ label: 'Magical Cunning', kind: 'effect', target: 'self', restorePact: 'half' }],
+    uses: { max: 1, recharge: 'long' },
     level: 2,
     name: 'Magical Cunning',
     description:
@@ -492,6 +500,10 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'druid-primal-order',
+    choices: [
+      { value: 'magician', label: 'Magician', passive: { skillAdd: [{ skill: 'arcana', add: 'wis' }, { skill: 'nature', add: 'wis' }] } },
+      { value: 'warden', label: 'Warden' },
+    ],
     level: 1,
     name: 'Primal Order',
     description:
@@ -521,6 +533,11 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
   { id: 'druid-subclass-3', level: 3, name: 'Druid Subclass', description: 'Chọn subclass (chưa hỗ trợ trong app).' },
   {
     id: 'druid-wild-resurgence',
+    actions: [
+      { label: 'Ô phép → 1 Wild Shape', kind: 'effect', target: 'self', convert: 'slotToWildShape', spendsUse: false },
+      { label: '1 Wild Shape → ô cấp 1', kind: 'effect', target: 'self', convert: 'wildShapeToSlot' },
+    ],
+    uses: { max: 1, recharge: 'long' },
     level: 5,
     name: 'Wild Resurgence',
     description:
@@ -528,6 +545,13 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'druid-elemental-fury',
+    choices: [
+      { value: 'potent', label: 'Potent Spellcasting', passive: { riders: [{ label: 'Potent Spellcasting', dice: 'mod:wis', type: 'same', scope: 'spell', cantripOnly: true }] } },
+      { value: 'primal-cold', label: 'Primal Strike (cold)', passive: { riders: [{ label: 'Primal Strike', byLevel: { 7: '1d8', 15: '2d8' }, type: 'cold', scope: 'weapon', armed: true }] } },
+      { value: 'primal-fire', label: 'Primal Strike (fire)', passive: { riders: [{ label: 'Primal Strike', byLevel: { 7: '1d8', 15: '2d8' }, type: 'fire', scope: 'weapon', armed: true }] } },
+      { value: 'primal-lightning', label: 'Primal Strike (lightning)', passive: { riders: [{ label: 'Primal Strike', byLevel: { 7: '1d8', 15: '2d8' }, type: 'lightning', scope: 'weapon', armed: true }] } },
+      { value: 'primal-thunder', label: 'Primal Strike (thunder)', passive: { riders: [{ label: 'Primal Strike', byLevel: { 7: '1d8', 15: '2d8' }, type: 'thunder', scope: 'weapon', armed: true }] } },
+    ],
     level: 7,
     name: 'Elemental Fury',
     description:
@@ -715,7 +739,16 @@ const BARD: Omit<ClassFeatureDef, 'class'>[] = [
 
 const CLERIC: Omit<ClassFeatureDef, 'class'>[] = [
   { id: 'cleric-spellcasting', level: 1, name: 'Spellcasting', description: 'Full caster, ability = WIS. Ô phép, DC tự tính ở tab Phép.' },
-  { id: 'cleric-divine-order', level: 1, name: 'Divine Order', description: 'Chọn: Protector (giáp nặng, vũ khí quân sự) hoặc Thaumaturge (thêm 1 cantrip, cộng WIS vào Arcana/Religion).' },
+  {
+    id: 'cleric-divine-order',
+    level: 1,
+    name: 'Divine Order',
+    description: 'Chọn: Protector (giáp nặng, vũ khí quân sự) hoặc Thaumaturge (thêm 1 cantrip, cộng WIS vào Arcana/Religion). App: chọn ở đây, Thaumaturge tự cộng.',
+    choices: [
+      { value: 'protector', label: 'Protector' },
+      { value: 'thaumaturge', label: 'Thaumaturge', passive: { skillAdd: [{ skill: 'arcana', add: 'wis' }, { skill: 'religion', add: 'wis' }] } },
+    ],
+  },
   {
     id: 'cleric-channel-divinity',
     level: 2,
@@ -745,7 +778,17 @@ const CLERIC: Omit<ClassFeatureDef, 'class'>[] = [
   },
   { id: 'cleric-subclass-3', level: 3, name: 'Cleric Subclass', description: 'Chọn Domain.' },
   { id: 'cleric-sear-undead', level: 5, name: 'Sear Undead', description: 'Turn Undead: Undead trượt save nhận thêm WIS mod d8 radiant.' },
-  { id: 'cleric-blessed-strikes', level: 7, name: 'Blessed Strikes', description: 'Chọn: Divine Strike (1 lần mỗi lượt, đòn vũ khí +1d8 necrotic/radiant) hoặc Potent Spellcasting (cộng WIS vào sát thương cantrip Cleric).' },
+  {
+    id: 'cleric-blessed-strikes',
+    level: 7,
+    name: 'Blessed Strikes',
+    description: 'Chọn: Divine Strike (1 lần mỗi lượt, đòn vũ khí +1d8 necrotic/radiant, 2d8 ở cấp 14) hoặc Potent Spellcasting (cộng WIS vào sát thương cantrip Cleric). App: chọn ở đây rồi tự áp.',
+    choices: [
+      { value: 'divine-radiant', label: 'Divine Strike (radiant)', passive: { riders: [{ label: 'Divine Strike', byLevel: { 7: '1d8', 14: '2d8' }, type: 'radiant', scope: 'weapon', armed: true }] } },
+      { value: 'divine-necrotic', label: 'Divine Strike (necrotic)', passive: { riders: [{ label: 'Divine Strike', byLevel: { 7: '1d8', 14: '2d8' }, type: 'necrotic', scope: 'weapon', armed: true }] } },
+      { value: 'potent', label: 'Potent Spellcasting', passive: { riders: [{ label: 'Potent Spellcasting', dice: 'mod:wis', type: 'same', scope: 'spell', cantripOnly: true }] } },
+    ],
+  },
   { id: 'cleric-divine-intervention', level: 10, name: 'Divine Intervention', description: 'Magic action: đúc 1 phép Cleric cấp ≤ 5 không tốn ô, không cần vật liệu. 1 lần mỗi nghỉ dài.' },
   { id: 'cleric-improved-blessed-strikes', level: 14, name: 'Improved Blessed Strikes', description: 'Divine Strike lên 2d8; Potent Spellcasting thêm HP tạm.' },
   { id: 'cleric-greater-divine-intervention', level: 20, name: 'Greater Divine Intervention', description: 'Divine Intervention có thể đúc Wish (sau đó 2d4 nghỉ dài mới dùng lại).' },
@@ -897,6 +940,11 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
 /** Class features this sheet has that carry mechanics (passives, buttons, use pools), as feature defs. */
 export function classMechanicDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
   return derivedClassFeatures(sheet)
+    .map((f) => {
+      // a feature with options: the chosen one's mechanics
+      const ch = f.choices?.find((c) => c.value === sheet.featureChoices?.[f.id]);
+      return { ...f, passive: ch?.passive ?? f.passive, actions: ch?.actions ?? f.actions };
+    })
     .filter((f) => f.passive || f.actions || f.uses)
     .map((f) => ({ id: f.id, class: f.class, subclass: '', level: f.level, name: f.name, description: f.description, passive: f.passive, actions: f.actions, uses: f.uses }));
 }

@@ -82,6 +82,8 @@ export type ClientAction =
       attackNotation: string;
       /** Seeking Spell: on a miss the d20 is rolled once more and the new roll stands. */
       rerollMiss?: boolean;
+      /** On a hit: rider effects, each behind an optional save (Cunning Strike, Brutal Strike). */
+      onHit?: OnHitEffect[];
       damageParts: DamagePart[];
       targetTokenId: string;
       attackerSheetId?: string;
@@ -336,4 +338,16 @@ export type ServerEvent =
 export interface ClientEnvelope {
   id?: string;
   action: ClientAction;
+}
+
+/** Something that happens to the target when an attack hits (after the damage), maybe behind a save. */
+export interface OnHitEffect {
+  label: string;
+  save?: { ability: import('./types.js').Ability; dc: number };
+  /** Placed on a failed save (or always without one). */
+  effect?: import('./types.js').ActiveEffect;
+  /** Pushed this many feet away from the attacker on a failed save (or always). */
+  pushFeet?: number;
+  /** Shown in the log (Withdraw, Sundering Blow…). */
+  note?: string;
 }
