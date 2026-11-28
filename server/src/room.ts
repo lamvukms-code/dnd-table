@@ -59,6 +59,8 @@ import {
   spellAttackBonus,
   hasStyle,
   shieldEquipped,
+  hasProp,
+  weaponInfo,
   expendJaegerMomentum,
   legendaryActionCost,
   legendaryInfo,
@@ -194,6 +196,13 @@ interface Intercept {
 }
 
 /** The target's own damage cut taken before the roll (Uncanny Dodge halves, Deflect Attacks reduces). */
+/** Defensive Duelist chosen before the roll: + AC against this attack. */
+interface Parry {
+  tokenId: string;
+  by: string;
+  ac: number;
+}
+
 interface SelfCut {
   tokenId: string;
   by: string;
@@ -339,6 +348,41 @@ export class Room {
     tk.currentHp = sheet.currentHp;
     tk.maxHp = sheet.maxHp;
     tk.tempHp = sheet.tempHp;
+  }
+
+  /**
+   * Crusher / Slasher on a weapon hit (once per turn each): a bludgeoning hit pushes the target 5 ft, a
+   * slashing hit cuts its speed by 10 ft until the attacker's next turn. On a crit, Crusher gives the
+   * next attack against the target advantage and Slasher gives the target disadvantage on attacks.
+   */
+  private featHitEffects(action: Extract<ClientAction, { t: 'attack' }>, target: Token, attackerTok: Token | undefined, crit: boolean): void {
+    if (!attackerTok || action.attackKind === 'spell') return;
+    const sheet = this.linkedSheet(attackerTok);
+    if (!sheet) return;
+    const types = (action.damageParts ?? []).map((p) => (p.type || '').toLowerCase());
+    const used = attackerTok.turnUsed?.featOnce ?? [];
+    const mark = (k: string) => (attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), k] });
+    const round = this.state.initiative.round;
+    if (passiveHas(sheet, 'crusher') && types.includes('bludgeoning')) {
+      if (!used.includes('crusher')) {
+        mark('crusher');
+        const fm = this.forceMove(target, attackerTok, 'push', 5);
+        if (fm.feet) this.pendingBaneLogs.push(`🔨 Crusher: đẩy ${target.label} ${fm.feet} ft`);
+      }
+      if (crit) {
+        target.effects = [...(target.effects ?? []), { id: nanoid(8), name: 'Crusher (chí mạng)', sourceTokenId: attackerTok.id, attackersAdvantage: true, untilSourceTurnStart: true, expiresRound: round + 1 } as ActiveEffect];
+      }
+    }
+    if (passiveHas(sheet, 'slasher') && types.includes('slashing')) {
+      if (!used.includes('slasher')) {
+        mark('slasher');
+        target.effects = [...(target.effects ?? []), { id: nanoid(8), name: 'Slasher', sourceTokenId: attackerTok.id, speedPenalty: 10, untilSourceTurnStart: true, expiresRound: round + 1 } as ActiveEffect];
+        this.pendingBaneLogs.push(`🗡 Slasher: ${target.label} −10 ft tốc độ đến lượt kế của ${attackerTok.label}`);
+      }
+      if (crit) {
+        target.effects = [...(target.effects ?? []), { id: nanoid(8), name: 'Slasher (chí mạng)', sourceTokenId: attackerTok.id, rollDisadvantage: ['attack'], untilSourceTurnStart: true, expiresRound: round + 1 } as ActiveEffect];
+      }
+    }
   }
 
   /** A token that can't take actions or reactions right now. */
@@ -537,7 +581,7 @@ export class Room {
   private deathSaveTick(token: Token): void {
     const sheet = this.linkedSheet(token);
     if (!sheet || !rollsDeathSaves(sheet.currentHp, sheet.deathSaves)) return;
-    const adv = !!token.effects?.some((e) => e.deathSaveAdvantage);
+    const adv = !!token.effects?.some((e) => e.deathSaveAdvantage) || passiveHas(sheet, 'deathSaveAdvantage');
     const a1 = 1 + Math.floor(Math.random() * 20);
     const a2 = 1 + Math.floor(Math.random() * 20);
     const d20 = adv ? Math.max(a1, a2) : a1;
@@ -1361,11 +1405,13 @@ export class Room {
   }
 
   /** After a token takes `damage`, roll a silent CON save to keep concentration. */
-  private maybeBreakConcentration(token: Token, damage: number): void {
+  private maybeBreakConcentration(token: Token, damage: number, disBy?: string): void {
     if (!token.concentration || damage <= 0) return;
     const dc = concentrationDc(damage);
     const sheet = this.linkedSheet(token);
-    const adv = passiveHas(sheet, 'concentrationAdvantage') || token.concentration.advantage ? 'advantage' : undefined;
+    const adv0 = passiveHas(sheet, 'concentrationAdvantage') || token.concentration.advantage;
+    // Mage Slayer on the attacker: the save is made with disadvantage (cancels an advantage)
+    const adv: RollMode | undefined = adv0 && disBy ? undefined : adv0 ? 'advantage' : disBy ? 'disadvantage' : undefined;
     const { d20, total, pass: kept, bonus } = this.rollTokenSave(token, 'con', dc, false, undefined, adv);
     this.pushRoll({
       id: nanoid(8),
@@ -1974,9 +2020,9 @@ export class Room {
   }
 
   /** Attacks waiting for the DM's answer to a reaction that comes before the roll (by hold id). */
-  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string; intercept?: Intercept; selfCut?: SelfCut }>();
+  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string; intercept?: Intercept; selfCut?: SelfCut; parry?: Parry }>();
   /** Set just before a held attack is run again: skip the hold, apply the disadvantage / Interception if any. */
-  private resumingAttack: { dis?: string; intercept?: Intercept; selfCut?: SelfCut } | null = null;
+  private resumingAttack: { dis?: string; intercept?: Intercept; selfCut?: SelfCut; parry?: Parry } | null = null;
   /** Attacks sent while another one waits for its reaction answer — run in order once it resolves. */
   private attackQueue: { actor: Participant; action: Extract<ClientAction, { t: 'attack' }> }[] = [];
 
@@ -2023,14 +2069,16 @@ export class Room {
       }
     }
     // the target's own reactions to a melee attack (a counter-attack, a step away), from its features
-    const own: { featureId: string; name: string; style: 'counter' | 'stepAway' | 'halve' | 'reduce'; sheet: CharacterSheet }[] = [];
+    const own: { featureId: string; name: string; style: 'counter' | 'stepAway' | 'halve' | 'reduce' | 'parry'; sheet: CharacterSheet }[] = [];
     const tSheet = this.linkedSheet(target);
     if (tSheet && attacker && this.canReact(target, {})) {
       const types = (action.damageParts ?? []).map((p) => (p.type || '').toLowerCase());
       for (const r of passiveReactions(tSheet)) {
         const k = r.reaction.kind;
         // a counter / step away answers melee attacks only; Deflect-style cuts need a matching damage type
-        if ((k === 'counter' || k === 'stepAway') && action.attackRange !== 'melee') continue;
+        if ((k === 'counter' || k === 'stepAway' || k === 'parry') && action.attackRange !== 'melee') continue;
+        // a parry needs a Finesse weapon in hand
+        if (k === 'parry' && !tSheet.inventory.some((it) => it.type === 'weapon' && it.equipped && hasProp(weaponInfo(it), 'finesse'))) continue;
         if (k === 'reduce' && r.reaction.types && !passiveHas(tSheet, 'deflectAnyType') && !types.some((t) => r.reaction.types!.includes(t))) continue;
         const max = r.uses ? subclassUsesMax(r.uses.max, tSheet) : Infinity;
         if ((tSheet.subclassUses?.[r.featureId] ?? 0) >= max) continue;
@@ -2056,7 +2104,9 @@ export class Room {
             ? `${by} đang đánh cận chiến bạn — phản đòn trước khi đòn trúng`
             : o.style === 'stepAway'
               ? `${by} đang đánh cận chiến bạn — lùi ra trước khi đòn trúng`
-              : o.style === 'halve'
+              : o.style === 'parry'
+                ? `${by} đang đánh cận chiến bạn — nếu trúng, +${o.sheet.proficiencyBonus} AC cho đòn này (tốn reaction khi đòn lẽ ra trúng)`
+                : o.style === 'halve'
                 ? `${by} đang tấn công bạn — nếu trúng, chỉ nhận nửa sát thương (tốn reaction khi trúng)`
                 : `${by} đang tấn công bạn — nếu trúng, giảm sát thương (tốn reaction khi trúng)`,
         holdsAttack: holdId,
@@ -2161,7 +2211,7 @@ export class Room {
     const held = this.heldAttacks.get(holdId);
     if (!held) return;
     this.heldAttacks.delete(holdId);
-    this.resumingAttack = { dis: held.dis, intercept: held.intercept, selfCut: held.selfCut };
+    this.resumingAttack = { dis: held.dis, intercept: held.intercept, selfCut: held.selfCut, parry: held.parry };
     const err = this.apply(held.actor, held.action);
     this.resumingAttack = null;
     if (err) this.systemLog(`⚠ Đòn chờ reaction không chạy được: ${err}`);
@@ -2780,7 +2830,9 @@ export class Room {
           this.state.reactPrompts = list.filter((x) => x.id !== p.id);
           const r = this.state.tokens.find((t) => t.id === p.tokenId);
           const held = p.holdsAttack ? this.heldAttacks.get(p.holdsAttack) : undefined;
-          if (action.use && r && held && this.canReact(r, {}) && (p.style === 'halve' || p.style === 'reduce')) {
+          if (action.use && r && held && this.canReact(r, {}) && p.style === 'parry') {
+            held.parry = { tokenId: r.id, by: `${p.tokenName} · ${p.actionName}`, ac: this.linkedSheet(r)?.proficiencyBonus ?? 2 };
+          } else if (action.use && r && held && this.canReact(r, {}) && (p.style === 'halve' || p.style === 'reduce')) {
             // paid only if the attack hits (see the damage step)
             const sheet = this.linkedSheet(r);
             const rx = sheet ? passiveReactions(sheet).find((x) => x.featureId === p.featureId) : undefined;
@@ -3159,10 +3211,12 @@ export class Room {
         const cover =
           action.attackRange === 'ranged' && action.attackKind !== 'spell'
             ? passiveRangedCover(atkSheetForCover, rawCover)
-            : action.attackRange === 'ranged' && action.attackKind === 'spell' && rawCover === 'half' && passiveHas(atkSheetForCover, 'spellIgnoreHalfCover')
+            : action.attackKind === 'spell' && (rawCover === 'half' || rawCover === 'threequarters') && passiveHas(atkSheetForCover, 'spellIgnoreCover')
               ? 'none'
-              : rawCover;
-        const ac = baseAc + coverAcBonus(cover);
+              : action.attackRange === 'ranged' && action.attackKind === 'spell' && rawCover === 'half' && passiveHas(atkSheetForCover, 'spellIgnoreHalfCover')
+                ? 'none'
+                : rawCover;
+        let ac = baseAc + coverAcBonus(cover);
         let attackRoll: RollResult;
         if (action.external) {
           attackRoll = externalRollResult(action.attackNotation, action.external.attack);
@@ -3208,6 +3262,15 @@ export class Room {
         }
         // The client pre-rolled damage for the outcome it saw; a changed roll means the server re-rolls it.
         if (baneNote && action.external) action.external = { ...action.external, partTotals: undefined };
+        // Defensive Duelist: the parry chosen before the roll is spent only on an attack that would hit
+        if (resume?.parry && resolveAttack(attackRoll, ac).hit) {
+          const me = this.state.tokens.find((t) => t.id === resume.parry!.tokenId);
+          if (me && this.canReact(me, {})) {
+            this.spendReaction(me, {});
+            ac += resume.parry.ac;
+            this.pendingBaneLogs.push(`🤺 ${resume.parry.by}: +${resume.parry.ac} AC trước đòn này (AC ${ac})`);
+          }
+        }
         // Seeking Spell: a missed spell attack rolls its d20 once more (the new roll stands)
         if (action.rerollMiss && attackRoll.d20 && !resolveAttack(attackRoll, ac).hit) {
           const again = rollNotation('1d20').total;
@@ -3285,8 +3348,34 @@ export class Room {
         if (res.hit) {
           if (!dmgParts.length) return 'Không có nguồn sát thương';
           let rd;
+          const atkSheetF = action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : attackerTok ? this.linkedSheet(attackerTok) : undefined;
+          const weaponHit = action.attackKind !== 'spell';
+          const once = (k: string) => !!attackerTok && !(attackerTok.turnUsed?.featOnce ?? []).includes(k);
+          const markOnce = (k: string) => {
+            if (attackerTok) attackerTok.turnUsed = { ...(attackerTok.turnUsed ?? {}), featOnce: [...(attackerTok.turnUsed?.featOnce ?? []), k] };
+          };
+          // Piercer: once per turn the lowest piercing die is rolled again; a crit adds one more die
+          const pi = weaponHit && passiveHas(atkSheetF, 'piercer') ? dmgParts.findIndex((p) => p.type === 'piercing' && /\d*d\d+/.test(p.dice)) : -1;
+          if (pi >= 0) {
+            if (once('piercer')) {
+              dmgParts[pi] = { ...dmgParts[pi], rerollLowest: Math.max(1, dmgParts[pi].rerollLowest ?? 0) };
+              markOnce('piercer');
+              this.pendingBaneLogs.push(`🗡 Piercer: đổ lại 1 xúc xắc thấp nhất`);
+            }
+            if (effectiveCrit) {
+              const die = /d(\d+)/.exec(dmgParts[pi].dice)?.[1];
+              if (die) dmgParts.push({ dice: `1d${die}`, type: 'piercing', label: 'Piercer (chí mạng)' });
+            }
+          }
           try {
             rd = this.rollDamageParts(dmgParts, effectiveCrit, action.external?.partTotals);
+            // Savage Attacker: once per turn the weapon's damage is rolled twice, the higher one stands
+            if (weaponHit && passiveHas(atkSheetF, 'savageAttacker') && once('savage')) {
+              const again = this.rollDamageParts(dmgParts, effectiveCrit, undefined);
+              markOnce('savage');
+              this.pendingBaneLogs.push(`🪓 Savage Attacker: ${rd.combined.total} / ${again.combined.total} → lấy ${Math.max(rd.combined.total, again.combined.total)}`);
+              if (again.combined.total > rd.combined.total) rd = again;
+            }
           } catch (err) {
             return (err as Error).message;
           }
@@ -3329,6 +3418,20 @@ export class Room {
             outcome = { ...outcome, totalFinal: Math.max(0, before - red) };
             this.pendingBaneLogs.push(`🛡 ${resume.intercept.by} · Interception: giảm ${red} sát thương (${resume.intercept.dice}) — ${before} → ${outcome.totalFinal}`);
           }
+        }
+        // Heavy Armor Master: bludgeoning / piercing / slashing from an attack is lower by the Proficiency Bonus
+        const hamSheet = this.linkedSheet(target);
+        if (
+          outcome &&
+          outcome.totalFinal > 0 &&
+          hamSheet &&
+          passiveHas(hamSheet, 'heavyArmorReduce') &&
+          hamSheet.inventory.some((it) => it.type === 'armor' && it.equipped && it.armorCategory === 'heavy') &&
+          dmgParts.some((p) => ['bludgeoning', 'piercing', 'slashing'].includes((p.type || '').toLowerCase()))
+        ) {
+          const before = outcome.totalFinal;
+          outcome = { ...outcome, totalFinal: Math.max(0, before - hamSheet.proficiencyBonus) };
+          this.pendingBaneLogs.push(`🛡 ${hamSheet.name} · Heavy Armor Master: −${hamSheet.proficiencyBonus} (${before} → ${outcome.totalFinal})`);
         }
         // the target's own cut taken before the roll: Uncanny Dodge halves, Deflect Attacks reduces
         if (outcome && resume?.selfCut) {
@@ -3424,7 +3527,8 @@ export class Room {
               },
             ];
           }
-          this.maybeBreakConcentration(target, outcome.totalFinal);
+          this.maybeBreakConcentration(target, outcome.totalFinal, passiveHas(attackerTok ? this.linkedSheet(attackerTok) : undefined, 'mageSlayer') ? 'Mage Slayer' : undefined);
+          if (outcome.totalFinal > 0) this.featHitEffects(action, target, attackerTok, effectiveCrit);
           const critTag = effectiveCrit
             ? autoCrit && !res.crit
               ? ' (chí mạng — mục tiêu tê liệt/bất tỉnh)'
@@ -4131,7 +4235,14 @@ export class Room {
             action.ability === 'dex' &&
             !!action.damageHalfOnSave &&
             (hasEvasion(this.mechOf(target)) || (passiveHas(this.linkedSheet(target), 'evasion') && !this.incapacitated(target)));
-          const base = evade ? (pass ? 0 : Math.floor(out.totalFinal / 2)) : pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
+          // Shield Master (Interpose Shield): with a shield, a successful DEX save for half takes none
+          const sm = this.linkedSheet(target);
+          const interpose = !evade && pass && action.ability === 'dex' && !!action.damageHalfOnSave && !!sm && passiveHas(sm, 'shieldInterpose') && shieldEquipped(sm) && this.canReact(target, {});
+          if (interpose) {
+            this.spendReaction(target, {});
+            this.pendingBaneLogs.push(`🛡 ${sm!.name} · Shield Master: chắn bằng khiên — không nhận sát thương`);
+          }
+          const base = interpose ? 0 : evade ? (pass ? 0 : Math.floor(out.totalFinal / 2)) : pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           if (evade) this.pendingBaneLogs.push(`${target.label}: Evasion — ${pass ? 'không nhận sát thương' : 'chỉ nhận nửa'}`);
           const dealt = this.baneReduce(target, action.sourceTokenId, base);
           const took = this.applyDamage(target, dealt, { types: partTypes(action.damageOnFail ?? []) });

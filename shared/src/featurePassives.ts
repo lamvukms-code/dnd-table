@@ -85,6 +85,38 @@ export interface FeaturePassive {
   relentlessRage?: boolean;
   /** The damage-reducing reaction works on any damage type (Deflect Energy). */
   deflectAnyType?: boolean;
+  /** Add the Proficiency Bonus to Initiative (Alert). */
+  initiativeProf?: boolean;
+  /** Ranged weapon attacks ignore half and three-quarters cover (Sharpshooter). */
+  rangedCoverIgnore?: boolean;
+  /** Spell attacks ignore half and three-quarters cover (Spell Sniper). */
+  spellIgnoreCover?: boolean;
+  /** No disadvantage for attacking at long range (Sharpshooter). */
+  noLongRangePenalty?: boolean;
+  /** Advantage on death saving throws (Durable). */
+  deathSaveAdvantage?: boolean;
+  /** In heavy armor, bludgeoning / piercing / slashing damage from an attack is lower by the Proficiency Bonus. */
+  heavyArmorReduce?: boolean;
+  /** Medium armor adds DEX up to this instead of 2 (Medium Armor Master). */
+  mediumArmorDexCap?: number;
+  /** Once per turn, a weapon hit's damage dice are rolled twice and the higher total is used. */
+  savageAttacker?: boolean;
+  /** Once per turn a bludgeoning hit pushes 5 ft; a crit gives attacks against the target advantage. */
+  crusher?: boolean;
+  /** Once per turn a piercing hit rerolls its lowest die; a crit adds one more damage die. */
+  piercer?: boolean;
+  /** Once per turn a slashing hit cuts the target's speed by 10 ft; a crit gives it disadvantage on attacks. */
+  slasher?: boolean;
+  /** With a shield, a successful DEX save for half takes no damage (Shield Master). */
+  shieldInterpose?: boolean;
+  /** A creature this character damages saves to keep concentration with disadvantage (Mage Slayer). */
+  mageSlayer?: boolean;
+  /** Bonus Action d4 bludgeoning strike with a quarterstaff, spear or heavy reach weapon (Polearm Master). */
+  polearmMaster?: boolean;
+  /** The off-hand attack may use any one-handed melee weapon, as long as one is Light (Dual Wielder). */
+  dualWielder?: boolean;
+  /** Unarmed strikes reroll 1s on damage, once per turn push 5 ft (Tavern Brawler). */
+  tavernBrawler?: boolean;
 }
 
 /** A reaction to being attacked in melee, answered by the player before the roll. */
@@ -93,7 +125,7 @@ export interface FeatureReaction {
    * counter / stepAway: answer a melee attack before it lands. halve: an attack that hits deals half
    * (Uncanny Dodge). reduce: an attack that hits deals `dice` less (Deflect Attacks) — `types` limits it.
    */
-  kind: 'counter' | 'stepAway' | 'halve' | 'reduce';
+  kind: 'counter' | 'stepAway' | 'halve' | 'reduce' | 'parry';
   /** counter: damage of the counter-attack (a spell attack against the attacker). reduce: the reduction. */
   dice?: string;
   /** reduce: only attacks dealing one of these damage types. */
@@ -198,7 +230,10 @@ export function hasInvocation(sheet: CharacterSheet | undefined, name: string): 
 
 export function localFeatDef(name: string): LocalFeatDef | undefined {
   const n = name.trim().toLowerCase();
-  return FEATS.find((f) => f.name.toLowerCase() === n);
+  const local = FEATS.find((f) => f.name.toLowerCase() === n);
+  if (local && (local.passive || local.actions || local.uses)) return local;
+  // the built-in SRD feats carry their own mechanics (Great Weapon Master, Sharpshooter…)
+  return SRD_FEATS_DRAFT.find((f) => f.name.toLowerCase() === n && (f.passive || f.actions || f.uses)) ?? local;
 }
 
 /** The sheet's local feats that carry mechanics, shaped like subclass features (id "feat:<id>",
@@ -206,7 +241,6 @@ export function localFeatDef(name: string): LocalFeatDef | undefined {
 export function featFeatureDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
   // base-class features and invocations with mechanics ride along (same UI / rest / rider code)
   const out: SubclassFeatureDef[] = [...classMechanicDefs(sheet), ...invocationFeatureDefs(sheet)];
-  if (!FEATS.length) return out;
   for (const f of sheet.feats ?? []) {
     const d = localFeatDef(f.name);
     if (!d || (!d.passive && !d.actions && !d.uses)) continue;
@@ -264,7 +298,11 @@ export function passiveNoCloseRangedPenalty(sheet: CharacterSheet): boolean {
 
 /** Cover-reducing feat: the target's cover against this sheet's ranged attacks. */
 export function passiveRangedCover<C extends string>(sheet: CharacterSheet | undefined, cover: C): C | 'none' | 'half' {
-  if (!sheet || !activePassives(sheet).some((p) => p.passive.rangedCoverReduce)) return cover;
+  if (!sheet) return cover;
+  const ps = activePassives(sheet);
+  // Sharpshooter: half and three-quarters cover don't count at all
+  if (ps.some((p) => p.passive.rangedCoverIgnore)) return cover === 'half' || cover === 'threequarters' ? 'none' : cover;
+  if (!ps.some((p) => p.passive.rangedCoverReduce)) return cover;
   return cover === 'half' ? 'none' : cover === 'threequarters' ? 'half' : cover;
 }
 
@@ -480,7 +518,21 @@ export function passiveHas(
     | 'evasion'
     | 'elusive'
     | 'relentlessRage'
-    | 'deflectAnyType',
+    | 'deflectAnyType'
+    | 'initiativeProf'
+    | 'spellIgnoreCover'
+    | 'noLongRangePenalty'
+    | 'deathSaveAdvantage'
+    | 'heavyArmorReduce'
+    | 'savageAttacker'
+    | 'crusher'
+    | 'piercer'
+    | 'slasher'
+    | 'shieldInterpose'
+    | 'mageSlayer'
+    | 'polearmMaster'
+    | 'dualWielder'
+    | 'tavernBrawler',
 ): boolean {
   return !!sheet && activePassives(sheet).some((p) => !!p.passive[key]);
 }

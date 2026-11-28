@@ -97,7 +97,9 @@ export function skillBonus(sheet: CharacterSheet, skill: string): number {
 }
 
 export function initiativeBonus(sheet: CharacterSheet): number {
-  return abilityMod(sheet.abilities.dex) + sheet.initiativeMisc + exhaustionPenalty(sheet.exhaustion);
+  // Alert: + Proficiency Bonus
+  const alert = passiveHas(sheet, 'initiativeProf') ? sheet.proficiencyBonus : 0;
+  return abilityMod(sheet.abilities.dex) + sheet.initiativeMisc + alert + exhaustionPenalty(sheet.exhaustion);
 }
 
 /** Suggested proficiency bonus by level (5e). */
@@ -353,7 +355,14 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
     };
     out.push(row);
     // Two Light melee weapons: the second one's extra attack (Bonus Action; Nick: inside the Attack action).
-    if (lights.length >= 2 && lights.includes(it)) {
+    // Dual Wielder: with one Light weapon, the other may be any one-handed melee weapon.
+    const dualOk =
+      passiveHas(sheet, 'dualWielder') &&
+      lights.length >= 1 &&
+      meleeWielded.length >= 2 &&
+      meleeWielded.includes(it) &&
+      !hasProp(weaponInfo(it), 'two-handed');
+    if ((lights.length >= 2 && lights.includes(it)) || dualOk) {
       const offMod = hasStyle(sheet, 'two-weapon-fighting') || dmgMod < 0 ? dmgMod : dmgMod - Math.max(0, mod);
       const nick = mastery === 'nick';
       out.push({
@@ -370,6 +379,21 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
           hasStyle(sheet, 'two-weapon-fighting') ? 'Two-Weapon Fighting: có cộng điểm chỉ số' : 'không cộng điểm chỉ số vào sát thương',
           ...notes.filter((n) => !n.startsWith('Dueling')),
         ].join(' · '),
+      });
+    }
+    // Polearm Master: a Bonus Action strike with the butt end (d4 bludgeoning)
+    const pole = weaponInfo(it);
+    if (passiveHas(sheet, 'polearmMaster') && pole && (/quarterstaff|spear/.test(pole.kind) || (hasProp(pole, 'heavy') && hasProp(pole, 'reach')))) {
+      out.push({
+        ...row,
+        id: `polearm:${it.id}`,
+        name: `${it.name} (đầu cán)`,
+        actionType: 'bonus',
+        attackRange: 'melee',
+        damage: withMod(dmgMod).replace(/^\d*d\d+/, '1d4'),
+        damageType: 'bludgeoning',
+        mastery: undefined,
+        description: 'Polearm Master: Bonus Action ngay sau khi dùng hành động Attack với vũ khí này — 1d4 bludgeoning',
       });
     }
   }
@@ -1622,7 +1646,9 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
   let dexPart = dexMod;
   let swap = '';
   if (armor.armorCategory === 'medium') {
-    dexPart = Math.min(dexMod, 2);
+    // Medium Armor Master: DEX up to +3
+    const cap = Math.max(2, ...activePassives(sheet).map((p) => p.passive.mediumArmorDexCap ?? 0));
+    dexPart = Math.min(dexMod, cap);
     const alt = passiveMediumArmorMod(sheet); // Marauder Momentum: CON (max +2) instead of DEX
     if (alt && alt.mod > dexPart) {
       dexPart = alt.mod;

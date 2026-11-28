@@ -54,7 +54,7 @@ describe('Sorcerer', () => {
   });
 
   it('Font of Magic: slot → points, points → slot (a refill or a new slot that lasts until the long rest)', () => {
-    let s = { ...base('Sorcerer', 5), sorceryUsed: 4 };
+    let s: CharacterSheet = { ...base('Sorcerer', 5), sorceryUsed: 4 };
     const r = slotToPoints(s, 2);
     expect(typeof r).not.toBe('string');
     s = r as CharacterSheet;

@@ -684,7 +684,7 @@ export const useStore = create<StoreState>((set, get) => {
           const mult = passiveRangeMultiplier(atkSheet);
           const band = rangeBand(rangeText, gridFeet(atkTok, tgtTok), mult);
           if (band === 'out' && !window.confirm(`Mục tiêu ở ${gridFeet(atkTok, tgtTok)}ft — ngoài tầm tối đa (${rangeText?.match(/\d+\s*\/\s*\d+/)?.[0]}${mult > 1 ? ` ×${mult}` : ''}). Vẫn đánh?`)) return;
-          if (band === 'long') {
+          if (band === 'long' && !passiveHas(atkSheet, 'noLongRangePenalty')) {
             mode = combineRollModes(mode, 'disadvantage');
             reasons.push('tầm xa');
           }

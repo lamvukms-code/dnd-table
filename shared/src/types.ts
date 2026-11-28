@@ -1096,6 +1096,8 @@ export interface TurnUsed {
   cleaveReady?: boolean;
   /** Cleave's extra attack was made this turn (once per turn). */
   cleaveUsed?: boolean;
+  /** Once-per-turn feat riders already used this turn (Savage Attacker, Crusher, Piercer, Slasher). */
+  featOnce?: string[];
 }
 
 export interface BattleMap {
@@ -1410,7 +1412,7 @@ export interface ReactPrompt {
    *  the roll, e.g. "impose disadvantage on the attack roll"). Same id on every prompt of one hold. */
   holdsAttack?: string;
   /** A character's own reaction (Protection / Interception, a counter-attack, a step away): its owner answers it. */
-  style?: 'protection' | 'interception' | 'counter' | 'stepAway' | 'halve' | 'reduce';
+  style?: 'protection' | 'interception' | 'counter' | 'stepAway' | 'halve' | 'reduce' | 'parry';
   ownerId?: string;
   /** The feature (`subclassUses` key) whose pool the reaction spends. */
   featureId?: string;

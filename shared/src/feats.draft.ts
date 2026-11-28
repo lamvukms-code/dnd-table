@@ -22,6 +22,10 @@ export interface FeatDef {
   abilityScoreIncrease?: Ability[];
   /** Brief Vietnamese paraphrase of the mechanics — not the PHB's own wording. */
   guidance: string;
+  /** Mechanics the app runs for the feat (see featurePassives.ts / featureActions.ts). */
+  passive?: import('./featurePassives.js').FeaturePassive;
+  actions?: import('./featureActions.js').FeatureAction[];
+  uses?: { max: number | string; recharge: 'short' | 'long' };
 }
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,7 @@ export interface FeatDef {
 const ORIGIN: FeatDef[] = [
   {
     id: 'feat-alert',
+    passive: { initiativeProf: true },
     name: 'Alert',
     category: 'origin',
     guidance:
@@ -51,6 +56,7 @@ const ORIGIN: FeatDef[] = [
   },
   {
     id: 'feat-lucky',
+    uses: { max: 'prof', recharge: 'long' },
     name: 'Lucky',
     category: 'origin',
     guidance:
@@ -72,6 +78,7 @@ const ORIGIN: FeatDef[] = [
   },
   {
     id: 'feat-savage-attacker',
+    passive: { savageAttacker: true },
     name: 'Savage Attacker',
     category: 'origin',
     guidance: 'Một lần mỗi lượt, khi trúng đòn vũ khí, có thể tung lại toàn bộ dice sát thương của đòn đó và chọn kết quả cao hơn.',
@@ -84,6 +91,7 @@ const ORIGIN: FeatDef[] = [
   },
   {
     id: 'feat-tavern-brawler',
+    passive: { unarmed: { byLevel: { 1: '1d4' } }, tavernBrawler: true },
     name: 'Tavern Brawler',
     category: 'origin',
     guidance:
@@ -155,6 +163,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-crusher',
+    passive: { crusher: true },
     name: 'Crusher',
     category: 'general',
     prerequisite: 'Cấp 4+',
@@ -164,6 +173,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-defensive-duelist',
+    passive: { reaction: { kind: 'parry' } },
     name: 'Defensive Duelist',
     category: 'general',
     prerequisite: 'Cấp 4+, DEX 13+',
@@ -173,6 +183,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-dual-wielder',
+    passive: { dualWielder: true },
     name: 'Dual Wielder',
     category: 'general',
     prerequisite: 'Cấp 4+, STR hoặc DEX 13+',
@@ -182,6 +193,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-durable',
+    passive: { deathSaveAdvantage: true },
     name: 'Durable',
     category: 'general',
     prerequisite: 'Cấp 4+',
@@ -217,6 +229,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-great-weapon-master',
+    passive: { riders: [{ label: 'Great Weapon Master', dice: 'pb', type: 'same', scope: 'weapon', heavyOnly: true }], extraAttackOnCritOrKill: true },
     name: 'Great Weapon Master',
     category: 'general',
     prerequisite: 'Cấp 4+, STR 13+',
@@ -234,6 +247,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-heavy-armor-master',
+    passive: { heavyArmorReduce: true },
     name: 'Heavy Armor Master',
     category: 'general',
     prerequisite: 'Cấp 4+, đã luyện Heavy Armor',
@@ -268,6 +282,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-mage-slayer',
+    passive: { mageSlayer: true },
     name: 'Mage Slayer',
     category: 'general',
     prerequisite: 'Cấp 4+',
@@ -285,6 +300,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-medium-armor-master',
+    passive: { mediumArmorDexCap: 3 },
     name: 'Medium Armor Master',
     category: 'general',
     prerequisite: 'Cấp 4+, đã luyện Medium Armor',
@@ -319,6 +335,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-piercer',
+    passive: { piercer: true },
     name: 'Piercer',
     category: 'general',
     prerequisite: 'Cấp 4+',
@@ -337,6 +354,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-polearm-master',
+    passive: { polearmMaster: true },
     name: 'Polearm Master',
     category: 'general',
     prerequisite: 'Cấp 4+, STR hoặc DEX 13+',
@@ -381,6 +399,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-sharpshooter',
+    passive: { rangedCoverIgnore: true, noCloseRangedPenalty: true, noLongRangePenalty: true },
     name: 'Sharpshooter',
     category: 'general',
     prerequisite: 'Cấp 4+, DEX 13+',
@@ -390,6 +409,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-shield-master',
+    passive: { shieldInterpose: true },
     name: 'Shield Master',
     category: 'general',
     prerequisite: 'Cấp 4+, đã luyện Shield',
@@ -416,6 +436,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-slasher',
+    passive: { slasher: true },
     name: 'Slasher',
     category: 'general',
     prerequisite: 'Cấp 4+',
@@ -425,6 +446,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-speedy',
+    passive: { speed: { bonus: 10 } },
     name: 'Speedy',
     category: 'general',
     prerequisite: 'Cấp 4+, DEX hoặc CON 13+',
@@ -433,6 +455,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-spell-sniper',
+    passive: { spellIgnoreCover: true, spellNoCloseRangedPenalty: true },
     name: 'Spell Sniper',
     category: 'general',
     prerequisite: 'Cấp 4+, có Spellcasting/Pact Magic',
@@ -460,6 +483,7 @@ const GENERAL: FeatDef[] = [
   },
   {
     id: 'feat-war-caster',
+    passive: { concentrationAdvantage: true },
     name: 'War Caster',
     category: 'general',
     prerequisite: 'Cấp 4+, có Spellcasting/Pact Magic',
