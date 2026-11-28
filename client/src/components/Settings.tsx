@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import { getSfxVolume, setSfxVolume } from '../sound.js';
 import { getDiceVolume, setDiceVolume, setVfxEnabled, vfxEnabled } from '../sfx.js';
+import { nativeDiceEnabled, setNativeDiceEnabled } from '../dice3d/hold.js';
 import { createRoom, listRooms, type DddiceRoom } from '../dddice.js';
 import { DddiceAccount } from './DddiceAccount.js';
 
@@ -202,6 +203,7 @@ function SoundSection() {
   const [v, setV] = useState(getSfxVolume);
   const [dv, setDv] = useState(getDiceVolume);
   const [fx, setFx] = useState(vfxEnabled);
+  const [nd, setNd] = useState(nativeDiceEnabled);
   return (
     <section className="settings-section">
       <h3>Âm thanh</h3>
@@ -221,7 +223,7 @@ function SoundSection() {
         />
       </label>
       <label className="sfx-vol-row">
-        Tiếng xúc xắc 3D (dddice): {dv ? `${Math.round(dv * 100)}%` : 'tắt'}
+        Tiếng xúc xắc 3D: {dv ? `${Math.round(dv * 100)}%` : 'tắt'}
         <input
           type="range"
           min={0}
@@ -245,6 +247,18 @@ function SoundSection() {
           }}
         />
         Hiệu ứng hình trên bản đồ (vết chém, phép bay, số sát thương)
+      </label>
+      <label className="chk" title="Xúc xắc 3D vẽ ngay trong app (server tung số, xúc xắc lăn tới đúng số đó). Tắt đi thì dùng dddice nếu bàn đã bật dddice.">
+        <input
+          type="checkbox"
+          checked={nd}
+          onChange={(e) => {
+            setNativeDiceEnabled(e.target.checked);
+            setNd(e.target.checked);
+            window.dispatchEvent(new Event('native-dice'));
+          }}
+        />
+        Xúc xắc 3D của bàn (không cần dddice) — chỉ máy này
       </label>
     </section>
   );

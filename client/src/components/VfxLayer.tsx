@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Token, TokenSize } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { eventsFor, fxDelay, playFx, vfxEnabled, type Element, type FxEvent } from '../sfx.js';
+import { diceHold } from '../dice3d/hold.js';
 
 /**
  * Visual effects on the battle map for each attack / spell / heal in the roll log: a projectile
@@ -62,13 +63,15 @@ export function VfxLayer({ cell, tokens, visible }: { cell: number; tokens: Toke
         const src = toks.find((t) => t.id === e.from);
         // nothing this viewer can see: no sound, no picture
         if (!(tgt && visRef.current(tgt)) && !(src && visRef.current(src))) continue;
-        playFx(e);
+        // native 3D dice still rolling: the hit lands when the number shows
+        const hold = diceHold();
+        playFx(e, hold);
         if (!vfxEnabled() || !tgt || !visRef.current(tgt)) continue;
         const c = (t: Token) => ({ x: (t.x + SPAN[t.size] / 2) * cell, y: (t.y + SPAN[t.size] / 2) * cell });
         const p = c(tgt);
         const q = src && src.id !== tgt.id ? c(src) : undefined;
         const item: Vfx = { key: `${e.id}-${Math.random().toString(36).slice(2, 6)}`, e, x: p.x, y: p.y, fx: q?.x, fy: q?.y, size: SPAN[tgt.size] * cell };
-        const wait = Math.max(0, fxDelay() - 0.22) * 1000;
+        const wait = Math.max(hold, fxDelay() - 0.22) * 1000;
         window.setTimeout(() => {
           setItems((xs) => [...xs.slice(-24), item]);
           window.setTimeout(() => setItems((xs) => xs.filter((x) => x.key !== item.key)), 1300);

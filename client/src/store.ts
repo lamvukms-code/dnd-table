@@ -95,6 +95,7 @@ import {
   rollEquation as dddiceRollEquation,
   setLocalKey as persistDddiceKey,
 } from './dddice.js';
+import { nativeDiceEnabled } from './dice3d/hold.js';
 import { shareStructure } from './share.js';
 import { playOneShot, stopOneShots } from './soundboard.js';
 
@@ -423,7 +424,8 @@ export const useStore = create<StoreState>((set, get) => {
 
   function dddiceActive(): boolean {
     const { room, dddiceKey } = get();
-    return Boolean(room?.dddice.enabled && room.dddice.roomSlug && dddiceKey);
+    // the table's own 3D dice (on by default) take over from dddice; turning them off brings dddice back
+    return Boolean(room?.dddice.enabled && room.dddice.roomSlug && dddiceKey) && !nativeDiceEnabled();
   }
 
   async function externalRoll(notation: string): Promise<ExternalRoll | null> {

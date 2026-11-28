@@ -90,6 +90,7 @@ import { DefenseLine, EffectChips, PcStatblock, StatDiamond } from './InspectorP
 import { LIGHT_ICON } from './LightChip.js';
 import { FogCanvas, FogTools, TokenSightFields, WallLayer, useVision, type FogTool } from './FogLayer.js';
 import { VfxLayer } from './VfxLayer.js';
+import { DiceLayer } from './DiceLayer.js';
 import { tokenSeen } from '@dnd-table/shared';
 
 /** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
@@ -1320,6 +1321,7 @@ function BattleMapImpl() {
               );
             })}
 
+          <DiceLayer />
           <VfxLayer cell={CELL} tokens={tokens} visible={(t) => (isDm || !t.hidden) && !fogHides(t)} />
           {vision && <FogCanvas map={map} vision={vision} cell={CELL} isDm={isDm} />}
           <WallLayer map={map} cell={CELL} isDm={isDm} tool={fogTool} vision={vision} />

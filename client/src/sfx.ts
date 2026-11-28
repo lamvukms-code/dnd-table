@@ -265,7 +265,7 @@ function playImpact(t: number, e: FxEvent) {
 const seen = new Set<string>();
 
 /** Queue the sound of one effect event. A burst (multiattack) plays its events one by one. */
-export function playFx(e: FxEvent): void {
+export function playFx(e: FxEvent, notBefore = 0): void {
   if (seen.has(e.id)) return;
   seen.add(e.id);
   if (seen.size > 500) seen.clear();
@@ -275,7 +275,7 @@ export function playFx(e: FxEvent): void {
   const now = c.currentTime;
   // impacts follow their own launch closely; separate attacks get a breath between them
   const gap = e.phase === 'impact' ? 0.16 : 0.32;
-  const t = Math.max(now + 0.02, queueEnd + (queueEnd > now ? gap : 0));
+  const t = Math.max(now + 0.02 + notBefore, queueEnd + (queueEnd > now ? gap : 0));
   if (t - now > 3) return; // the backlog is long enough already
   queueEnd = t + (e.phase === 'impact' ? 0.25 : 0.18);
   if (e.phase === 'launch') playLaunch(t, e);
@@ -308,6 +308,29 @@ export function setDiceVolume(v: number): void {
     /* storage blocked */
   }
   window.dispatchEvent(new Event('dice-volume'));
+}
+
+/** One die hitting the table or another die (native 3D dice); `strength` 0..1. Own volume (dice slider). */
+let lastClack = 0;
+export function diceClack(strength: number): void {
+  const vol = getDiceVolume() * Math.min(1, Math.max(0.15, strength));
+  if (vol <= 0.01) return;
+  const c = audio();
+  if (!c) return;
+  if (c.currentTime - lastClack < 0.035) return; // a pile-up of contacts is one click, not ten
+  lastClack = c.currentTime;
+  const url = clipUrl(/impactGeneric_light|impactPlate_light/);
+  if (!url) return;
+  void loadClip(url).then((buf) => {
+    if (!buf || !ctx) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 1.55 + Math.random() * 0.45; // small and hard: a die, not a crate
+    const g = ctx.createGain();
+    g.gain.value = vol;
+    src.connect(g).connect(ctx.destination);
+    src.start();
+  });
 }
 
 /** Effects on/off for the visual layer (per browser). */

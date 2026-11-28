@@ -2187,3 +2187,7 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 .ico { width: 1.25em; height: 1.25em; vertical-align: -0.28em; flex: none; }
 .mt-btn .ico { width: 22px; height: 22px; }
 .hud-actions > button .ico, .hud-actions .top-menu > button .ico, .hud-dice > button .ico { width: 20px; height: 20px; }
+
+/* native 3D dice: a transparent canvas over the map, never in the way of clicks */
+.dice3d-stage { position: absolute; inset: 0; pointer-events: none; z-index: 12; } /* over the map, under the HUD, trays and sheet */
+.dice3d-stage canvas { display: block; }
