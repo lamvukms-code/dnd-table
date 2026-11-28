@@ -71,6 +71,9 @@ export interface SubclassFeatureDef {
   actions?: FeatureAction[];
   /** Always-on mechanics: AC, speed, resistances, extra damage… (see featurePassives.ts). */
   passive?: FeaturePassive;
+  /** Ids of base class features this one takes away once gained (a subclass that swaps out
+   *  "paladin-smite" or "paladin-lay-on-hands"); they drop off the sheet with their buttons. */
+  replaces?: string[];
 }
 
 const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
@@ -916,6 +919,18 @@ export const CLASS_FEATURES: ClassFeatureDef[] = [
 export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid', 'sorcerer', 'wizard', 'fighter', 'paladin', 'ranger', 'bard', 'cleric'];
 
 /** The class features this sheet has earned, from CLASS_FEATURES, ordered by level. */
+/** Subclass features that replace base class features (set when the subclass data is registered). */
+let REPLACING_DEFS: SubclassFeatureDef[] = [];
+export function registerReplacingDefs(defs: SubclassFeatureDef[]): void {
+  REPLACING_DEFS = defs.filter((d) => d.replaces?.length);
+}
+
+/** Base class feature ids the sheet's subclass features have replaced. */
+export function replacedClassFeatureIds(sheet: CharacterSheet): Set<string> {
+  if (!REPLACING_DEFS.length) return new Set();
+  return new Set(derivedSubclassFeatures(sheet, REPLACING_DEFS).flatMap((d) => d.replaces ?? []));
+}
+
 export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
   const levels: Record<string, number> = {
     rogue: rogueLevel(sheet),
@@ -932,8 +947,9 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
     cleric: classLevelOf(sheet, 'cleric'),
   };
   for (const f of CUSTOM_CLASS_FEATURES) levels[f.class] ??= classLevelOf(sheet, f.class);
+  const replaced = replacedClassFeatureIds(sheet);
   return [...CLASS_FEATURES, ...CUSTOM_CLASS_FEATURES]
-    .filter((f) => f.level <= (levels[f.class] ?? 0))
+    .filter((f) => f.level <= (levels[f.class] ?? 0) && !replaced.has(f.id))
     .sort((a, b) => a.level - b.level);
 }
 

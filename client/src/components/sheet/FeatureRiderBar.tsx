@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { featFeatureDefs, featureRiders, subclassUsesMax, type CharacterSheet, type DamageRider } from '@dnd-table/shared';
+import { featFeatureDefs, featureRiders, replacedClassFeatureIds, subclassUsesMax, type CharacterSheet, type DamageRider } from '@dnd-table/shared';
 import { SUBCLASS_DEFS } from '../../subclassData.js';
 import { nanoIdish } from '../../util.js';
 import { DamageTypeSelect } from '../DefensesEditor.js';
@@ -14,8 +14,9 @@ const SCOPE_VI: Record<string, string> = {
 };
 
 /** Common sheet-level extra damage. Target marks (Hunter's Mark, Hex) live on the target bar instead. */
-const PRESETS: (Omit<DamageRider, 'id' | 'enabled'> & { note?: string })[] = [
-  { name: 'Divine Smite', dice: '2d8', type: 'radiant', scope: 'melee', once: true, note: '+1d8 mỗi cấp ô phép trên 1; +1d8 với fiend/undead' },
+/** `featureId`: hidden when a subclass has replaced that class feature. */
+const PRESETS: (Omit<DamageRider, 'id' | 'enabled'> & { note?: string; featureId?: string })[] = [
+  { name: 'Divine Smite', dice: '2d8', type: 'radiant', scope: 'melee', once: true, note: '+1d8 mỗi cấp ô phép trên 1; +1d8 với fiend/undead', featureId: 'paladin-smite' },
   { name: 'Divine Favor', dice: '1d4', type: 'radiant', scope: 'weapon' },
   { name: 'Holy Weapon', dice: '2d8', type: 'radiant', scope: 'weapon' },
   { name: 'Elemental Weapon', dice: '1d4', type: 'fire', scope: 'weapon', note: 'đổi loại sát thương theo lựa chọn' },
@@ -145,12 +146,12 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
               onChange={(e) => {
                 const p = PRESETS.find((x) => x.name === e.target.value);
                 if (!p) return;
-                const { note: _n, ...rest } = p;
+                const { note: _n, featureId: _f, ...rest } = p;
                 setRiders([...mine, { id: nanoIdish(), enabled: !p.once, ...rest }]);
               }}
             >
               <option value="">+ Thêm từ mẫu…</option>
-              {PRESETS.map((p) => (
+              {PRESETS.filter((p) => !p.featureId || !replacedClassFeatureIds(sheet).has(p.featureId)).map((p) => (
                 <option key={p.name} value={p.name} title={p.note}>
                   {p.name} (+{p.dice}
                   {typeText(p.type)}

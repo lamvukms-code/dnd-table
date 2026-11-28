@@ -1,6 +1,6 @@
 import type { Ability, CharacterSheet, DamagePart, Defenses, SheetAction } from './types.js';
 import { emptyDefenses } from './types.js';
-import { classMechanicDefs, derivedSubclassFeatures, type SubclassFeatureDef } from './classFeatures.js';
+import { classMechanicDefs, derivedSubclassFeatures, registerReplacingDefs, type SubclassFeatureDef } from './classFeatures.js';
 import { SRD_FEATS_DRAFT, type FeatDef } from './feats.draft.js';
 import { findInvocationDraft, WARLOCK_INVOCATIONS_DRAFT, type InvocationDef } from './invocations.draft.js';
 import type { FeatureAction } from './featureActions.js';
@@ -204,6 +204,7 @@ let FEATS: LocalFeatDef[] = [];
 
 export function registerFeatureDefs(defs: SubclassFeatureDef[]): void {
   DEFS = defs;
+  registerReplacingDefs(defs);
 }
 
 /** Register local feats: they join the feat picker, and their passives / buttons / uses apply to
