@@ -3,6 +3,7 @@ import { useStore } from '../store.js';
 import { getSfxVolume, setSfxVolume } from '../sound.js';
 import { getDiceVolume, setDiceVolume, setVfxEnabled, vfxEnabled } from '../sfx.js';
 import { nativeDiceEnabled, setNativeDiceEnabled } from '../dice3d/hold.js';
+import { diceSkinPref, loadSkins, setDiceSkinPref, skinSets, type LoadedSkin, type SkinSet } from '../dice3d/skins.js';
 import { createRoom, listRooms, type DddiceRoom } from '../dddice.js';
 import { DddiceAccount } from './DddiceAccount.js';
 
@@ -204,6 +205,15 @@ function SoundSection() {
   const [dv, setDv] = useState(getDiceVolume);
   const [fx, setFx] = useState(vfxEnabled);
   const [nd, setNd] = useState(nativeDiceEnabled);
+  const [skinPref, setSkinPref] = useState(diceSkinPref);
+  const [skinList, setSkinList] = useState<LoadedSkin[]>([]);
+  const [setList, setSetList] = useState<SkinSet[]>([]);
+  useEffect(() => {
+    void loadSkins().then((m) => {
+      setSkinList([...m.values()]);
+      setSetList(skinSets());
+    });
+  }, []);
   return (
     <section className="settings-section">
       <h3>Âm thanh</h3>
@@ -260,6 +270,40 @@ function SoundSection() {
         />
         Xúc xắc 3D của bàn (không cần dddice) — chỉ máy này
       </label>
+      {nd && skinList.length > 0 && (
+        <label className="sfx-vol-row" title="Skin chỉ đổi cách máy này vẽ xúc xắc; kết quả tung không đổi">
+          Skin xúc xắc 3D
+          <select
+            value={skinPref}
+            onChange={(e) => {
+              setDiceSkinPref(e.target.value);
+              setSkinPref(e.target.value);
+            }}
+          >
+            {setList.length <= 1 ? (
+              <option value="moon">Theo trăng đang mọc (không có trăng: màu người tung)</option>
+            ) : (
+              setList.map((st) => (
+                <option key={st.id} value={`moon@${st.id}`}>
+                  Theo trăng đang mọc — bộ {st.name}
+                </option>
+              ))
+            )}
+            <option value="player">Màu của người tung</option>
+            {setList.map((st) => (
+              <optgroup key={st.id} label={`Bộ ${st.name}`}>
+                {skinList
+                  .filter((sk) => sk.set === st.id)
+                  .map((sk) => (
+                    <option key={sk.key} value={sk.key}>
+                      {sk.name}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      )}
     </section>
   );
 }

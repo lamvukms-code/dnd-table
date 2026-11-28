@@ -120,9 +120,17 @@ export function sheetForStreamCard(sheet: CharacterSheet): CharacterSheet {
   };
 }
 
-/** A player's view of the party's sheets: their own in full, everyone else's as blank stubs. */
+/** A player's view of the party's sheets: their own in full, everyone else's as blank stubs; sheets the
+ *  DM keeps hidden (an unrevealed NPC / companion) are left out entirely. */
 export function sheetsForPlayer(sheets: CharacterSheet[], participantId: string): CharacterSheet[] {
-  return sheets.map((s) => (s.ownerId === participantId ? s : sheetStubForPlayers(s)));
+  return sheets
+    .filter((s) => s.ownerId === participantId || !s.hiddenFromPlayers)
+    .map((s) => (s.ownerId === participantId ? s : sheetStubForPlayers(s)));
+}
+
+/** Sheets the stream / recording window may show (hidden ones never). */
+export function sheetsForStream(sheets: CharacterSheet[]): CharacterSheet[] {
+  return sheets.filter((s) => !s.hiddenFromPlayers).map(sheetForStreamCard);
 }
 
 /** Player copy of the roll log: DM-private rolls are dropped; an attack against a stat-hidden (or no-longer-present) target keeps

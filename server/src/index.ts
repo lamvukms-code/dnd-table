@@ -23,7 +23,7 @@ import {
   type Token,
   formatElapsed,
   rollLogForPlayers,
-  sheetForStreamCard,
+  sheetsForStream,
   referenceForPlayers,
   type SettingReference,
   patchMessage,
@@ -585,7 +585,7 @@ function bestiaryJson(): string {
 
 /** What the stream window shows: the player view, with just enough of each sheet for the speaker cards. */
 function streamState(base: RoomState = playerView()): RoomState {
-  return { ...base, sheets: room.state.sheets.map(sheetForStreamCard) };
+  return { ...base, sheets: sheetsForStream(room.state.sheets) };
 }
 
 // Delta sync (see statePatch.ts): clients that asked for patches get only what changed since the

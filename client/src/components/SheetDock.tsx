@@ -79,6 +79,8 @@ import {
   type ActionType,
   type CasterType,
   type CharacterSheet,
+  type Participant,
+  type SheetKind,
   type InventoryItem,
   type ClassEntry,
   type ConditionType,
@@ -187,6 +189,71 @@ export function RollModeToggle({
   );
 }
 
+const NO_PEOPLE: Participant[] = [];
+const KIND_LABEL: Record<SheetKind, string> = { pc: 'Nhân vật người chơi', companion: 'Đồng hành', npc: 'NPC' };
+
+/** The DM's sheet list in groups: each player's characters, then the DM's own, companions, NPCs — filtered by a search. */
+function sheetGroups(list: CharacterSheet[], people: Participant[], meId: string, isDm: boolean, query: string): { label: string; sheets: CharacterSheet[] }[] {
+  const q = query.trim().toLowerCase();
+  const nameOf = (id: string) => people.find((p) => p.id === id)?.name ?? 'người chơi cũ';
+  const hit = (s: CharacterSheet) =>
+    !q || s.name.toLowerCase().includes(q) || nameOf(s.ownerId).toLowerCase().includes(q) || (s.className ?? '').toLowerCase().includes(q);
+  const shown = list.filter(hit);
+  if (!isDm) return [{ label: '', sheets: shown }];
+  const groups = new Map<string, CharacterSheet[]>();
+  const add = (label: string, s: CharacterSheet) => groups.set(label, [...(groups.get(label) ?? []), s]);
+  for (const s of shown) {
+    const kind = s.kind ?? 'pc';
+    if (kind === 'companion') add('🤝 Đồng hành', s);
+    else if (kind === 'npc') add('🎭 NPC', s);
+    else if (s.ownerId === meId) add('🛠 Của DM', s);
+    else add(`🧑 ${nameOf(s.ownerId)}`, s);
+  }
+  const order = (label: string) => (label.startsWith('🧑') ? 0 : label.startsWith('🛠') ? 1 : label.startsWith('🤝') ? 2 : 3);
+  return [...groups.entries()].sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0])).map(([label, sheets]) => ({ label, sheets }));
+}
+
+/** DM-only strip under the sheet header: who owns it, what kind it is, whether players can see it. */
+function SheetDmBar({ sheet, participants }: { sheet: CharacterSheet; participants: Participant[] }) {
+  const send = useStore((s) => s.send);
+  const meta = (patch: { ownerId?: string; kind?: SheetKind; hiddenFromPlayers?: boolean }) => send({ t: 'setSheetMeta', id: sheet.id, ...patch });
+  const owner = participants.find((p) => p.id === sheet.ownerId);
+  return (
+    <div className="sd-dm-bar" title="Chỉ DM thấy hàng này">
+      <label>
+        Chủ
+        <select value={sheet.ownerId} onChange={(e) => meta({ ownerId: e.target.value })}>
+          {!owner && <option value={sheet.ownerId}>(người chơi đã rời)</option>}
+          {participants.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.role === 'dm' ? ' (DM)' : ''}
+              {p.connected ? '' : ' · offline'}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Loại
+        <select value={sheet.kind ?? 'pc'} onChange={(e) => meta({ kind: e.target.value as SheetKind })}>
+          {(Object.keys(KIND_LABEL) as SheetKind[]).map((k) => (
+            <option key={k} value={k}>
+              {KIND_LABEL[k]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        className={`sd-dm-eye ${sheet.hiddenFromPlayers ? 'on' : ''}`}
+        title={sheet.hiddenFromPlayers ? 'Đang ẩn với người chơi (kể cả tên, thẻ stream) — bấm để công khai' : 'Người chơi đang thấy tên sheet này — bấm để ẩn'}
+        onClick={() => meta({ hiddenFromPlayers: !sheet.hiddenFromPlayers })}
+      >
+        {sheet.hiddenFromPlayers ? '🔒 Đang ẩn' : '👁 Công khai'}
+      </button>
+    </div>
+  );
+}
+
 export function blankSheet(ownerId: string): CharacterSheet {
   return {
     id: nanoIdish(),
@@ -272,8 +339,46 @@ function SheetDockImpl({ onClose }: { onClose?: () => void }) {
   const tokens = useStore((s) => s.room?.tokens);
   const avatarOf = (s: CharacterSheet) => tokens?.find((t) => t.id === s.tokenId);
   const pdfRef = useRef<HTMLInputElement>(null);
+  const jsonRef = useRef<HTMLInputElement>(null);
   const [importNote, setImportNote] = useState<string | null>(null);
   const hasBuilder = useCharacterBuilder();
+  const participants = useStore((s) => s.room?.participants ?? NO_PEOPLE);
+  const [query, setQuery] = useState('');
+
+  /** Save one sheet as a .json file (a backup, or to move it to another table). */
+  function exportJson(s: CharacterSheet) {
+    const blob = new Blob([JSON.stringify(s, null, 1)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${s.name.replace(/[\\/:*?"<>|]+/g, '_') || 'sheet'}.json`;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  /** Load a sheet from a .json file as a new sheet. The DM's imports start hidden from players (an NPC /
+   *  companion prepared ahead); the DM reveals it from the sheet's DM bar. */
+  async function importJson(file: File) {
+    try {
+      const raw = JSON.parse(await file.text()) as Partial<CharacterSheet>;
+      if (!raw || typeof raw !== 'object' || typeof raw.name !== 'string' || !raw.abilities) throw new Error('File không phải sheet nhân vật (thiếu tên / chỉ số)');
+      const base = blankSheet(meId);
+      const sheet: CharacterSheet = {
+        ...base,
+        ...raw,
+        id: base.id,
+        ownerId: meId,
+        tokenId: undefined,
+        redacted: undefined,
+        hiddenFromPlayers: isDm ? true : undefined,
+        kind: isDm ? raw.kind : undefined,
+      } as CharacterSheet;
+      send({ t: 'upsertSheet', sheet });
+      setOpenId(sheet.id);
+      setImportNote(`✅ Đã nhập "${sheet.name}" từ JSON${isDm ? ' — đang ẩn với người chơi (bấm 🔒 ở hàng DM để công khai)' : ''}`);
+    } catch (e) {
+      setImportNote('❌ ' + (e as Error).message);
+    }
+  }
 
   /** Read a filled-in character-sheet PDF in the browser and create the sheet from it. */
   async function importPdf(file: File) {
@@ -384,24 +489,37 @@ function SheetDockImpl({ onClose }: { onClose?: () => void }) {
             </button>
             {pickOpen && (
               <div className="sd-pick-list" onPointerLeave={() => setPickOpen(false)}>
-                {mine.map((s) => (
-                  <button
-                    key={s.id}
-                    className={s.id === (sheet?.id ?? '') ? 'on' : ''}
-                    onClick={() => {
-                      setOpenId(s.id);
-                      setPickOpen(false);
-                    }}
-                  >
-                    <SheetFace sheet={s} token={avatarOf(s)} />
-                    <span>
-                      {s.name}
-                      {s.ownerId !== meId ? ' *' : ''}
-                    </span>
-                    <small>
-                      {s.className} {s.level}
-                    </small>
-                  </button>
+                {mine.length > 6 && (
+                  <input
+                    className="sd-pick-search"
+                    autoFocus
+                    placeholder="Tìm nhân vật / người chơi…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                )}
+                {sheetGroups(mine, participants, meId, isDm, query).map((g) => (
+                  <Fragment key={g.label || 'all'}>
+                    {g.label && <div className="sd-pick-group">{g.label}</div>}
+                    {g.sheets.map((s) => (
+                      <button
+                        key={s.id}
+                        className={s.id === (sheet?.id ?? '') ? 'on' : ''}
+                        onClick={() => {
+                          setOpenId(s.id);
+                          setPickOpen(false);
+                          setQuery('');
+                        }}
+                      >
+                        <SheetFace sheet={s} token={avatarOf(s)} />
+                        <span>
+                          {s.name}
+                          {s.hiddenFromPlayers ? <em className="sd-hidden-tag" title="Đang ẩn với người chơi"> 🔒</em> : null}
+                        </span>
+                        <small>{/\d/.test(s.className ?? '') ? s.className : `${s.className} ${s.level}`}</small>
+                      </button>
+                    ))}
+                  </Fragment>
                 ))}
               </div>
             )}
@@ -430,6 +548,12 @@ function SheetDockImpl({ onClose }: { onClose?: () => void }) {
                 },
               },
               { label: '📄 Nhập từ PDF', title: 'Nhập phiếu nhân vật từ file PDF (hoặc kéo thả PDF vào đây)', onClick: () => pdfRef.current?.click() },
+              {
+                label: '⬆ Nhập sheet JSON',
+                title: isDm ? 'Nạp một sheet đã lưu (.json) — sheet DM nạp vào sẽ ẩn với người chơi cho tới khi công khai' : 'Nạp một sheet đã lưu (.json)',
+                onClick: () => jsonRef.current?.click(),
+              },
+              ...(sheet ? [{ label: '⬇ Xuất sheet JSON', title: 'Lưu sheet này ra file .json (sao lưu / chuyển bàn)', onClick: () => exportJson(sheet) }] : []),
               ...(hasBuilder
                 ? [{ label: '🧙 Trang tạo nhân vật', title: 'Mở trang tạo nhân vật (tab mới), xuất PDF rồi nhập lại vào đây', onClick: openCharacterBuilder }]
                 : []),
@@ -454,6 +578,17 @@ function SheetDockImpl({ onClose }: { onClose?: () => void }) {
             </button>
           )}
           <input
+            ref={jsonRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void importJson(file);
+            }}
+          />
+          <input
             ref={pdfRef}
             type="file"
             accept="application/pdf,.pdf"
@@ -465,6 +600,7 @@ function SheetDockImpl({ onClose }: { onClose?: () => void }) {
             }}
           />
         </div>
+        {sheet && isDm && <SheetDmBar sheet={sheet} participants={participants} />}
         {sheet && (
           <div className="sd-subtabs">
             {(

@@ -4782,7 +4782,12 @@ export class Room {
         const incoming = normalizeSheet({
           ...(existing && action.base ? mergeSheetEdit(existing, action.base, action.sheet) : action.sheet),
         });
-        if (!existing) incoming.ownerId = incoming.ownerId || actor.id;
+        // ownership, kind and visibility are the DM's to set (setSheetMeta); a player's save can't change them
+        if (!isDm) {
+          incoming.ownerId = existing ? existing.ownerId : actor.id;
+          incoming.kind = existing?.kind;
+          incoming.hiddenFromPlayers = existing?.hiddenFromPlayers;
+        } else if (!existing) incoming.ownerId = incoming.ownerId || actor.id;
         // A token can back exactly one sheet, and NPC (stat-blocked) tokens can't
         // be linked to a character sheet — copy the token instead.
         if (incoming.tokenId && incoming.tokenId !== existing?.tokenId) {
@@ -4801,6 +4806,24 @@ export class Room {
         this.mirrorSheetToToken(incoming);
         this.syncWildShapeSize(existing, incoming);
         this.syncDowned(incoming);
+        this.touch();
+        break;
+      }
+
+      case 'setSheetMeta': {
+        if (!isDm) return 'Chỉ DM được đổi chủ / loại / chế độ ẩn của sheet';
+        const sheet = this.state.sheets.find((s) => s.id === action.id);
+        if (!sheet) return 'Không tìm thấy nhân vật';
+        if (action.ownerId !== undefined) {
+          if (!this.state.participants.some((p) => p.id === action.ownerId)) return 'Không có người này trong bàn';
+          sheet.ownerId = action.ownerId;
+          // the linked token follows: its new owner moves it
+          const tk = sheet.tokenId ? this.tokenAnywhere(sheet.tokenId) : undefined;
+          if (tk) tk.controllerId = action.ownerId;
+        }
+        if (action.kind !== undefined) sheet.kind = action.kind === 'pc' ? undefined : action.kind;
+        if (action.hiddenFromPlayers !== undefined) sheet.hiddenFromPlayers = action.hiddenFromPlayers || undefined;
+        this.state.sheets = [...this.state.sheets]; // a new array: per-player views rebuild
         this.touch();
         break;
       }

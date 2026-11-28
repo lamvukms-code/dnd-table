@@ -21,6 +21,7 @@ import type {
   ConditionType,
   Hazard,
   SheetAction,
+  SheetKind,
 } from './types.js';
 import type { GodsBaneOp, GodsBaneRoomOp } from './godsBane.js';
 
@@ -291,6 +292,8 @@ export type ClientAction =
   // `base`: the server copy the edit started from — fields unchanged from it keep the server's value
   | { t: 'upsertSheet'; sheet: CharacterSheet; base?: CharacterSheet }
   | { t: 'removeSheet'; id: string }
+  /** DM: who owns a sheet, what kind it is, whether players may see it. */
+  | { t: 'setSheetMeta'; id: string; ownerId?: string; kind?: SheetKind; hiddenFromPlayers?: boolean }
   // bestiary (DM only)
   | { t: 'bestiaryUpsert'; statblock: Statblock }
   | { t: 'bestiaryRemove'; id: string }

@@ -393,6 +393,11 @@ export interface CharacterSheet {
   featureChoices?: Record<string, string>;
   /** Options learned for features that teach only some of their list, by feature id: button labels. */
   featurePicks?: Record<string, string[]>;
+  /** What the sheet is for the table: a player character (default), a companion the DM runs
+   *  alongside the party, or an NPC. DM-set; drives grouping in the DM's sheet list. */
+  kind?: SheetKind;
+  /** DM-only for now (an NPC or companion not yet revealed): players and the stream view don't get it at all. */
+  hiddenFromPlayers?: boolean;
   /** The look of the token last linked to this sheet (art, colour, size) — kept when that token is
    *  deleted, so the sheet keeps its portrait and "📍 Đặt lên bản đồ" brings the same token back. */
   tokenLook?: { imageUrl?: string; color?: string; size?: TokenSize };
@@ -448,6 +453,8 @@ export interface CharacterSheet {
    *  id / owner / name / linked token survive, every stat is blanked. Never stored. */
   redacted?: boolean;
 }
+
+export type SheetKind = 'pc' | 'companion' | 'npc';
 
 export type TokenSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
 

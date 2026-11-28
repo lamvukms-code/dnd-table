@@ -2191,3 +2191,15 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 /* native 3D dice: a transparent canvas over the map, never in the way of clicks */
 .dice3d-stage { position: absolute; inset: 0; pointer-events: none; z-index: 12; } /* over the map, under the HUD, trays and sheet */
 .dice3d-stage canvas { display: block; }
+
+/* DM sheet management: grouped picker, search, DM bar */
+.sd-pick-search { width: calc(100% - 12px); margin: 6px; padding: 4px 8px; }
+.sd-pick-group { padding: 6px 10px 2px; font-size: 11px; letter-spacing: 0.04em; opacity: 0.7; text-transform: uppercase; }
+.sd-hidden-tag { font-style: normal; }
+.sd-dm-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 4px 10px; font-size: 12px; border-bottom: 1px dashed rgba(200, 170, 120, 0.35); background: rgba(120, 60, 30, 0.12); }
+.sd-dm-bar label { display: inline-flex; align-items: center; gap: 4px; }
+.sd-dm-bar select { max-width: 150px; font-size: 12px; }
+.sd-dm-eye { font-size: 12px; padding: 2px 8px; }
+.sd-dm-eye.on { background: rgba(150, 40, 40, 0.35); }
+.sheet-dock .sd-pick-list { min-width: 300px; }
+.sheet-dock .sd-pick-list button span.sd-face { flex: none; }

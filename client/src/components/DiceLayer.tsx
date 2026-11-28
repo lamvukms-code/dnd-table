@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { RollLogEntry } from '@dnd-table/shared';
 import { useStore } from '../store.js';
 import { nativeDiceEnabled } from '../dice3d/hold.js';
+import { loadSkins, resolveSkin } from '../dice3d/skins.js';
 import type { DieSpec } from '../dice3d/stage.js';
 
 /**
@@ -32,11 +33,15 @@ export function DiceLayer() {
   const log = useStore((s) => s.room?.rollLog);
   const participants = useStore((s) => s.room?.participants);
   const dddice = useStore((s) => s.dddiceActive());
+  const moonKey = useStore((s) => s.room?.moon?.key);
   const seen = useRef<Set<string> | null>(null);
 
   // warm the 3D code up front so the first roll isn't late
   useEffect(() => {
-    if (nativeDiceEnabled() && !dddice) void loadStage();
+    if (nativeDiceEnabled() && !dddice) {
+      void loadStage();
+      void loadSkins();
+    }
   }, [dddice]);
 
   useEffect(() => {
@@ -54,10 +59,11 @@ export function DiceLayer() {
       const dice = diceOf(entry);
       if (!dice.length) continue;
       const color = participants?.find((p) => p.id === entry.actorId)?.color ?? '#8a6a3a';
-      if (stage) stage.throwDice(dice, color);
-      else void loadStage().then((m) => m.throwDice(dice, color));
+      const skin = resolveSkin(moonKey); // this browser's skin choice (e.g. the moon in the sky)
+      if (stage) stage.throwDice(dice, color, skin);
+      else void loadStage().then((m) => m.throwDice(dice, color, skin));
     }
-  }, [log, dddice, participants]);
+  }, [log, dddice, participants, moonKey]);
 
   return null;
 }

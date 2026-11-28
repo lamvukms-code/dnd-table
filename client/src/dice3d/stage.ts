@@ -23,6 +23,7 @@ import { Body, ContactMaterial, ConvexPolyhedron, Material, Plane, Vec3, World }
 import { dieShape, symmetriesTo, upFeature, type DieShape, type Sides } from './shapes.js';
 import { diceClack } from '../sfx.js';
 import { holdFor } from './hold.js';
+import type { LoadedSkin } from './skins.js';
 
 /**
  * Native 3D dice. The server has already rolled; this only shows it. Each throw is simulated with
@@ -173,21 +174,42 @@ function label(value: number, kind: 'plain' | 'tens' | 'units'): string {
 const matCache = new Map<string, MeshStandardMaterial[]>();
 
 /** One material per face, each with its number painted where the face's UVs put it. */
-function materials(shape: DieShape, color: string, kind: 'plain' | 'tens' | 'units', uvs: Vector2[][]): MeshStandardMaterial[] {
-  const key = `${shape.sides}|${color}|${kind}`;
+function materials(shape: DieShape, color: string, kind: 'plain' | 'tens' | 'units', uvs: Vector2[][], skin?: LoadedSkin | null): MeshStandardMaterial[] {
+  const pic = skin?.img && skin.img.complete && skin.img.naturalWidth > 0 ? skin.img : null;
+  const key = `${shape.sides}|${skin ? `skin:${skin.key}:${pic ? 1 : 0}` : color}|${kind}`;
   const hit = matCache.get(key);
   if (hit) return hit;
-  const ink = contrast(color);
+  const ink = skin ? skin.ink : contrast(color);
   const out = shape.faces.map((face, fi) => {
-    const S = 128;
+    const S = skin ? 256 : 128;
     const cv = document.createElement('canvas');
     cv.width = cv.height = S;
     const g = cv.getContext('2d')!;
-    g.fillStyle = color;
-    g.fillRect(0, 0, S, S);
+    if (pic) g.drawImage(pic, 0, 0, S, S);
+    else {
+      g.fillStyle = skin ? skin.base : color;
+      g.fillRect(0, 0, S, S);
+    }
     g.fillStyle = ink;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
+    // a skin's number: soft glow behind, thin outline for legibility on a painted face
+    const num = (text: string, x: number, y: number) => {
+      if (skin?.inkGlow) {
+        g.save();
+        g.shadowColor = skin.inkGlow;
+        g.shadowBlur = S * 0.06;
+        g.fillText(text, x, y);
+        g.restore();
+      }
+      if (skin?.inkStroke) {
+        g.lineWidth = Math.max(1.5, S * 0.012);
+        g.strokeStyle = skin.inkStroke;
+        g.lineJoin = 'round';
+        g.strokeText(text, x, y);
+      }
+      g.fillText(text, x, y);
+    };
     const px = (uv: Vector2) => new Vector2(uv.x * S, (1 - uv.y) * S);
     const corners = uvs[fi].map(px);
     const mid = corners.reduce((a, c) => a.add(c), new Vector2()).divideScalar(corners.length);
@@ -210,21 +232,30 @@ function materials(shape: DieShape, color: string, kind: 'plain' | 'tens' | 'uni
         g.translate(at.x, at.y);
         g.rotate(ang);
         g.font = `700 ${Math.round(inr * 0.85)}px Georgia, serif`;
-        g.fillText(String(shape.values[vi]), 0, 0);
+        num(String(shape.values[vi]), 0, 0);
         g.restore();
       });
     } else {
       const text = label(shape.values[fi], kind);
       const fs = Math.round(inr * (text.length > 1 ? 1.05 : 1.35));
       g.font = `700 ${fs}px Georgia, serif`;
-      g.fillText(text, mid.x, mid.y + fs * 0.04);
+      num(text, mid.x, mid.y + fs * 0.04);
       // 6 / 9 (and 66-style) need a mark to tell which way is up
       if (kind === 'plain' && (text === '6' || text === '9') && shape.sides > 6) g.fillRect(mid.x - fs * 0.22, mid.y + fs * 0.45, fs * 0.44, Math.max(2, fs * 0.07));
     }
     const tex = new CanvasTexture(cv);
     tex.colorSpace = SRGBColorSpace;
     tex.anisotropy = 4;
-    return new MeshStandardMaterial({ map: tex, roughness: 0.42, metalness: 0.08, transparent: true });
+    return new MeshStandardMaterial({
+      map: tex,
+      roughness: skin?.roughness ?? 0.42,
+      metalness: skin?.metalness ?? 0.08,
+      transparent: true,
+      // a faint inner light that follows the painted face (glowing moons)
+      ...(skin?.emissive && skin.emissiveIntensity
+        ? { emissive: new Color(skin.emissive), emissiveIntensity: skin.emissiveIntensity, emissiveMap: tex }
+        : {}),
+    });
   });
   matCache.set(key, out);
   return out;
@@ -354,7 +385,7 @@ function simulate(shapes: DieShape[]): { frames: Frame[]; finals: Quaternion[]; 
 const SUPPORTED = new Set([4, 6, 8, 10, 12, 20]);
 
 /** Show a roll: the dice tumble over the map and come to rest on the given values. */
-export function throwDice(dice: DieSpec[], color: string): void {
+export function throwDice(dice: DieSpec[], color: string, skin?: LoadedSkin | null): void {
   if (!dice.length || !ensureStage()) return;
   resize();
   // a d100 is two d10s (tens and units); anything else unusual is skipped
@@ -381,7 +412,7 @@ export function throwDice(dice: DieSpec[], color: string): void {
   const group = new Group();
   const meshes = parts.map((part, i) => {
     const { geo, uvs } = geometry(part.shape);
-    const mats = materials(part.shape, color, part.kind, uvs).map((m) => m.clone());
+    const mats = materials(part.shape, color, part.kind, uvs, skin).map((m) => m.clone());
     const outer = new Mesh(); // follows the physics body
     const inner = new Mesh(geo, mats); // turned by a symmetry so the rolled number ends on top
     inner.castShadow = true;
