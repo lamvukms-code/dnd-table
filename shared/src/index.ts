@@ -42,3 +42,4 @@ export * from './spellbook.js';
 export * from './wildShape.js';
 export * from './strikeOptions.js';
 export * from './vision.js';
+export * from './fxClassify.js';

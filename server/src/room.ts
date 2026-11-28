@@ -135,6 +135,7 @@ import {
   effectSaveAdvantage,
   passiveRangedCover,
   type RollMode,
+  type RollFx,
   DOWNED_EFFECT_NAME,
   freshDeathSaves,
   onDamageWhileDown,
@@ -1092,6 +1093,8 @@ export class Room {
   }
 
   private pushRoll(entry: RollLogEntry): void {
+    // sound / visual effect hints for the attack, its damage, a spell's save, a heal
+    if (this.fxCtx && !entry.fx && (entry.attack || entry.damage || (this.fxCtx.heal && /HP/.test(entry.label)))) entry.fx = { ...this.fxCtx };
     this.state.rollLog.push(entry);
     if (this.state.rollLog.length > ROLL_LOG_CAP) {
       this.state.rollLog.splice(0, this.state.rollLog.length - ROLL_LOG_CAP);
@@ -2655,7 +2658,53 @@ export class Room {
   }
 
   /** Apply an action from `actor`. Returns an error string or null. */
+  /** Effect hints for the action being applied (attached to its attack / damage / heal log entries). */
+  private fxCtx: RollFx | null = null;
+
   apply(actor: Participant, action: ClientAction): string | null {
+    const prev = this.fxCtx;
+    this.fxCtx = this.fxFor(action);
+    try {
+      return this.applyInner(actor, action);
+    } finally {
+      this.fxCtx = prev;
+    }
+  }
+
+  private fxFor(action: ClientAction): RollFx | null {
+    const tokOfSheet = (id?: string) => (id ? this.state.sheets.find((s) => s.id === id)?.tokenId : undefined);
+    const types = (parts?: { type?: string }[]) => [...new Set((parts ?? []).map((p) => (p.type || '').toLowerCase()).filter(Boolean))];
+    // the action name without the "Actor · " prefix and the trailing notes
+    const name = (label: string) => label.replace(/^[^·]*·\s*/, '').replace(/\s*[(\[—].*$/, '').trim();
+    switch (action.t) {
+      case 'attack':
+        return {
+          from: action.attackerTokenId ?? tokOfSheet(action.attackerSheetId),
+          to: action.targetTokenId,
+          range: action.attackRange,
+          kind: action.attackKind ?? 'weapon',
+          name: action.actionName ?? name(action.label),
+          types: types(action.damageParts),
+        };
+      case 'damage':
+        return { from: action.attackerTokenId ?? tokOfSheet(action.attackerSheetId), to: action.targetTokenId, name: name(action.label), types: types(action.damageParts) };
+      case 'spellSave':
+        return {
+          from: action.sourceTokenId ?? tokOfSheet(action.sourceSheetId),
+          to: action.targetTokenId,
+          kind: action.fromSpell ? 'spell' : undefined,
+          name: action.actionName ?? name(action.label),
+          types: types(action.damageOnFail),
+          aoe: action.aoeId,
+        };
+      case 'heal':
+        return { from: tokOfSheet(action.sourceSheetId), to: action.targetTokenId, heal: true, name: name(action.label) };
+      default:
+        return null;
+    }
+  }
+
+  private applyInner(actor: Participant, action: ClientAction): string | null {
     const isDm = actor.role === 'dm';
     switch (action.t) {
       case 'join':

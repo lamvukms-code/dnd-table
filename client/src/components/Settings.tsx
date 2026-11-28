@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../store.js';
 import { getSfxVolume, setSfxVolume } from '../sound.js';
+import { getDiceVolume, setDiceVolume, setVfxEnabled, vfxEnabled } from '../sfx.js';
 import { createRoom, listRooms, type DddiceRoom } from '../dddice.js';
 import { DddiceAccount } from './DddiceAccount.js';
 
@@ -199,6 +200,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 /** Sound-effect volume (this browser only). The topbar keeps just the 🔊/🔇 toggle. */
 function SoundSection() {
   const [v, setV] = useState(getSfxVolume);
+  const [dv, setDv] = useState(getDiceVolume);
+  const [fx, setFx] = useState(vfxEnabled);
   return (
     <section className="settings-section">
       <h3>Âm thanh</h3>
@@ -216,6 +219,32 @@ function SoundSection() {
             setV(n);
           }}
         />
+      </label>
+      <label className="sfx-vol-row">
+        Tiếng xúc xắc 3D (dddice): {dv ? `${Math.round(dv * 100)}%` : 'tắt'}
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={dv}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            setDiceVolume(n);
+            setDv(n);
+          }}
+        />
+      </label>
+      <label className="chk">
+        <input
+          type="checkbox"
+          checked={fx}
+          onChange={(e) => {
+            setVfxEnabled(e.target.checked);
+            setFx(e.target.checked);
+          }}
+        />
+        Hiệu ứng hình trên bản đồ (vết chém, phép bay, số sát thương)
       </label>
     </section>
   );

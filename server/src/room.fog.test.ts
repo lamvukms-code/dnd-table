@@ -38,3 +38,17 @@ describe('dynamic fog on the server', () => {
     expect(room.state.tokens[0]).toMatchObject({ lightSource: { bright: 20, dim: 20 }, darkvision: 60 });
   });
 });
+
+describe('effect hints on the roll log', () => {
+  it('an attack and its damage carry who / whom / how', () => {
+    const room = new Room(join(mkdtempSync(join(tmpdir(), 'room-fx-')), 'room.json'), join(tmpdir(), 'none-bestiary.json'));
+    room.state.tokens.push(
+      { id: 'bear', label: 'Bear', x: 0, y: 0, size: 'large', color: '#fff', hidden: false, currentHp: 30, maxHp: 30, armorClass: 11 } as Token,
+      { id: 'pc', label: 'Pc', x: 2, y: 0, size: 'medium', color: '#fff', hidden: false, currentHp: 30, maxHp: 30, armorClass: 10 } as Token,
+    );
+    room.apply(dm, { t: 'attack', label: 'Bear · Bite', actionName: 'Bite', attackNotation: '1d20+100', damageParts: [{ dice: '5', type: 'piercing' }], targetTokenId: 'pc', attackerTokenId: 'bear', attackRange: 'melee' });
+    const fx = room.state.rollLog.filter((l) => l.fx).map((l) => l.fx);
+    expect(fx.length).toBe(2);
+    expect(fx[0]).toMatchObject({ from: 'bear', to: 'pc', name: 'Bite', range: 'melee', kind: 'weapon', types: ['piercing'] });
+  });
+});

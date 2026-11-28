@@ -1269,7 +1269,24 @@ export interface RollLogEntry {
   };
   // homebrew: nat 20 / nat 1 on a skill / ability / save check
   checkNat?: 'success' | 'fail';
+  /** What the table's sound / visual effects need about the action behind this entry. */
+  fx?: RollFx;
   private?: boolean; // DM-only roll
+}
+
+/** Sound / visual effect hints for one attack, spell or heal (who, at whom, how, what damage). */
+export interface RollFx {
+  from?: string;
+  to?: string;
+  range?: 'melee' | 'ranged';
+  kind?: 'weapon' | 'spell';
+  /** The attack / spell name ("Bite", "Fire Bolt", "Longsword"). */
+  name?: string;
+  /** Damage types of the parts. */
+  types?: string[];
+  heal?: boolean;
+  /** One area spell: every target shares this id. */
+  aoe?: string;
 }
 
 /** A roll resolved outside the server (e.g. by the dddice 3D engine). */

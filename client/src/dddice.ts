@@ -1,3 +1,4 @@
+import { getDiceVolume } from './sfx.js';
 // Thin wrapper around dddice-js: one shared 3D engine bound to a canvas, plus
 // helpers to log in (activation code or guest), join the table's room and roll an
 // equation. Works like the dddice extension for Owlbear Rodeo: every player uses
@@ -84,6 +85,8 @@ function onRollFinished(roll: { uuid?: string }) {
 // its theme is loaded) — only to log where the time goes between "click" and "dice on screen".
 const appeared = new Map<string, number>();
 function onRollCreated(roll: { uuid?: string }) {
+  // the engine may only make its audio listener with the first roll's camera
+  if (current) applyDiceVolume(current.engine);
   if (!roll?.uuid) return;
   appeared.set(roll.uuid, performance.now());
   if (appeared.size > 50) appeared.delete(appeared.keys().next().value as string);
@@ -136,6 +139,7 @@ export async function connect(
     sizeCanvas(canvas);
     const engine = new ThreeDDice(canvas, apiKey, { autoClear: 3 } as never);
     engine.start();
+    applyDiceVolume(engine);
     engine.connect(roomSlug);
     engine.on(ThreeDDiceRollEvent.RollFinished, onRollFinished as never);
     engine.on(ThreeDDiceRollEvent.RollCreated, onRollCreated as never);
@@ -154,6 +158,7 @@ export async function connect(
         if (current?.engine !== engine) return;
         engine.loadTheme(theme);
         engine.loadThemeResources(theme.id);
+        applyDiceVolume(engine);
       } catch {
         /* the first roll loads it instead */
       }
@@ -165,6 +170,17 @@ export async function connect(
     return false;
   }
 }
+
+/** The dice-roll sounds' level (Settings → Âm thanh): the engine's three.js audio listener volume. */
+function applyDiceVolume(engine: unknown): void {
+  try {
+    const l = (engine as { audioListener?: { setMasterVolume?: (v: number) => void } }).audioListener;
+    l?.setMasterVolume?.(getDiceVolume());
+  } catch {
+    /* engine without audio */
+  }
+}
+if (typeof window !== 'undefined') window.addEventListener('dice-volume', () => current && applyDiceVolume(current.engine));
 
 export function teardown(): void {
   if (!current) return;
