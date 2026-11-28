@@ -53,6 +53,7 @@ import {
   passiveReactions,
   passiveSaveAdvantage,
   passiveCheckFloor,
+  exploredMark,
   auraSaveBonusFor,
   barbarianLevel,
   subclassUsesMax,
@@ -183,6 +184,8 @@ function withOptionIds<T extends { id: string }>(list: T[], prefix: string): T[]
 /** Token fields a non-DM may change with `updateToken` (on a token they control). */
 const PLAYER_TOKEN_FIELDS = new Set([
   'x', 'y', 'label', 'color', 'imageUrl', 'size', 'cover', 'currentHp', 'maxHp', 'tempHp', 'armorClass', 'actionUses',
+  // a torch they light, their own darkvision (dynamic fog)
+  'lightSource', 'darkvision',
 ]);
 
 /** Damage types plus attack traits (magical, silvered, moongilded…) of damage parts. */
@@ -3724,6 +3727,30 @@ export class Room {
         if (!isDm) return 'Chỉ DM được sửa bản đồ';
         Object.assign(this.state.map, action.patch);
         this.activeScene().map = this.state.map;
+        this.touch();
+        break;
+      }
+
+      case 'fogExplore': {
+        const m = this.state.map;
+        if (!m.fog?.enabled || !m.fog.explore) return null;
+        const n = m.cols * m.rows;
+        const cells = (action.cells ?? []).filter((i) => Number.isInteger(i) && i >= 0 && i < n).slice(0, n);
+        if (!cells.length) return null;
+        const next = exploredMark(m.explored, m.cols, m.rows, cells);
+        if (next === m.explored) return null;
+        m.explored = next;
+        this.activeScene().map = m;
+        this.touch();
+        break;
+      }
+
+      case 'toggleDoor': {
+        const w = (this.state.map.walls ?? []).find((x) => x.id === action.wallId && x.door);
+        if (!w) return 'Không có cửa này';
+        this.state.map.walls = (this.state.map.walls ?? []).map((x) => (x.id === w.id ? { ...x, open: !x.open } : x));
+        this.activeScene().map = this.state.map;
+        this.systemLog(`🚪 ${actor.name} ${w.open ? 'đóng' : 'mở'} cửa`);
         this.touch();
         break;
       }

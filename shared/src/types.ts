@@ -1077,6 +1077,10 @@ export interface Token {
   engulfDmgTurn?: number;
   /** This token IS the awakened God's Bane blade: DM-moved only, no AC / HP, never a target. */
   godsBaneBlade?: boolean;
+  /** Light the token carries (torch, lantern…): radius in feet, bright then dim. */
+  lightSource?: { bright: number; dim: number } | null;
+  /** Darkvision in feet (unset = from the linked sheet: species, features, Devil's Sight). */
+  darkvision?: number | null;
 }
 
 /** What a creature has spent of its action economy since its turn started. */
@@ -1127,6 +1131,22 @@ export interface BattleMap {
   roofs?: MapRoof[];
   /** DM override per roof id; unset = automatic (open while a PC token stands inside). */
   roofOverride?: Record<string, 'open' | 'closed'>;
+  /** Walls and doors that block sight (grid units, between points on the board). */
+  walls?: import('./vision.js').Wall[];
+  /** Fixed light sources on the map (braziers, lamps): radius in feet, bright then dim. */
+  lights?: MapLight[];
+  /** Dynamic fog: players see only what their tokens see. `explore`: seen areas stay revealed (greyed). */
+  fog?: { enabled: boolean; explore?: boolean };
+  /** Explored cells ('0' / '1' per cell, row by row) — what the party has seen so far. */
+  explored?: string;
+}
+
+export interface MapLight {
+  id: string;
+  x: number;
+  y: number;
+  bright: number;
+  dim: number;
 }
 
 /**

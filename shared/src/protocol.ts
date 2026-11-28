@@ -224,6 +224,10 @@ export type ClientAction =
   | { t: 'spendHitDie'; sheetId: string; die: number }
   | { t: 'clearLog' }
   | { t: 'updateMap'; patch: Partial<BattleMap> }
+  /** Cells the party's tokens now see (dynamic fog's explored memory). */
+  | { t: 'fogExplore'; cells: number[] }
+  /** Open / close a door wall. */
+  | { t: 'toggleDoor'; wallId: string }
   // scenes (DM)
   | { t: 'sceneCreate'; name?: string }
   | { t: 'sceneActivate'; id: string }

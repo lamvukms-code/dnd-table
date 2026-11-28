@@ -87,6 +87,8 @@ import { BESTIARY_GROUPS, ZONE_LAYOUTS } from '../campaignData.js';
 import { ExhaustionStepper } from './Exhaustion.js';
 import { DefenseLine, EffectChips, PcStatblock, StatDiamond } from './InspectorParts.js';
 import { LIGHT_ICON } from './LightChip.js';
+import { FogCanvas, FogTools, TokenSightFields, WallLayer, useVision, type FogTool } from './FogLayer.js';
+import { tokenSeen } from '@dnd-table/shared';
 
 /** The imported map pack's own file id, e.g. "gl_3_1_the_keep_20x24" — derived from
  *  `backgroundUrl` (`/maps/battlemaps/<id>.webp`, see MapLibrary.tsx) so a known zone layout can
@@ -149,6 +151,13 @@ function BattleMapImpl() {
   const sheets = useStore((s) => s.room?.sheets)!;
   const initiative = useStore((s) => s.room?.initiative)!;
   const godsBaneAwake = useStore((s) => !!s.room?.godsBane?.enabled && !!s.room?.godsBane?.awakened);
+  // dynamic fog: the scene light (unset with a moon up = moonlight) and who is looking
+  const sceneLight = useStore((s) => s.room?.light ?? (s.room?.moon ? 'moon' : undefined));
+  const [fogTool, setFogTool] = useState<FogTool>({ mode: 'none', preset: 'torch', preview: false });
+  const vision = useVision(map, tokens, sheets, sceneLight, isDm, meId, fogTool.preview);
+  /** Hidden by the fog for this viewer: not their own token and outside what they see. */
+  const fogHides = (t: Token) =>
+    !!vision && t.controllerId !== meId && !sheets.some((s) => s.tokenId === t.id && s.ownerId === meId) && !tokenSeen(vision, t);
   /** A visible player character (controlled, or linked to a sheet) has its centre on the roof's
    *  floor — follows the live drag position so the roof lifts as the token walks in. */
   function roofHasPc(r: MapRoof): boolean {
@@ -782,6 +791,16 @@ function BattleMapImpl() {
         <CharacterPalette />
         {isDm && <BestiaryPalette />}
         {isDm && <NpcPalette />}
+        {isDm && (
+          <details className="mt-item" {...MT_GROUP}>
+            <summary className={`mt-btn ${map.fog?.enabled ? 'on' : ''}`} title="Fog & tầm nhìn: tường, cửa, đèn">
+              🌫
+            </summary>
+            <div className="token-palette mt-flyout">
+              <FogTools map={map} tool={fogTool} setTool={setFogTool} />
+            </div>
+          </details>
+        )}
         {tokens.length > 0 && (
           <details className="mt-item" {...MT_GROUP}>
             <summary className="mt-btn" title="Kéo token để nhân bản">
@@ -1154,7 +1173,7 @@ function BattleMapImpl() {
             })}
 
           {tokens
-            .filter((t) => isDm || !t.hidden)
+            .filter((t) => (isDm || !t.hidden) && !fogHides(t))
             .map((t) => {
               const span = SIZE_CELLS[t.size];
               // While this token is the one being dragged, follow the local (instant) position
@@ -1292,6 +1311,9 @@ function BattleMapImpl() {
                 </button>
               );
             })}
+
+          {vision && <FogCanvas map={map} vision={vision} cell={CELL} isDm={isDm} />}
+          <WallLayer map={map} cell={CELL} isDm={isDm} tool={fogTool} vision={vision} />
 
           {diceTray.entries.length > 0 && (
             <div className="dice-tray">
@@ -2138,6 +2160,7 @@ function TokenInspector({
       {panel === 'status' && (
         <div className="sbx-panel">
           <div className="sbx-panel-title">⚔ Trạng thái</div>
+          <TokenSightFields token={token} sheet={linkedSheet ?? undefined} canEdit={canControl} />
           <div className="insp-grid">
             {isDm && !statsHidden && (
               <label className="chk madness-save">
