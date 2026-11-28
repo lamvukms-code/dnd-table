@@ -1205,7 +1205,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                   const kind = economyKindOf(a.actionType);
                   if (!kind) return true;
                   const maxAttacks =
-                    a.id === 'monk-unarmed-bonus' ? monkBonusUnarmedMax(draft, flurryActive) : attacksPerAction(draft);
+                    a.id === 'monk-unarmed-bonus' ? monkBonusUnarmedMax(draft, flurryActive) : a.id.startsWith('offhand:') ? 1 : attacksPerAction(draft);
                   return spendEconomy(draft.tokenId || undefined, kind, { attack, maxAttacks });
                 };
                 // Firearms: an empty / jammed gun can't fire; each shot spends a round from the barrel.
@@ -1312,8 +1312,9 @@ function BasicTab({ draft, commit }: EditorCtx) {
                         }
                       : undefined
                   }
+                  cleaveReady={!!linkedToken?.turnUsed?.cleaveReady && !linkedToken?.turnUsed?.cleaveUsed}
                   onToggleRange={
-                    a.id === 'unarmed' || a.id === 'monk-unarmed'
+                    a.id === 'unarmed' || a.id === 'monk-unarmed' || a.id.startsWith('offhand:')
                       ? undefined
                       : () => {
                           const next: AttackRange = attackRangeOf(a) === 'melee' ? 'ranged' : 'melee';
@@ -1399,6 +1400,7 @@ function ActionRow({
   grapplerCombo,
   onToggleRange,
   onDelete,
+  cleaveReady,
 }: {
   action: SheetAction;
   parts: DamagePart[];
@@ -1420,6 +1422,8 @@ function ActionRow({
     attackRange?: AttackRange;
     attackKind?: 'weapon' | 'spell';
     rangeText?: string;
+    mastery?: SheetAction['mastery'];
+    cleave?: boolean;
   }) => Promise<void>;
   damageRoll: (
     label: string,
@@ -1445,6 +1449,8 @@ function ActionRow({
   };
   onToggleRange?: () => void;
   onDelete?: () => void;
+  /** Cleave mastery earned an extra attack this turn: fire it at the current target. */
+  cleaveReady?: boolean;
 }) {
   const base = `${sheetName} · ${action.name}`;
   const isAttack = typeof action.attackBonus === 'number' && parts.length > 0;
@@ -1497,11 +1503,35 @@ function ActionRow({
               attackRange: attackRangeOf(action),
               attackKind: attackKindOf(action),
               rangeText: action.range ?? action.description,
+              mastery: action.mastery,
             });
             // Armed riders (Sneak Attack, Booming Blade, Finishers…) are disarmed by the server on a hit.
           }}
         >
           ⚔ {targetName}
+        </button>
+      )}
+      {isAttack && targetId && cleaveReady && action.mastery?.kind === 'cleave' && action.baseDamage && (
+        <button
+          className="roll-btn"
+          title="Cleave: đòn thêm vào 1 kẻ khác trong 5 ft của mục tiêu đầu (trong tầm với), không cộng điểm chỉ số vào sát thương. 1 lần/lượt, không tốn đòn."
+          onClick={() =>
+            void attackRoll({
+              label: `${base} · Cleave → ${targetName}`,
+              attackBonus: action.attackBonus!,
+              rollMode,
+              // the weapon's own dice without the ability modifier; the other parts stay
+              damageParts: parts.map((p, i) => (i === 0 ? { ...p, dice: action.baseDamage! } : p)),
+              targetTokenId: targetId,
+              attackerSheetId: attacker.sheetId,
+              attackerTokenId: attacker.tokenId,
+              attackRange: 'melee',
+              attackKind: 'weapon',
+              cleave: true,
+            })
+          }
+        >
+          🪓 Cleave → {targetName}
         </button>
       )}
       {isAttack && !targetId && (

@@ -12,6 +12,8 @@ import { accessConfigFromEnv, AuthIds, isDmAuth, makeAuthResolver, type TableAut
 import { Recordings, type TracksManifest } from './recordings.js';
 import * as soundboard from './soundboard.js';
 import { mixSession } from './mix.js';
+import { queueTranscribe, transcribeEnabled } from './transcribe.js';
+import { writeSessionNames } from './glossary.js';
 import {
   PROTOCOL_VERSION,
   type ClientEnvelope,
@@ -65,6 +67,8 @@ const LOREBOOK_FILE =
 const MAPS_DIR = process.env.MAPS_DIR ?? join(__dirname, '..', 'data', 'maps');
 /** Soundboard clips the DM uploaded (git-ignored, like uploads/). */
 const SOUNDS_DIR = process.env.SOUNDS_DIR ?? join(__dirname, '..', 'data', 'soundboard');
+/** The DM's list of proper names for the recordings' speech-to-text (see glossary.ts). Git-ignored. */
+const GLOSSARY_FILE = process.env.GLOSSARY_FILE ?? join(__dirname, '..', 'data', 'ten-rieng.txt');
 // Local, git-ignored third-party classes (same file the client bundles). The server needs them for
 // Hit Dice / level-up / Extra Attack, so register them before the Room starts handling messages.
 const CLASSES_FILE =
@@ -249,6 +253,11 @@ function stopRecording(reason: string): { folder: string } | null {
   room.announce(`⏹ Đã dừng ghi hình (${formatElapsed(done.ms)})${reason}`);
   setRecordingState(null);
   console.log(`recording saved: ${done.folder} (${(done.bytes / 1e6).toFixed(1)} MB)`);
+  try {
+    writeSessionNames(done.folder, GLOSSARY_FILE, room.state);
+  } catch (e) {
+    console.error('ten-rieng.json not written:', e);
+  }
   return done;
 }
 
@@ -343,12 +352,25 @@ app.post('/recordings/track/:id/stop', (req, res) => {
 
 /** After a recording's tracks are in: build the denoised mix in the background (ffmpeg). */
 async function buildCleanMix(folder: string, manifest: TracksManifest): Promise<void> {
-  if (!manifest.tracks.length) return;
-  console.log(`mixing ${manifest.tracks.length} track(s): ${folder}`);
-  const r = await mixSession(folder).catch((e: unknown) => ({ ok: false, note: String(e) }));
-  if (!r) return;
-  console.log(r.ok ? `clean mix ready: ${'out' in r ? r.out : folder}` : `clean mix failed: ${r.note}`);
-  room.announce(r.ok ? `🎚 Đã dựng xong bản tiếng sạch (${r.note})` : `🎚 Chưa dựng được bản tiếng sạch: ${r.note}`);
+  if (manifest.tracks.length) {
+    console.log(`mixing ${manifest.tracks.length} track(s): ${folder}`);
+    const r = await mixSession(folder).catch((e: unknown) => ({ ok: false, note: String(e) }));
+    if (r) {
+      console.log(r.ok ? `clean mix ready: ${'out' in r ? r.out : folder}` : `clean mix failed: ${r.note}`);
+      room.announce(r.ok ? `🎚 Đã dựng xong bản tiếng sạch (${r.note})` : `🎚 Chưa dựng được bản tiếng sạch: ${r.note}`);
+      broadcastState();
+      scheduleSave();
+    }
+  }
+  if (transcribeEnabled()) void transcribeRecording(folder);
+}
+
+/** Speech-to-text of the session (local Whisper) → loi-thoai.md / .srt / .json in its folder. */
+async function transcribeRecording(folder: string): Promise<void> {
+  console.log(`transcribing: ${folder}`);
+  const r = await queueTranscribe(folder);
+  console.log(r.ok ? `transcript ready (${r.note}): ${folder}` : `transcript failed: ${r.note}`);
+  room.announce(r.ok ? `📝 Đã chép xong lời thoại buổi quay (${r.note})` : `📝 Chưa chép được lời thoại: ${r.note}`);
   broadcastState();
   scheduleSave();
 }

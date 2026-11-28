@@ -132,16 +132,34 @@ export function DmPromptBanner() {
   );
 }
 
-/** DM-only: a monster's reaction just became available (its trigger fired). "Dùng" runs its save / damage. */
+/** A reaction just became available (its trigger fired): monsters' go to the DM ("Dùng" runs its save /
+ *  damage); a character's Protection / Interception goes to its player (and the DM). */
 export function ReactPromptBanner() {
-  const prompts = useStore((s) => s.room?.reactPrompts);
+  const all = useStore((s) => s.room?.reactPrompts);
   const tokens = useStore((s) => s.room?.tokens);
   const isDm = useStore((s) => s.isDm());
+  const me = useStore((s) => s.participantId);
   const send = useStore((s) => s.send);
-  if (!isDm || !prompts?.length) return null;
+  const prompts = all?.filter((p) => isDm || (p.style && p.ownerId === me));
+  if (!prompts?.length) return null;
   return (
     <div className="oa-prompts react-prompts">
       {prompts.map((p) => {
+        if (p.style) {
+          return (
+            <div key={p.id} className="oa-prompt react">
+              <span>
+                🛡 <b>{p.tokenName}</b> có thể dùng <b>{p.actionName}</b> ({p.why}) · ⏸ đòn đánh đang chờ
+              </span>
+              <button className="primary" onClick={() => send({ t: 'reactResolve', id: p.id, use: true })}>
+                Dùng Reaction
+              </button>
+              <button className="link" onClick={() => send({ t: 'reactResolve', id: p.id, use: false })}>
+                Bỏ qua
+              </button>
+            </div>
+          );
+        }
         const a = tokens?.find((t) => t.id === p.tokenId)?.statblock?.actions.find((x) => x.id === p.actionId);
         return (
           <div key={p.id} className="oa-prompt react">

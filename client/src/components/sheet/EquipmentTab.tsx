@@ -21,6 +21,10 @@ import {
   type ItemType,
   type WeaponAbility,
   magicItemPresets,
+  MASTERY_VI,
+  SRD_WEAPONS,
+  masterySlots,
+  weaponInfo,
 } from '@dnd-table/shared';
 import { useStore } from '../../store.js';
 import { nanoIdish } from '../../util.js';
@@ -297,6 +301,7 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                     />
                     Heavy
                   </label>
+                  <WeaponMasteryPicker draft={draft} commit={commit} item={it} onKind={(k) => setItem(it.id, { weaponKind: k })} />
                   <label>
                     +đánh phụ
                     <input
@@ -562,5 +567,43 @@ function EquipmentPicker({ onAdd }: { onAdd: (item: InventoryItem) => void }) {
         </ul>
       )}
     </div>
+  );
+}
+
+/** Which SRD weapon this item is (properties + mastery), and whether this character masters it. */
+function WeaponMasteryPicker({ draft, commit, item, onKind }: EditorCtx & { item: InventoryItem; onKind: (kind: string | undefined) => void }) {
+  const info = weaponInfo(item);
+  const slots = masterySlots(draft);
+  const chosen = draft.weaponMasteries ?? [];
+  const on = !!info && chosen.includes(info.kind);
+  const toggle = (v: boolean) => {
+    if (!info) return;
+    const next = v ? [...chosen.filter((k) => k !== info.kind), info.kind] : chosen.filter((k) => k !== info.kind);
+    commit({ ...draft, weaponMasteries: next });
+  };
+  return (
+    <>
+      <label title="Loại vũ khí SRD: quyết định thuộc tính (Light, Two-Handed, Thrown…) và Weapon Mastery. Để tự đoán thì app tìm theo tên.">
+        Loại
+        <select value={item.weaponKind ?? ''} onChange={(e) => onKind(e.target.value || undefined)}>
+          <option value="">{info && !item.weaponKind ? `tự đoán: ${info.name}` : '— không rõ —'}</option>
+          {SRD_WEAPONS.map((w) => (
+            <option key={w.kind} value={w.kind}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      {info && (
+        <label
+          className="chk"
+          title={`${MASTERY_VI[info.mastery].name}: ${MASTERY_VI[info.mastery].text}${slots ? ` · Đang dùng ${chosen.length}/${slots} loại vũ khí mastery.` : ' · Class hiện tại chưa có Weapon Mastery.'}`}
+        >
+          <input type="checkbox" checked={on} disabled={!on && (slots === 0 || chosen.length >= slots)} onChange={(e) => toggle(e.target.checked)} />
+          Mastery {MASTERY_VI[info.mastery].name}
+          {slots > 0 && <small> ({chosen.length}/{slots})</small>}
+        </label>
+      )}
+    </>
   );
 }

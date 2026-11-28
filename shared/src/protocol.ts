@@ -20,6 +20,7 @@ import type {
   Token,
   ConditionType,
   Hazard,
+  SheetAction,
 } from './types.js';
 import type { GodsBaneOp, GodsBaneRoomOp } from './godsBane.js';
 
@@ -94,6 +95,10 @@ export type ClientAction =
        *  (same save-vs-DC resolution as the standalone 'grapple' action). Client gates this to
        *  once per turn via `turnUsed.grapplerComboUsed`; the server doesn't re-check the feat. */
       grappleOnHit?: { dc: number };
+      /** Weapon Mastery of the weapon used (the character masters it): applied on hit / miss. */
+      mastery?: SheetAction['mastery'];
+      /** This is Cleave's extra attack (needs `turnUsed.cleaveReady`, once per turn). */
+      cleave?: boolean;
       // When present, the client already rolled (via dddice). On a crit the
       // per-part totals are the homebrew-crit notation's roll.
       external?: {

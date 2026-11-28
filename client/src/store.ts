@@ -138,6 +138,10 @@ interface AttackParams {
   pushFeetOnHit?: number;
   /** Grappler feat "Punch and Grab" (2024): on a hit, also attempt to grapple the target. */
   grappleOnHit?: { dc: number };
+  /** Weapon Mastery of the weapon (applied by the server on hit / miss). */
+  mastery?: Extract<ClientAction, { t: 'attack' }>['mastery'];
+  /** Cleave's extra attack. */
+  cleave?: boolean;
 }
 
 export interface AoeMode {
@@ -534,6 +538,8 @@ export const useStore = create<StoreState>((set, get) => {
       actionName,
       pushFeetOnHit,
       grappleOnHit,
+      mastery,
+      cleave,
     }) => {
       const room = get().room;
       // Fold condition-implied advantage/disadvantage into the manual roll mode.
@@ -565,6 +571,11 @@ export const useStore = create<StoreState>((set, get) => {
         if (help) {
           mode = combineRollModes(mode, 'advantage');
           reasons.push(help.name.replace(/^Bị Help nhắm/, 'Help'));
+        }
+        // Vex mastery: this attacker's next attack on the target
+        if (atkTok && tgtFx.some((e) => e.vexBy === atkTok.id)) {
+          mode = combineRollModes(mode, 'advantage');
+          reasons.push('Vex');
         }
         // Ranged attack made at close quarters (target within 5 ft): Disadvantage.
         const atkSheet = attackerSheetId ? room?.sheets.find((s) => s.id === attackerSheetId) : undefined;
@@ -666,6 +677,8 @@ export const useStore = create<StoreState>((set, get) => {
           actionName,
           pushFeetOnHit,
           grappleOnHit,
+          mastery,
+          cleave,
         });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(notation);
@@ -691,6 +704,8 @@ export const useStore = create<StoreState>((set, get) => {
           actionName,
           pushFeetOnHit,
           grappleOnHit,
+          mastery,
+          cleave,
           external: { attack },
         });
       }
@@ -744,6 +759,8 @@ export const useStore = create<StoreState>((set, get) => {
         actionName,
         pushFeetOnHit,
         grappleOnHit,
+        mastery,
+        cleave,
         external: { attack, crit: effectiveCrit, partTotals },
       });
     },

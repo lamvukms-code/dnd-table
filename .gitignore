@@ -41,3 +41,6 @@ client/public/campaign/
 
 # setting art (moon cards, backgrounds) built locally from purchased assets — never commit
 client/public/art/
+.whisper/
+server/tools/__pycache__/
+server/data/ten-rieng.txt

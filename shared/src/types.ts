@@ -68,6 +68,8 @@ export interface DamagePart {
   label?: string; // "Ring of fire", "Flame Tongue"
   /** The attack's traits (magical / silvered / moongilded). Unset = an ordinary, non-magical attack. */
   traits?: WeaponTrait[];
+  /** Great Weapon Fighting: a 1 or 2 on a damage die counts as this (3). */
+  minDie?: number;
 }
 
 /**
@@ -133,6 +135,12 @@ export interface SheetAction {
   attackRange?: AttackRange;
   /** Magical / silvered / moongilded weapon (spell attacks always count as magical). */
   weaponTraits?: WeaponTrait[];
+  /** Weapon Mastery this attack applies (the character masters the weapon). */
+  mastery?: { kind: import('./weaponMastery.js').WeaponMasteryKind; mod: number; dc: number };
+  /** Base damage dice without the ability modifier (Cleave's extra attack). */
+  baseDamage?: string;
+  /** Damage dice treat 1–2 as this (Great Weapon Fighting). */
+  minDie?: number;
 }
 
 /** Limited-use class resource: Ki, Rage, Bardic Inspiration, Sorcery Points… */
@@ -275,6 +283,8 @@ export interface InventoryItem {
   proficient?: boolean;
   /** Weapon has the Heavy property. Unset = guessed from the SRD weapon name. */
   heavy?: boolean;
+  /** Which SRD weapon this is (properties + mastery), e.g. "longsword". Unset = found from the name. */
+  weaponKind?: string;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
 
@@ -381,6 +391,8 @@ export interface CharacterSheet {
    *  remove only what the old one added, the same way `fromSpecies`/`fromBackground` work. */
   backgroundSkills?: string[];
   feats: Feat[];
+  /** Weapon kinds (SRD weapon keys, e.g. "longsword") whose mastery this character uses. */
+  weaponMasteries?: string[];
   features: Feature[];
   inventory: InventoryItem[];
   currency: Currency;
@@ -575,6 +587,15 @@ export interface ActiveEffect {
   endsAfterOwnTurns?: number;
   /** Ends when the turn of the token that applied it (`sourceTokenId`) starts again (Dodge, Help). */
   untilSourceTurnStart?: boolean;
+  /** Ends when the source's turn has ended this many more times (2 = "before the end of your next
+   *  turn" when applied during the source's own turn). Counted down at the end of each of its turns. */
+  untilSourceTurnEnds?: number;
+  /** Vex: the token with this id has advantage on its next attack against the bearer (then it ends). */
+  vexBy?: string;
+  /** Removed once the bearer makes an attack roll (Sap: disadvantage on its next attack only). */
+  consumeOnAttack?: boolean;
+  /** The bearer's walking speed is lower by this many feet (Slow mastery; the biggest one counts). */
+  speedPenalty?: number;
   /** Attacks against the bearer have disadvantage (Dodge; not while it is incapacitated). */
   attackersDisadvantage?: boolean;
   /** The next attack against the bearer by someone other than the source has advantage, then it clears (Help). */
@@ -1002,6 +1023,10 @@ export interface TurnUsed {
   grapplerComboUsed?: boolean;
   /** The "one more melee attack after a crit / kill" reminder was given this turn. */
   bonusAttackReminder?: boolean;
+  /** Cleave mastery: a melee hit this turn earned one extra attack on another creature. */
+  cleaveReady?: boolean;
+  /** Cleave's extra attack was made this turn (once per turn). */
+  cleaveUsed?: boolean;
 }
 
 export interface BattleMap {
@@ -1315,6 +1340,9 @@ export interface ReactPrompt {
   /** The attack that triggered it is parked until the DM answers (a reaction that must come before
    *  the roll, e.g. "impose disadvantage on the attack roll"). Same id on every prompt of one hold. */
   holdsAttack?: string;
+  /** A character's Fighting Style reaction (Protection / Interception): its owner answers it. */
+  style?: 'protection' | 'interception';
+  ownerId?: string;
 }
 
 /** The caster picks where a creature lands (within `maxFeet` of `anchorTokenId`). */

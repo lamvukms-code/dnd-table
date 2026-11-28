@@ -45,6 +45,9 @@ import {
   FEET_PER_CELL,
   abilityMod as abilityModOf,
   diceFacesOf,
+  minDieBonus,
+  hasStyle,
+  shieldEquipped,
   expendJaegerMomentum,
   legendaryActionCost,
   legendaryInfo,
@@ -170,6 +173,13 @@ const PLAYER_TOKEN_FIELDS = new Set([
 /** Damage types plus attack traits (magical, silvered, moongilded…) of damage parts. */
 const partTypes = (parts: { type?: string; traits?: string[] }[]): string[] =>
   [...new Set(parts.flatMap((p) => [p.type ?? '', ...(p.traits ?? [])]).filter(Boolean).map((x) => x.toLowerCase()))];
+
+/** Interception taken before the roll: reduces the damage if the attack hits. */
+interface Intercept {
+  tokenId: string;
+  by: string;
+  dice: string;
+}
 
 export class Room {
   state: RoomState;
@@ -1132,14 +1142,18 @@ export class Room {
       bits.push(n);
       const ext = externals?.[i];
       let raw: number;
+      let mine: number[];
       if (ext) {
         raw = ext.total;
-        faces.push(...ext.faces);
+        mine = ext.faces;
       } else {
         const r = rollNotation(n);
         raw = r.total;
-        faces.push(...diceFacesOf(r));
+        mine = diceFacesOf(r);
       }
+      faces.push(...mine);
+      // Great Weapon Fighting: a 1 or 2 on a damage die counts as 3
+      if (p.minDie) raw += minDieBonus(mine, p.minDie);
       rolled.push({ part: p, raw });
     });
     const total = rolled.reduce((s, r) => s + r.raw, 0);
@@ -1394,6 +1408,17 @@ export class Room {
       }
     }
     if (phase === 'end-of-turn') {
+      // effects that last until the end of their SOURCE's (next) turn (Vex)
+      for (const t of this.state.tokens) {
+        if (!(t.effects ?? []).some((e) => e.untilSourceTurnEnds != null && e.sourceTokenId === token.id)) continue;
+        const left: ActiveEffect[] = [];
+        for (const e of t.effects ?? []) {
+          if (e.untilSourceTurnEnds == null || e.sourceTokenId !== token.id) left.push(e);
+          else if (e.untilSourceTurnEnds > 1) left.push({ ...e, untilSourceTurnEnds: e.untilSourceTurnEnds - 1 });
+          else this.systemLog(`${t.label}: hết ${e.name}`);
+        }
+        t.effects = left;
+      }
       // effects lasting "until the end of its next turn"
       if (token.effects?.some((e) => e.endsAfterOwnTurns != null)) {
         const left: ActiveEffect[] = [];
@@ -1493,10 +1518,79 @@ export class Room {
   }
 
   /** A token's walking speed (ft): linked sheet, else stat block, else 30. Grappled → 0. */
+  /** Weapon Mastery (SRD 5.2.1) of a character's weapon attack, after it hit or missed. */
+  private applyMastery(action: Extract<ClientAction, { t: 'attack' }>, target: Token, hit: boolean, dealt: boolean, actor: Participant): void {
+    const m = action.mastery!;
+    const attacker = action.attackerTokenId
+      ? this.state.tokens.find((t) => t.id === action.attackerTokenId)
+      : this.state.tokens.find((t) => this.state.sheets.some((x) => x.id === action.attackerSheetId && x.tokenId === t.id));
+    const who = attacker?.label ?? 'Đòn đánh';
+    const add = (e: Omit<ActiveEffect, 'id'>) => {
+      target.effects = [...(target.effects ?? []), { id: nanoid(8), ...e }];
+    };
+    const own = !!attacker && this.state.initiative.entries.some((e) => e.isActive && e.tokenId === attacker.id);
+    switch (m.kind) {
+      case 'graze': {
+        if (hit || m.mod <= 0) return;
+        const type = action.damageParts[0]?.type ?? '';
+        const out = resolveDamageParts([{ part: { dice: String(m.mod), type }, raw: m.mod }], this.effectiveDefenses(target));
+        const took = this.applyDamage(target, out.totalFinal, { types: [type] });
+        if (took.applied + took.absorbed > 0) this.markDealtDamage(attacker?.id);
+        this.maybeBreakConcentration(target, out.totalFinal);
+        this.systemLog(`🗡 ${who} · Graze: trượt nhưng vẫn gây ${out.totalFinal} sát thương cho ${target.label}`);
+        return;
+      }
+      case 'vex':
+        if (!hit || !dealt || !attacker) return;
+        add({ name: `Vex (${who})`, vexBy: attacker.id, sourceTokenId: attacker.id, untilSourceTurnEnds: own ? 2 : 1, note: `${who} có Lợi thế ở đòn kế tiếp vào mục tiêu này` });
+        this.systemLog(`🎯 ${who} · Vex: Lợi thế ở đòn kế tiếp vào ${target.label}`);
+        return;
+      case 'sap':
+        if (!hit) return;
+        add({ name: `Sap (${who})`, rollDisadvantage: ['attack'], consumeOnAttack: true, sourceTokenId: attacker?.id, untilSourceTurnStart: !!attacker, note: 'Bất lợi ở đòn tấn công kế tiếp' });
+        this.systemLog(`🔨 ${who} · Sap: ${target.label} bị Bất lợi ở đòn tấn công kế tiếp`);
+        return;
+      case 'slow':
+        if (!hit || !dealt) return;
+        if (target.effects?.some((e) => e.speedPenalty)) return; // does not stack
+        add({ name: `Slow (${who})`, speedPenalty: 10, sourceTokenId: attacker?.id, untilSourceTurnStart: !!attacker, note: 'Speed −10 ft' });
+        this.systemLog(`🐌 ${who} · Slow: ${target.label} −10 ft Speed đến đầu lượt sau của ${who}`);
+        return;
+      case 'topple': {
+        if (!hit || tokenConditions(target).includes('prone')) return;
+        const sv = this.rollTokenSave(target, 'con', m.dc);
+        if (!sv.pass) add({ name: `Ngã (Topple · ${who})`, condition: 'prone' });
+        this.systemLog(`🤸 ${who} · Topple: ${target.label} cứu CON ${sv.total}${sv.modeNote} vs DC ${m.dc} — ${sv.pass ? 'đứng vững' : 'ngã Prone'}`);
+        return;
+      }
+      case 'push': {
+        if (!hit || !attacker) return;
+        if (sizeIndex(target.size) > sizeIndex('large')) {
+          this.systemLog(`↔ ${who} · Push: ${target.label} quá lớn, không đẩy được`);
+          return;
+        }
+        const fm = this.forceMove(target, attacker, 'push', 10);
+        this.systemLog(`↔ ${who} · Push: đẩy ${target.label} ${fm.feet} ft${fm.collided ? ' (vướng vật cản)' : ''}`);
+        return;
+      }
+      case 'cleave':
+        if (!hit || action.cleave || action.attackRange !== 'melee' || !attacker || attacker.turnUsed?.cleaveUsed || attacker.turnUsed?.cleaveReady) return;
+        attacker.turnUsed = { ...(attacker.turnUsed ?? {}), cleaveReady: true };
+        this.systemLog(`🪓 ${who} · Cleave: được đánh thêm 1 kẻ khác trong 5 ft của ${target.label} (nút 🪓 trên sheet, không cộng điểm chỉ số)`);
+        return;
+      case 'nick':
+        return; // the off-hand row itself costs no Bonus Action (client)
+    }
+    void actor;
+  }
+
   private tokenSpeed(token: Token): number {
     if (token.godsBaneBlade) return BLADE_SPEED;
     const sheet = this.state.sheets.find((s) => s.tokenId === token.id);
-    return walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token), this.tokenExhaustion(token));
+    const walk = walkSpeed(sheet ? computeSpeed(sheet).speed : undefined, token.statblock?.speed, tokenIsGrappled(token), this.tokenExhaustion(token));
+    // Slow mastery: −10 ft (does not stack: the biggest penalty counts)
+    const slow = Math.max(0, ...(token.effects ?? []).map((e) => e.speedPenalty ?? 0));
+    return Math.max(0, walk - slow);
   }
 
   /** After an initiative change: anchor the active token's position for the move tracker. */
@@ -1796,9 +1890,9 @@ export class Room {
   }
 
   /** Attacks waiting for the DM's answer to a reaction that comes before the roll (by hold id). */
-  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string }>();
-  /** Set just before a held attack is run again: skip the hold, apply the disadvantage if any. */
-  private resumingAttack: { dis?: string } | null = null;
+  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string; intercept?: Intercept }>();
+  /** Set just before a held attack is run again: skip the hold, apply the disadvantage / Interception if any. */
+  private resumingAttack: { dis?: string; intercept?: Intercept } | null = null;
   /** Attacks sent while another one waits for its reaction answer — run in order once it resolves. */
   private attackQueue: { actor: Participant; action: Extract<ClientAction, { t: 'attack' }> }[] = [];
 
@@ -1831,11 +1925,42 @@ export class Room {
         found.push({ r, m });
       }
     }
-    if (!found.length) return false;
+    // characters with the Protection / Interception fighting style next to the target (player side only)
+    const styles: { r: Token; sheet: CharacterSheet; style: 'protection' | 'interception' }[] = [];
+    if (this.isPlayerSide(target) && !(attacker && this.isPlayerSide(attacker))) {
+      for (const r of this.state.tokens) {
+        const sheet = this.linkedSheet(r);
+        if (!sheet || r.id === target.id || r.id === attacker?.id || !this.canReact(r, {})) continue;
+        if (edgeFeet(r, tokenSpan(r), target, tokenSpan(target)) > 5) continue;
+        const shield = shieldEquipped(sheet);
+        const weapon = sheet.inventory.some((it) => it.type === 'weapon' && it.equipped);
+        if (hasStyle(sheet, 'protection') && shield) styles.push({ r, sheet, style: 'protection' });
+        else if (hasStyle(sheet, 'interception') && (shield || weapon)) styles.push({ r, sheet, style: 'interception' });
+      }
+    }
+    if (!found.length && !styles.length) return false;
     const holdId = nanoid(8);
     this.heldAttacks.set(holdId, { actor, action });
     const list = (this.state.reactPrompts ??= []);
     const by = attacker?.label ?? 'Đòn đánh';
+    for (const { r, sheet, style } of styles) {
+      list.push({
+        id: nanoid(8),
+        tokenId: r.id,
+        tokenName: sheet.name || r.label,
+        actionId: style,
+        actionName: style === 'protection' ? 'Protection' : 'Interception',
+        triggerTokenId: attacker?.id,
+        triggerName: attacker?.label,
+        why:
+          style === 'protection'
+            ? `${by} đang tấn công ${target.label} — dùng khiên để đòn này bị Bất lợi`
+            : `${by} đang tấn công ${target.label} — nếu trúng, giảm 1d10 + ${sheet.proficiencyBonus} sát thương`,
+        holdsAttack: holdId,
+        style,
+        ownerId: sheet.ownerId,
+      });
+    }
     for (const { r, m } of found) {
       list.push({
         id: nanoid(8),
@@ -1849,7 +1974,7 @@ export class Room {
         holdsAttack: holdId,
       });
     }
-    this.systemLog(`⏸ ${action.label || 'Đòn đánh'}: chờ DM quyết định reaction trước khi tung`);
+    this.systemLog(`⏸ ${action.label || 'Đòn đánh'}: chờ ${styles.length && !found.length ? 'người chơi' : 'DM'} quyết định reaction trước khi tung`);
     return true;
   }
 
@@ -1859,7 +1984,7 @@ export class Room {
     const held = this.heldAttacks.get(holdId);
     if (!held) return;
     this.heldAttacks.delete(holdId);
-    this.resumingAttack = { dis: held.dis };
+    this.resumingAttack = { dis: held.dis, intercept: held.intercept };
     const err = this.apply(held.actor, held.action);
     this.resumingAttack = null;
     if (err) this.systemLog(`⚠ Đòn chờ reaction không chạy được: ${err}`);
@@ -2469,10 +2594,30 @@ export class Room {
       }
 
       case 'reactResolve': {
-        if (!isDm) return 'Chỉ DM trả lời reaction của quái';
         const list = this.state.reactPrompts ?? [];
         const p = list.find((x) => x.id === action.id);
         if (!p) return null;
+        if (p.style) {
+          // a character's Protection / Interception: its owner (or the DM) answers
+          if (!isDm && actor.id !== p.ownerId) return 'Reaction này của người chơi khác';
+          this.state.reactPrompts = list.filter((x) => x.id !== p.id);
+          const r = this.state.tokens.find((t) => t.id === p.tokenId);
+          const held = p.holdsAttack ? this.heldAttacks.get(p.holdsAttack) : undefined;
+          if (action.use && r && held && this.canReact(r, {})) {
+            if (p.style === 'protection') {
+              this.spendReaction(r, {});
+              held.dis = `${p.tokenName} · Protection`;
+              this.systemLog(`🛡 ${p.tokenName} dùng Protection: đòn của ${p.triggerName ?? 'kẻ tấn công'} bị BẤT LỢI`);
+            } else if (!held.intercept) {
+              const sheet = this.linkedSheet(r);
+              held.intercept = { tokenId: r.id, by: p.tokenName, dice: `1d10+${sheet?.proficiencyBonus ?? 2}` };
+            }
+          }
+          if (p.holdsAttack) this.releaseHeldAttack(p.holdsAttack);
+          this.touch();
+          break;
+        }
+        if (!isDm) return 'Chỉ DM trả lời reaction của quái';
         this.state.reactPrompts = list.filter((x) => x.id !== p.id);
         const r = this.state.tokens.find((t) => t.id === p.tokenId);
         const a = r?.statblock?.actions.find((x) => x.id === p.actionId);
@@ -2776,6 +2921,13 @@ export class Room {
             : this.state.tokens.find((t) => this.state.sheets.some((x) => x.id === action.attackerSheetId && x.tokenId === t.id));
           const help = target.effects?.find((e) => e.attackersAdvantage && e.sourceTokenId !== attacker?.id);
           if (help) target.effects = target.effects!.filter((e) => e !== help);
+          // Sap: disadvantage on the bearer's next attack only. Vex: advantage on this attacker's next attack on it.
+          if (attacker?.effects?.some((e) => e.consumeOnAttack)) attacker.effects = attacker.effects.filter((e) => !e.consumeOnAttack);
+          if (attacker && target.effects?.some((e) => e.vexBy === attacker.id)) target.effects = target.effects.filter((e) => e.vexBy !== attacker.id);
+          if (action.cleave) {
+            if (!attacker?.turnUsed?.cleaveReady || attacker.turnUsed.cleaveUsed) return 'Cleave: cần một đòn cận chiến trúng trước đó trong lượt (1 lần/lượt)';
+            attacker.turnUsed = { ...attacker.turnUsed, cleaveUsed: true };
+          }
           const hid = attacker?.effects?.find((e) => e.hiddenStealth != null);
           if (attacker && hid) {
             attacker.effects = attacker.effects!.filter((e) => e !== hid);
@@ -2951,6 +3103,17 @@ export class Room {
           },
         });
         if (outcome) outcome = { ...outcome, totalFinal: this.baneReduce(target, action.attackerTokenId, outcome.totalFinal) };
+        // Interception (fighting style): the reaction is taken once the hit is known
+        if (outcome && resume?.intercept) {
+          const r = this.state.tokens.find((t) => t.id === resume.intercept!.tokenId);
+          if (r && this.canReact(r, {}) && outcome.totalFinal > 0) {
+            this.spendReaction(r, {});
+            const red = rollNotation(resume.intercept.dice).total;
+            const before = outcome.totalFinal;
+            outcome = { ...outcome, totalFinal: Math.max(0, before - red) };
+            this.pendingBaneLogs.push(`🛡 ${resume.intercept.by} · Interception: giảm ${red} sát thương (${resume.intercept.dice}) — ${before} → ${outcome.totalFinal}`);
+          }
+        }
         if (outcome && damageResult && tgtMechs.length && target.autoReactions !== false) {
           const cut = mechanicsOfKind(tgtMechs, 'reduceDamage').find((p) => this.canReact(target, p));
           if (cut && outcome.totalFinal > 0) {
@@ -3142,6 +3305,7 @@ export class Room {
             this.systemLog(`⚔ ${atkSheet?.name ?? atkTok.label} ${effectiveCrit ? 'chí mạng' : 'hạ gục mục tiêu'} — được đánh thêm 1 đòn cận chiến (không tốn action, 1 lần/lượt)`);
           }
         }
+        if (action.mastery) this.applyMastery(action, target, res.hit, !!outcome && outcome.totalFinal > 0, actor);
         // Grappler feat "Punch and Grab" (2024): damage + grapple on the same hit.
         if (res.hit && action.grappleOnHit) {
           this.applyGrappleAttempt(

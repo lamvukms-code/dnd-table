@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "mix": "tsx src/mixCli.ts",
+    "transcribe": "tsx src/transcribeCli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

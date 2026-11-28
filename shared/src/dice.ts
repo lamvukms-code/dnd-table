@@ -335,3 +335,8 @@ export function resolveAttack(
   const hit = crit ? true : fumble ? false : attackRoll.total >= targetAc;
   return { attackRoll, targetAc, hit, crit, fumble };
 }
+
+/** Great Weapon Fighting: how much a roll gains when every die face below `min` counts as `min`. */
+export function minDieBonus(faces: number[], min: number): number {
+  return faces.reduce((n, f) => n + (f > 0 && f < min ? min - f : 0), 0);
+}

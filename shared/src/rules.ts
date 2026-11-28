@@ -29,6 +29,7 @@ import { regainHitDice } from './derived.js';
 import { magicItemActive } from './magicItems.js';
 import { jaegerAfterRest, jaegerDamageParts } from './jaeger.js';
 import { customExtraAttack } from './classDefaults.js';
+import { hasProp, hasStyle, itemMastery, lightMeleeWeapons, MASTERY_VI, shieldEquipped, weaponInfo } from './weaponMastery.js';
 import {
   activePassives,
   featureRiderParts,
@@ -285,33 +286,82 @@ function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {
   return 'str';
 }
 
-/** Action-economy entries contributed by currently equipped weapons. */
+/** Action-economy entries contributed by currently equipped weapons (+ the off-hand Light attack). */
 export function derivedActions(sheet: CharacterSheet): SheetAction[] {
-  return sheet.inventory
-    .filter((it) => it.type === 'weapon' && it.equipped)
-    .map((it) => {
-      const ab = weaponAbilityUsed(sheet, it);
-      const mod = abilityMod(sheet.abilities[ab]);
-      const toHit =
-        mod + (it.proficient ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
-      const dmgMod = mod + (it.damageBonusMisc || 0);
-      const base = it.damage || '1d4';
-      const damage = dmgMod === 0 ? base : dmgMod > 0 ? `${base}+${dmgMod}` : `${base}${dmgMod}`;
-      return {
-        id: `weapon:${it.id}`,
-        name: it.name,
-        actionType: 'action' as const,
-        attackBonus: toHit,
-        damage,
-        damageType: it.damageType || '',
-        extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
-        weaponTraits: it.weaponTraits?.length ? [...it.weaponTraits] : undefined,
-        range: it.rangeText || '5 ft',
-        source: 'weapon' as const,
-        attackKind: 'weapon' as const,
-        attackRange: it.attackRange ?? inferAttackRange(it.rangeText),
-      };
-    });
+  const weapons = sheet.inventory.filter((it) => it.type === 'weapon' && it.equipped);
+  const lights = lightMeleeWeapons(sheet);
+  // weapons in hand for melee (a bow slung on the back doesn't stop Dueling)
+  const meleeWielded = weapons.filter((w) => (w.attackRange ?? inferAttackRange(w.rangeText)) === 'melee');
+  const out: SheetAction[] = [];
+  for (const it of weapons) {
+    const ab = weaponAbilityUsed(sheet, it);
+    const mod = abilityMod(sheet.abilities[ab]);
+    const info = weaponInfo(it);
+    const range = it.attackRange ?? inferAttackRange(it.rangeText);
+    const ranged = range === 'ranged';
+    const notes: string[] = [];
+    let toHit = mod + (it.proficient ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
+    let dmgMod = mod + (it.damageBonusMisc || 0);
+    // Fighting Styles that change the numbers (SRD 5.2.1 feats)
+    if (ranged && hasStyle(sheet, 'archery')) {
+      toHit += 2;
+      notes.push('Archery +2 đánh');
+    }
+    if (!ranged && hasStyle(sheet, 'dueling') && !hasProp(info, 'two-handed') && meleeWielded.length <= 1) {
+      dmgMod += 2;
+      notes.push('Dueling +2 sát thương');
+    }
+    if (ranged && hasProp(info, 'thrown') && hasStyle(sheet, 'thrown-weapon-fighting')) {
+      dmgMod += 2;
+      notes.push('Thrown Weapon Fighting +2 sát thương');
+    }
+    const twoHands = hasProp(info, 'two-handed') || (hasProp(info, 'versatile') && !shieldEquipped(sheet));
+    const gwf = !ranged && twoHands && hasStyle(sheet, 'great-weapon-fighting');
+    if (gwf) notes.push('Great Weapon Fighting: 1–2 trên xúc xắc sát thương tính là 3');
+    const base = it.damage || '1d4';
+    const withMod = (m: number) => (m === 0 ? base : m > 0 ? `${base}+${m}` : `${base}${m}`);
+    const mastery = itemMastery(sheet, it);
+    if (mastery) notes.push(`Mastery ${MASTERY_VI[mastery].name}: ${MASTERY_VI[mastery].text}`);
+    const row: SheetAction = {
+      id: `weapon:${it.id}`,
+      name: it.name,
+      actionType: 'action' as const,
+      attackBonus: toHit,
+      damage: withMod(dmgMod),
+      damageType: it.damageType || '',
+      extraDamage: (it.weaponExtraDamage ?? []).map((p) => ({ ...p })),
+      weaponTraits: it.weaponTraits?.length ? [...it.weaponTraits] : undefined,
+      range: it.rangeText || '5 ft',
+      source: 'weapon' as const,
+      attackKind: 'weapon' as const,
+      attackRange: range,
+      ...(notes.length ? { description: notes.join(' · ') } : {}),
+      ...(mastery ? { mastery: { kind: mastery, mod, dc: 8 + mod + sheet.proficiencyBonus }, baseDamage: base } : {}),
+      ...(gwf ? { minDie: 3 } : {}),
+    };
+    out.push(row);
+    // Two Light melee weapons: the second one's extra attack (Bonus Action; Nick: inside the Attack action).
+    if (lights.length >= 2 && lights.includes(it)) {
+      const offMod = hasStyle(sheet, 'two-weapon-fighting') || dmgMod < 0 ? dmgMod : dmgMod - Math.max(0, mod);
+      const nick = mastery === 'nick';
+      out.push({
+        ...row,
+        id: `offhand:${it.id}`,
+        name: `${it.name} (tay phụ)`,
+        actionType: nick ? 'free' : 'bonus',
+        attackRange: 'melee',
+        damage: withMod(offMod),
+        description: [
+          nick
+            ? 'Nick: đòn thêm của vũ khí Light, đánh trong hành động Attack (không tốn Bonus Action), 1 lần/lượt'
+            : 'Đòn thêm của vũ khí Light (sau khi đánh bằng vũ khí Light khác bằng hành động Attack)',
+          hasStyle(sheet, 'two-weapon-fighting') ? 'Two-Weapon Fighting: có cộng điểm chỉ số' : 'không cộng điểm chỉ số vào sát thương',
+          ...notes.filter((n) => !n.startsWith('Dueling')),
+        ].join(' · '),
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -321,7 +371,13 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
  */
 export function unarmedAction(sheet: CharacterSheet): SheetAction {
   const strMod = abilityMod(sheet.abilities.str);
-  const feat = passiveUnarmedDie(sheet);
+  // Unarmed Fighting style: 1d6 + STR, 1d8 with no weapon or shield in hand
+  const emptyHands = !sheet.inventory.some((it) => (it.type === 'weapon' || it.type === 'shield') && it.equipped);
+  const feat =
+    passiveUnarmedDie(sheet) ??
+    (hasStyle(sheet, 'unarmed-fighting')
+      ? { die: emptyHands ? '1d8' : '1d6', type: 'bludgeoning', source: `Unarmed Fighting${emptyHands ? ' (tay không)' : ''}` }
+      : null);
   if (feat) {
     return {
       id: 'unarmed',
@@ -466,7 +522,9 @@ export function actionDamageParts(
     // Jaeger: an armed Finisher adds the held Momentum dice (the server expends them on a hit).
     parts.push(...jaegerDamageParts(sheet, primaryType));
   }
-  return withAttackTraits(parts, action);
+  const out = withAttackTraits(parts, action);
+  // Great Weapon Fighting: every damage die of the attack
+  return action.minDie ? out.map((p) => ({ ...p, minDie: action.minDie })) : out;
 }
 
 /** The traits an attack carries: a spell attack is magical; a weapon has what its item / row says. */
@@ -732,7 +790,7 @@ export function grappleDc(sheet: CharacterSheet): number {
 /** Whether the sheet has a feat by name (case/whitespace-insensitive — feats are free-text). */
 export function hasFeat(sheet: CharacterSheet, name: string): boolean {
   const n = name.trim().toLowerCase();
-  return sheet.feats.some((f) => f.name.trim().toLowerCase() === n);
+  return (sheet.feats ?? []).some((f) => f.name.trim().toLowerCase() === n);
 }
 
 /** Rogue Sneak Attack dice = ⌈Rogue level / 2⌉ (0 if not a Rogue). */
@@ -1526,9 +1584,11 @@ export function computeArmorClass(sheet: CharacterSheet): AcResult {
     }
   }
   else if (armor.armorCategory === 'heavy') dexPart = 0;
+  // Defense fighting style: +1 AC while wearing armor
+  const defense = hasStyle(sheet, 'defense') ? 1 : 0;
   return {
-    ac: base + dexPart + shieldBonus,
-    source: (shield ? `${armor.name} + khiên` : armor.name) + swap,
+    ac: base + dexPart + shieldBonus + defense,
+    source: (shield ? `${armor.name} + khiên` : armor.name) + swap + (defense ? ' + Defense' : ''),
   };
 }
 
