@@ -1,5 +1,6 @@
 import type { CharacterSheet, InventoryItem } from './types.js';
 import { abilityMod } from './rules.js';
+import { passiveHas } from './featurePassives.js';
 
 /**
  * Firearm rules (mechanics only — the setting's gun list lives in the DM's local equipment data).
@@ -50,10 +51,17 @@ export function reloaded<T extends Pick<InventoryItem, 'firearm'>>(it: T): T {
   return it.firearm ? { ...it, firearm: { ...it.firearm, loaded: it.firearm.barrel } } : it;
 }
 
-/** Economy a reload costs: fast guns can use the bonus action, every gun can use the action. */
-export function reloadCosts(it: Pick<InventoryItem, 'firearm'>): ('bonus' | 'action')[] {
+/** Economy a reload costs: fast guns can use the bonus action, every gun can use the action; an
+ *  artillery expert (`artilleryExpert`) reloads artillery as a bonus action too. */
+export function reloadCosts(it: Pick<InventoryItem, 'firearm'>, sheet?: CharacterSheet): ('bonus' | 'action')[] {
   if (!it.firearm) return [];
+  if (it.firearm.reload === 'artillery' && sheet && passiveHas(sheet, 'artilleryExpert')) return ['bonus', 'action'];
   return it.firearm.reload === 'fast' ? ['bonus', 'action'] : ['action'];
+}
+
+/** An artillery firearm in the hands of an artillery expert (proficient, half weight, ×2 vs objects). */
+export function artilleryExpertWith(sheet: CharacterSheet, it: Pick<InventoryItem, 'firearm'>): boolean {
+  return it.firearm?.reload === 'artillery' && passiveHas(sheet, 'artilleryExpert');
 }
 
 /** Firearm save DC = 8 + PB + DEX (STR for artillery). */

@@ -30,7 +30,8 @@ import { regainHitDice } from './derived.js';
 import { magicItemActive } from './magicItems.js';
 import { jaegerAfterRest, jaegerDamageParts } from './jaeger.js';
 import { customExtraAttack } from './classDefaults.js';
-import { hasProp, hasStyle, itemMastery, lightMeleeWeapons, MASTERY_VI, shieldEquipped, weaponInfo } from './weaponMastery.js';
+import { artilleryExpertWith } from './firearms.js';
+import { flexibleDualWeapons, hasProp, hasStyle, itemMastery, lightMeleeWeapons, MASTERY_VI, shieldEquipped, weaponInfo } from './weaponMastery.js';
 import {
   activePassives,
   featureRiderParts,
@@ -182,7 +183,8 @@ export function randomLootFor(cr: string): Currency {
 /** Total carried weight (lb), coins included at 50 per pound (5e). */
 export function carriedWeight(sheet: CharacterSheet): number {
   const items = sheet.inventory.reduce(
-    (sum, it) => sum + (it.weight || 0) * (it.quantity || 1),
+    // an artillery expert carries artillery at half weight
+    (sum, it) => sum + (it.weight || 0) * (it.quantity || 1) * (artilleryExpertWith(sheet, it) ? 0.5 : 1),
     0,
   );
   const coins = totalCoins(sheet.currency) / 50;
@@ -308,6 +310,8 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
   const lights = lightMeleeWeapons(sheet);
   // weapons in hand for melee (a bow slung on the back doesn't stop Dueling)
   const meleeWielded = weapons.filter((w) => (w.attackRange ?? inferAttackRange(w.rangeText)) === 'melee');
+  // the setting class's flexible style: any two one-handed weapons, ranged too, +1 damage with both
+  const flexible = flexibleDualWeapons(sheet);
   const out: SheetAction[] = [];
   const pact = passiveHas(sheet, 'pactWeapon');
   for (const it of weapons) {
@@ -320,7 +324,9 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
     const range = it.attackRange ?? inferAttackRange(it.rangeText);
     const ranged = range === 'ranged';
     const notes: string[] = [];
-    let toHit = mod + (it.proficient || pactItem ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
+    const cannon = artilleryExpertWith(sheet, it);
+    let toHit = mod + (it.proficient || pactItem || cannon ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
+    if (cannon) notes.push('Chuyên gia pháo: thành thạo pháo, sát thương ×2 lên vật thể / công trình');
     if (pactItem) notes.push(`Pact weapon${ab === 'cha' ? ': dùng CHA' : ''}`);
     let dmgMod = mod + (it.damageBonusMisc || 0);
     // Fighting Styles that change the numbers (SRD 5.2.1 feats)
@@ -331,6 +337,10 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
     if (!ranged && hasStyle(sheet, 'dueling') && !hasProp(info, 'two-handed') && meleeWielded.length <= 1) {
       dmgMod += 2;
       notes.push('Dueling +2 sát thương');
+    }
+    if (flexible.includes(it)) {
+      dmgMod += 1;
+      notes.push('Flexible Fighting +1 sát thương (đánh hai tay)');
     }
     if (ranged && hasProp(info, 'thrown') && hasStyle(sheet, 'thrown-weapon-fighting')) {
       dmgMod += 2;
@@ -369,7 +379,8 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
       meleeWielded.length >= 2 &&
       meleeWielded.includes(it) &&
       !hasProp(weaponInfo(it), 'two-handed');
-    if ((lights.length >= 2 && lights.includes(it)) || dualOk) {
+    const flexOff = flexible.includes(it);
+    if ((lights.length >= 2 && lights.includes(it)) || dualOk || flexOff) {
       const offMod = hasStyle(sheet, 'two-weapon-fighting') || dmgMod < 0 ? dmgMod : dmgMod - Math.max(0, mod);
       const nick = mastery === 'nick';
       out.push({
@@ -377,12 +388,15 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
         id: `offhand:${it.id}`,
         name: `${it.name} (tay phụ)`,
         actionType: nick ? 'free' : 'bonus',
-        attackRange: 'melee',
+        // Flexible Fighting allows a one-handed ranged weapon in the off hand
+        attackRange: flexOff ? range : 'melee',
         damage: withMod(offMod),
         description: [
           nick
             ? 'Nick: đòn thêm của vũ khí Light, đánh trong hành động Attack (không tốn Bonus Action), 1 lần/lượt'
-            : 'Đòn thêm của vũ khí Light (sau khi đánh bằng vũ khí Light khác bằng hành động Attack)',
+            : flexOff
+              ? 'Flexible Fighting: đòn thêm bằng vũ khí một tay còn lại (Bonus Action, sau khi đánh bằng hành động Attack)'
+              : 'Đòn thêm của vũ khí Light (sau khi đánh bằng vũ khí Light khác bằng hành động Attack)',
           hasStyle(sheet, 'two-weapon-fighting') ? 'Two-Weapon Fighting: có cộng điểm chỉ số' : 'không cộng điểm chỉ số vào sát thương',
           ...notes.filter((n) => !n.startsWith('Dueling')),
         ].join(' · '),

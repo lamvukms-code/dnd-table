@@ -145,8 +145,20 @@ export function FirearmControls({ sheet, item, action, parts, targetId, targetNa
         </button>
       ) : (
         <>
-          {reloadCosts(item).map((c) => (
-            <button key={c} className="roll-btn sm" disabled={left >= fa.barrel} onClick={() => reload(c)}>
+          {reloadCosts(item, sheet).map((c) => (
+            <button
+              key={c}
+              className="roll-btn sm"
+              disabled={left >= fa.barrel}
+              onClick={() => reload(c)}
+              title={
+                c === 'bonus' && fa.reload === 'artillery'
+                  ? sheet.level >= 11
+                    ? 'Chuyên gia pháo: nạp pháo bằng bonus action'
+                    : 'Chuyên gia pháo: nạp pháo bằng bonus action — chỉ khi chưa di chuyển trong lượt, sau đó tốc độ 0 tới hết lượt'
+                  : undefined
+              }
+            >
               ⟳ Nạp ({c === 'bonus' ? 'bonus' : 'action'})
             </button>
           ))}

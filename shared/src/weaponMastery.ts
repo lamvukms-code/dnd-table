@@ -151,8 +151,28 @@ const STYLE_NAMES: Record<FightingStyle, string> = {
   'unarmed-fighting': 'Unarmed Fighting',
 };
 
+/** A class's own Fighting Style option (picked on its class panel, not as a feat) → the style it is. */
+const CLASS_STYLE: Record<string, FightingStyle> = {
+  dueling: 'dueling',
+  'great-weapon': 'great-weapon-fighting',
+  'two-weapon': 'two-weapon-fighting',
+};
+
 export function hasStyle(sheet: CharacterSheet | undefined, s: FightingStyle): boolean {
-  return !!sheet && hasFeat(sheet, STYLE_NAMES[s]);
+  if (!sheet) return false;
+  const picked = sheet.jaeger?.fightingStyle;
+  return hasFeat(sheet, STYLE_NAMES[s]) || (!!picked && CLASS_STYLE[picked] === s);
+}
+
+/**
+ * The setting class's "flexible" Fighting Style: two-weapon fighting with any weapons wielded in one
+ * hand (one-handed ranged weapons and non-Light weapons too), +1 damage with both while doing so.
+ * Returns the weapons that qualify when two or more are equipped, else [].
+ */
+export function flexibleDualWeapons(sheet: CharacterSheet): InventoryItem[] {
+  if (sheet.jaeger?.fightingStyle !== 'flexible') return [];
+  const oneHanded = sheet.inventory.filter((it) => it.type === 'weapon' && it.equipped && !hasProp(weaponInfo(it), 'two-handed'));
+  return oneHanded.length >= 2 ? oneHanded : [];
 }
 
 /** Equipped melee weapons that are Light (two of them → the off-hand attack). */

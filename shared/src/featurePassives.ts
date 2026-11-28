@@ -101,6 +101,9 @@ export interface FeaturePassive {
   mediumArmorDexCap?: number;
   /** Once per turn, a weapon hit's damage dice are rolled twice and the higher total is used. */
   savageAttacker?: boolean;
+  /** Artillery expert: proficient with artillery firearms, reloads them as a bonus action (until level 11
+   *  only if not moved, then speed 0), artillery and its shot weigh half, double damage to objects. */
+  artilleryExpert?: boolean;
   /** Once per turn a bludgeoning hit pushes 5 ft; a crit gives attacks against the target advantage. */
   crusher?: boolean;
   /** Once per turn a piercing hit rerolls its lowest die; a crit adds one more damage die. */
@@ -547,6 +550,7 @@ export function passiveHas(
     | 'deathSaveAdvantage'
     | 'heavyArmorReduce'
     | 'savageAttacker'
+    | 'artilleryExpert'
     | 'crusher'
     | 'piercer'
     | 'slasher'
