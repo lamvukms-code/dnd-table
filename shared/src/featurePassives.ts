@@ -26,7 +26,7 @@ export interface FeaturePassive {
   resist?: string[];
   immune?: string[];
   /** Walking speed bonus; `lightArmorOnly`: only in light armor or none. */
-  speed?: { bonus: number; lightArmorOnly?: boolean };
+  speed?: { bonus: number; lightArmorOnly?: boolean; noHeavyArmor?: boolean };
   /** Add another ability's modifier to checks of an ability (incl. its skills), e.g. CON to STR checks. */
   checkAdd?: { ability: Ability; add: Ability; min1?: boolean }[];
   /** Add an ability modifier to one skill (e.g. INT to Medicine). */
@@ -117,6 +117,10 @@ export interface FeaturePassive {
   dualWielder?: boolean;
   /** Unarmed strikes reroll 1s on damage, once per turn push 5 ft (Tavern Brawler). */
   tavernBrawler?: boolean;
+  /** An aura: the character and allies within `radius` feet (by class level) add this ability's modifier (min +1) to saves. */
+  auraSave?: { ability: Ability; radius: Record<number, number> };
+  /** Half the Proficiency Bonus on ability checks without proficiency, Initiative included (Jack of All Trades). */
+  jackOfAllTrades?: boolean;
 }
 
 /** A reaction to being attacked in melee, answered by the player before the roll. */
@@ -377,6 +381,7 @@ export function passiveSpeedBonus(sheet: CharacterSheet): { bonus: number; notes
     const s = p.passive.speed;
     if (!s) continue;
     if (s.lightArmorOnly && armor && armor.armorCategory !== 'light') continue;
+    if (s.noHeavyArmor && armor?.armorCategory === 'heavy') continue;
     bonus += s.bonus;
     notes.push(`${p.feature.name} +${s.bonus}`);
   }
@@ -532,7 +537,8 @@ export function passiveHas(
     | 'mageSlayer'
     | 'polearmMaster'
     | 'dualWielder'
-    | 'tavernBrawler',
+    | 'tavernBrawler'
+    | 'jackOfAllTrades',
 ): boolean {
   return !!sheet && activePassives(sheet).some((p) => !!p.passive[key]);
 }
@@ -586,4 +592,37 @@ export function passiveCheckFloor(
     }
   }
   return out;
+}
+
+/** A save aura the sheet radiates now (Aura of Protection): its bonus and reach in feet. */
+export function passiveAuraSave(sheet: CharacterSheet | undefined): { bonus: number; feet: number; name: string } | null {
+  if (!sheet) return null;
+  for (const p of activePassives(sheet)) {
+    const a = p.passive.auraSave;
+    if (!a) continue;
+    const feet = byLevel(a.radius, p.classLevel) ?? 0;
+    if (feet > 0) return { bonus: Math.max(1, abilityMod(sheet.abilities[a.ability])), feet, name: p.feature.name };
+  }
+  return null;
+}
+
+/**
+ * The best save aura reaching `target` (a token on the map): the sheets' own tokens within reach,
+ * on the same side, not Incapacitated. `sameSide` decides who counts as an ally.
+ */
+export function auraSaveBonusFor<T extends { id: string; x: number; y: number; size?: string; effects?: { condition?: string }[] }>(
+  target: T,
+  sources: { sheet: CharacterSheet; token: T }[],
+  distanceFeet: (a: T, b: T) => number,
+  sameSide: (a: T, b: T) => boolean,
+): { bonus: number; name: string } | null {
+  let best: { bonus: number; name: string } | null = null;
+  for (const { sheet, token } of sources) {
+    const aura = passiveAuraSave(sheet);
+    if (!aura) continue;
+    if ((token.effects ?? []).some((e) => e.condition && ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(e.condition))) continue;
+    if (token.id !== target.id && (!sameSide(token, target) || distanceFeet(token, target) > aura.feet)) continue;
+    if (!best || aura.bonus > best.bonus) best = { bonus: aura.bonus, name: `${aura.name} (${sheet.name})` };
+  }
+  return best;
 }

@@ -42,7 +42,7 @@ describe('local feats', () => {
   it('apply only to sheets that have them', () => {
     expect(passiveNoCloseRangedPenalty(sheet(['Test Eye']))).toBe(true);
     expect(passiveNoCloseRangedPenalty(sheet([]))).toBe(false);
-    expect(featFeatureDefs(sheet(['Test Pool', 'Skilled'])).map((f) => f.id)).toEqual(['feat:x-pool']);
+    expect(featFeatureDefs(sheet(['Test Pool', 'Skilled'])).map((f) => f.id).filter((id) => id.startsWith('feat:'))).toEqual(['feat:x-pool']);
   });
   it('armed −5/+10 rider: attack mod and damage only while armed', () => {
     const s = sheet(['Test Cleave']);

@@ -21,8 +21,10 @@ interface Props {
   actions: FeatureAction[];
   /** The sheet's current target (the "🎯 Mục tiêu" bar). */
   targetId?: string;
-  /** Spend one use of the feature's own pool; false = cancelled (no use left and the player declined). */
-  spendUse?: () => boolean;
+  /** Spend `n` uses (default 1) of the feature's own pool; false = cancelled (not enough left and the player declined). */
+  spendUse?: (n?: number) => boolean;
+  /** Uses left in the pool (Lay On Hands' HP). */
+  usesLeft?: number;
   /** A weapon-style feature attack was rolled (armed riders it carried are now spent). */
   onWeaponFired?: () => void;
   /** Put the character in a form (or out of it: undefined) — a 'form' button. */
@@ -30,7 +32,7 @@ interface Props {
 }
 
 /** Buttons a feature declares in local data, run through the app's usual attack / save / area flows. */
-export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, onWeaponFired, setForm }: Props) {
+export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, usesLeft, onWeaponFired, setForm }: Props) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
@@ -50,6 +52,27 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
       return;
     }
     const self = sheet.tokenId;
+    // Action Surge: one more Action this turn
+    if (a.kind === 'surge') {
+      if (!self) return useStore.setState({ error: 'Nhân vật chưa có token trên bản đồ.' });
+      if ((a.spendsUse ?? true) && spendUse && !spendUse()) return;
+      send({ t: 'setTurnUsed', tokenId: self, patch: { action: false, attacks: 0 } });
+      send({ t: 'roll', label: `${sheet.name} · ${a.label}: thêm 1 Action lượt này`, notation: '0' });
+      return;
+    }
+    // Lay On Hands: the player picks how many HP from the pool (the current target, or themself)
+    if (a.kind === 'poolHeal') {
+      const who = targetId || self;
+      if (!who) return useStore.setState({ error: 'Chọn mục tiêu ở ô 🎯 Mục tiêu (hoặc gắn token cho nhân vật).' });
+      const left = usesLeft ?? 0;
+      const raw = window.prompt(`${a.label}: hồi bao nhiêu HP? (còn ${left} trong quỹ)`, String(Math.min(left, 10)));
+      const n = Math.floor(Number(raw));
+      if (!raw || !Number.isFinite(n) || n <= 0) return;
+      if (spendUse && !spendUse(n)) return;
+      if (a.cost && !spendEconomy(self, a.cost)) return;
+      void healRoll(`${sheet.name} · ${a.label} (${n} HP)`, String(n), who, sheet.id);
+      return;
+    }
     const tgt = a.target === 'self' ? self : targetId || undefined;
     const needsTarget = a.kind !== 'summon' && (a.kind === 'attack' || a.kind === 'damage' || a.kind === 'save' || ((a.kind === 'effect' || a.kind === 'heal' || a.kind === 'tempHp') && a.target !== 'self'));
     if (needsTarget && !tgt) {
@@ -193,7 +216,7 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
           title={[a.cost ? `tốn ${a.cost === 'action' ? 'action' : a.cost === 'bonus' ? 'bonus action' : 'reaction'}` : '', featureActionDice(a, sheet, classKey) ? featureActionDice(a, sheet, classKey) + (a.type ? ` ${a.type}` : '') : '', a.summon ? `AC ${resolveFeatureNumber(a.summon.ac, sheet, classKey)}, HP ${resolveFeatureNumber(a.summon.hp, sheet, classKey)}` : '', a.save ? `${a.save.ability.toUpperCase()} save DC ${resolveFeatureDc(a.save.dc, sheet)}` : ''].filter(Boolean).join(' · ')}
           onClick={() => run(a)}
         >
-          {a.kind === 'form' ? ((sheet.activeForm ?? '').toLowerCase() === (a.form ?? '').toLowerCase() ? '◉' : '○') : a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : a.kind === 'summon' ? '👼' : '✦'} {a.label}
+          {a.kind === 'form' ? ((sheet.activeForm ?? '').toLowerCase() === (a.form ?? '').toLowerCase() ? '◉' : '○') : a.kind === 'surge' ? '⚡' : a.kind === 'poolHeal' ? '✚' : a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : a.kind === 'summon' ? '👼' : '✦'} {a.label}
         </button>
       ))}
     </span>

@@ -128,4 +128,16 @@ describe('class feature passives on the server', () => {
     room.apply(player, { t: 'roll', label: 'Athletics', notation: '1d20+4', external: { total: 6, faces: [2], d20Natural: 2, source: 'dddice' }, totalMin: 20 });
     expect(room.state.rollLog.at(-1)!.result.total).toBe(20);
   });
+
+  it('Aura of Protection adds the paladin CHA to an ally save in 10 ft', () => {
+    const pal = pc('Paladin', 6, { abilities: { ...abil, cha: 16 } });
+    const ally = { ...tok('ally', 2), controllerId: player.id } as Token;
+    const room = setup([tok('pc', 0), ally], [pal]);
+    room.apply(dm, { t: 'spellSave', targetTokenId: 'ally', ability: 'dex', dc: 14, label: 'Trap', damageOnFail: [{ dice: '10', type: 'fire' }] });
+    expect(T(room, 'ally').currentHp).toBe(100); // 11 + 3 = 14
+    const far = { ...tok('far', 6), controllerId: player.id } as Token;
+    const room2 = setup([tok('pc', 0), far], [pc('Paladin', 6, { abilities: { ...abil, cha: 16 } })]);
+    room2.apply(dm, { t: 'spellSave', targetTokenId: 'far', ability: 'dex', dc: 14, label: 'Trap', damageOnFail: [{ dice: '10', type: 'fire' }] });
+    expect(T(room2, 'far').currentHp).toBe(90);
+  });
 });

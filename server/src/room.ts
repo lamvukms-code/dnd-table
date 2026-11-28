@@ -53,6 +53,7 @@ import {
   passiveReactions,
   passiveSaveAdvantage,
   passiveCheckFloor,
+  auraSaveBonusFor,
   barbarianLevel,
   subclassUsesMax,
   resolveFeatureFormula,
@@ -383,6 +384,16 @@ export class Room {
         target.effects = [...(target.effects ?? []), { id: nanoid(8), name: 'Slasher (chí mạng)', sourceTokenId: attackerTok.id, rollDisadvantage: ['attack'], untilSourceTurnStart: true, expiresRound: round + 1 } as ActiveEffect];
       }
     }
+  }
+
+  /** The best save aura (Aura of Protection) covering this token, from the characters on the map. */
+  private auraSave(token: Token): { bonus: number; name: string } | null {
+    const sources = this.state.sheets.flatMap((s) => {
+      const t = s.tokenId ? this.state.tokens.find((x) => x.id === s.tokenId) : undefined;
+      return t ? [{ sheet: s, token: t }] : [];
+    });
+    if (!sources.length) return null;
+    return auraSaveBonusFor(token, sources, (a, b) => edgeFeet(a, tokenSpan(a), b, tokenSpan(b)), (a, b) => this.isPlayerSide(a) === this.isPlayerSide(b));
   }
 
   /** A token that can't take actions or reactions right now. */
@@ -1348,7 +1359,9 @@ export class Room {
       this.tokenSaveBonus(token, ability) +
       (withCover && ability === 'dex' ? coverDexSaveBonus(token.cover) : 0) +
       // God's Bane: sworn PCs add N against mind-altering conditions.
-      baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition);
+      baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition) +
+      // Aura of Protection reaching this token
+      (this.auraSave(token)?.bonus ?? 0);
     // advantage from the bearer's effects (effect save advantage) and a forced mode
     // (close-range disadvantage) cancel each other like any 5e advantage/disadvantage
     const featAdv = this.incapacitated(token) ? null : passiveSaveAdvantage(sheet, ability);

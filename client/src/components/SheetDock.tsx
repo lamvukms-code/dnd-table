@@ -113,7 +113,7 @@ import { FirearmControls } from './sheet/FirearmControls.js';
 import { MadnessPanel } from './sheet/MadnessPanel.js';
 import { ArcaneRecoveryPanel, MetamagicBar, SorcererPanel, SpellbookBar, WildShapePanel, type ScribeMode } from './sheet/CasterFeatures.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
-import { passiveCheckFloor, passiveHas, passiveSaveAdvantage } from '@dnd-table/shared';
+import { auraSaveBonusFor, classLevelOf, edgeFeet, passiveCheckFloor, passiveHas, passiveSaveAdvantage, tokenSpan } from '@dnd-table/shared';
 import { canCastAsRitual, isSpellbookSpell, scribeSpell, sorcererLevel, spellbookCounts, wizardLevel } from '@dnd-table/shared';
 import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, attackKindOf, featFeatureDefs, featureAttackMod, jaegerLevel } from '@dnd-table/shared';
 
@@ -727,9 +727,24 @@ function BasicTab({ draft, commit }: EditorCtx) {
       kind === 'save' && ab && (effectSaveAdvantage(linkedToken?.effects, ab) || featAdv) ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode;
     // Indomitable Might: a STR check / save total below the STR score uses the score
     const floor = ab && kind !== 'other' ? passiveCheckFloor(draft, ab, { save: kind === 'save' }) : undefined;
+    // Jack of All Trades: a plain ability check has no proficiency — half of it
+    const jack = kind === 'check' && passiveHas(draft, 'jackOfAllTrades') ? Math.floor(draft.proficiencyBonus / 2) : 0;
+    // Aura of Protection (any paladin's aura reaching this character)
+    const aura =
+      kind === 'save' && linkedToken
+        ? auraSaveBonusFor(
+            linkedToken,
+            allSheets.flatMap((s) => {
+              const t = tokens.find((x) => x.id === s.tokenId);
+              return t ? [{ sheet: s, token: t }] : [];
+            }),
+            (a, b) => edgeFeet(a, tokenSpan(a), b, tokenSpan(b)),
+            (a, b) => playerSideToken(a, allSheets) === playerSideToken(b, allSheets),
+          )
+        : null;
     // plain ability checks don't go through skillBonus/saveBonus, so add Exhaustion here
-    let notation = d20Check(mod + (kind === 'check' ? exhaustionPenalty(draft.exhaustion) : 0), effMode);
-    let extra = '';
+    let notation = d20Check(mod + jack + (aura?.bonus ?? 0) + (kind === 'check' ? exhaustionPenalty(draft.exhaustion) : 0), effMode);
+    let extra = aura ? ` +${aura.bonus} (${aura.name})` : jack ? ` +${jack} (Jack of All Trades)` : '';
     const gb = kind === 'check' ? pendingRollBonus(linkedToken ?? undefined, 'check') : undefined;
     if (gb) {
       notation = `${notation}+${gb.dice}`;
@@ -966,7 +981,7 @@ function BasicTab({ draft, commit }: EditorCtx) {
                     <div className="ab-rolls">
                       <button
                         className="roll-btn sm"
-                        onClick={() => roll(`${ab.toUpperCase()} check`, mod, 'check')}
+                        onClick={() => roll(`${ab.toUpperCase()} check`, mod, 'check', ab)}
                       >
                         check
                       </button>
@@ -2186,8 +2201,14 @@ export function withSubclassRest(sheet: CharacterSheet, kind: 'short' | 'long'):
   const used = { ...(sheet.subclassUses ?? {}) };
   let changed = false;
   for (const f of [...derivedSubclassFeatures(sheet, SUBCLASS_DEFS), ...featFeatureDefs(sheet)]) {
-    if (f.uses && (kind === 'long' || f.uses.recharge === 'short') && used[f.id]) {
+    if (!f.uses || !used[f.id]) continue;
+    const allBack =
+      kind === 'long' || f.uses.recharge === 'short' || (f.uses.shortFrom != null && f.class && classLevelOf(sheet, f.class) >= f.uses.shortFrom);
+    if (allBack) {
       delete used[f.id];
+      changed = true;
+    } else if (f.uses.recharge === 'shortOne') {
+      used[f.id] = Math.max(0, used[f.id] - 1);
       changed = true;
     }
   }
@@ -2408,13 +2429,14 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
                     }}
                     spendUse={
                       f.uses
-                        ? () => {
-                            if (u >= max && !window.confirm(`${f.name}: đã hết lượt dùng. Vẫn dùng?`)) return false;
-                            setUse(f.id, u + 1);
+                        ? (n = 1) => {
+                            if (u + n > max && !window.confirm(`${f.name}: không đủ lượt dùng (còn ${Math.max(0, max - u)}). Vẫn dùng?`)) return false;
+                            setUse(f.id, Math.min(max, u + n));
                             return true;
                           }
                         : undefined
                     }
+                    usesLeft={f.uses ? Math.max(0, max - u) : undefined}
                   />
                 )}
               </span>
@@ -2455,6 +2477,11 @@ function Pips({ max, used, onChange }: { max: number; used: number; onChange: (u
 }
 
 /* ------------------------------------------------------------- Feats / Abilities */
+
+/** A token on the players' side (linked to a character sheet, or controlled by a player). */
+function playerSideToken(t: Token, sheets: CharacterSheet[]): boolean {
+  return !!t.controllerId || sheets.some((s) => s.tokenId === t.id);
+}
 
 /** Conditions that stop a creature from acting (and switch off features like Danger Sense). */
 function tokenIncapacitated(t: Token | undefined | null): boolean {

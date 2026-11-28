@@ -490,7 +490,7 @@ describe('class features (Rogue / Barbarian)', () => {
     expect(r3.some((f) => f.id === 'rogue-sneak-attack')).toBe(true);
     expect(r3.some((f) => f.id === 'rogue-cunning-action')).toBe(true);
     expect(r3.some((f) => f.id === 'rogue-uncanny-dodge')).toBe(false); // level 5
-    expect(derivedClassFeatures(sheet({ className: 'Fighter', level: 10 }))).toHaveLength(0);
+    expect(derivedClassFeatures(sheet({ className: 'Artificer', level: 10 }))).toHaveLength(0);
   });
 
   it('sneak attack dice = ceil(rogue level / 2)', () => {

@@ -93,12 +93,19 @@ export function skillBonus(sheet: CharacterSheet, skill: string): number {
   let bonus = base;
   if (sheet.skillExpertise.includes(skill)) bonus += sheet.proficiencyBonus * 2;
   else if (sheet.skillProficiencies.includes(skill)) bonus += sheet.proficiencyBonus;
+  // Jack of All Trades: half the Proficiency Bonus on a skill without proficiency
+  else if (passiveHas(sheet, 'jackOfAllTrades')) bonus += Math.floor(sheet.proficiencyBonus / 2);
   return bonus + passiveCheckBonus(sheet, ability, skill) + exhaustionPenalty(sheet.exhaustion);
 }
 
 export function initiativeBonus(sheet: CharacterSheet): number {
   // Alert: + Proficiency Bonus
-  const alert = passiveHas(sheet, 'initiativeProf') ? sheet.proficiencyBonus : 0;
+  // (or Jack of All Trades: Initiative is a DEX check without proficiency — half of it)
+  const alert = passiveHas(sheet, 'initiativeProf')
+    ? sheet.proficiencyBonus
+    : passiveHas(sheet, 'jackOfAllTrades')
+      ? Math.floor(sheet.proficiencyBonus / 2)
+      : 0;
   return abilityMod(sheet.abilities.dex) + sheet.initiativeMisc + alert + exhaustionPenalty(sheet.exhaustion);
 }
 

@@ -12,7 +12,8 @@ import { abilityMod, classLevelOf, spellAttackBonus, spellSaveDc } from './rules
  */
 export interface FeatureAction {
   label: string;
-  kind: 'attack' | 'damage' | 'save' | 'aoe' | 'effect' | 'tempHp' | 'heal' | 'summon' | 'form';
+  /** surge: one more Action this turn (Action Surge). poolHeal: heal an amount the player picks, paid from the use pool (Lay On Hands). */
+  kind: 'attack' | 'damage' | 'save' | 'aoe' | 'effect' | 'tempHp' | 'heal' | 'summon' | 'form' | 'surge' | 'poolHeal';
   /** form: the form this button puts the character in (`sheet.activeForm`); passives with `whileForm` follow it. */
   form?: string;
   /** Action economy spent (default: none). */
@@ -155,7 +156,7 @@ export function featureActionDice(a: Pick<FeatureAction, 'dice' | 'diceByLevel'>
 
 /** Build the ActiveEffect a feature button applies (formulas resolved against the caster's sheet). */
 export function buildFeatureEffect(
-  a: Pick<FeatureAction, 'label' | 'effect' | 'save' | 'kind'>,
+  a: Pick<FeatureAction, 'label' | 'effect' | 'save' | 'kind'> & Partial<Pick<FeatureAction, 'dice' | 'diceByLevel'>>,
   sheet: CharacterSheet,
   classKey: string | undefined,
   round: number,
@@ -169,7 +170,8 @@ export function buildFeatureEffect(
     name: e.name ?? a.label,
     sourceSheetId: sheet.id,
     condition: e.condition,
-    note: e.note ?? featureName,
+    // "{dice}" in a note shows the button's dice at the character's level (Bardic Inspiration d8)
+    note: (e.note ?? featureName).replace('{dice}', a.dice || a.diceByLevel ? featureActionDice(a as FeatureAction, sheet, classKey) : ''),
     acBonus: acBonus || undefined,
     acMin: e.acMin,
     acBase: e.acBase,

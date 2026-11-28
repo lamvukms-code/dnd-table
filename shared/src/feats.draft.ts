@@ -25,7 +25,7 @@ export interface FeatDef {
   /** Mechanics the app runs for the feat (see featurePassives.ts / featureActions.ts). */
   passive?: import('./featurePassives.js').FeaturePassive;
   actions?: import('./featureActions.js').FeatureAction[];
-  uses?: { max: number | string; recharge: 'short' | 'long' };
+uses?: import('./classFeatures.js').SubclassFeatureDef['uses'];
 }
 
 // ---------------------------------------------------------------------------

@@ -31,7 +31,8 @@ export interface ClassFeatureDef {
     | 'pact-magic'
     | 'wild-shape'
     | 'sorcery'
-    | 'spellbook';
+    | 'spellbook'
+    | 'builtin';
   /** Mechanics the app runs for this feature (same shapes as subclass features). */
   passive?: FeaturePassive;
   actions?: FeatureAction[];
@@ -52,8 +53,18 @@ export interface SubclassFeatureDef {
   name: string;
   description: string;
   /** A limited-use pool this feature grants (rendered as a pip tracker). */
-  /** `max`: a number, 'cha-mod' (at least 1), 'prof', or a feature formula ("2*mod:cha", at least 1). */
-  uses?: { max: number | string; recharge: 'short' | 'long' };
+  /**
+   * `max`: a number, 'cha-mod' (at least 1), 'prof', a feature formula ("2*mod:cha", at least 1),
+   * '<class>:<formula>' (`lvl` = that class's level: "paladin:5*lvl"), or a table by class level
+   * ("tbl:fighter:1=2,4=3,10=4").
+   */
+  uses?: {
+    max: number | string;
+    /** 'shortOne': a short rest gives back one use, a long rest all of them. */
+    recharge: 'short' | 'long' | 'shortOne';
+    /** From this class level on, a short rest gives back every use (Font of Inspiration). */
+    shortFrom?: number;
+  };
   /** Buttons this feature puts on the sheet (see featureActions.ts). */
   actions?: FeatureAction[];
   /** Always-on mechanics: AC, speed, resistances, extra damage… (see featurePassives.ts). */
@@ -543,6 +554,203 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
   },
 ];
 
+const FIGHTER: Omit<ClassFeatureDef, 'class'>[] = [
+  { id: 'fighter-fighting-style', level: 1, name: 'Fighting Style', description: 'Chọn 1 feat Fighting Style (tab Đặc điểm → Feat). Archery, Defense, Dueling, GWF, TWF, Protection, Interception… đã tự áp.' },
+  {
+    id: 'fighter-second-wind',
+    level: 1,
+    name: 'Second Wind',
+    description: 'Bonus Action: hồi 1d10 + cấp Fighter HP. 2 lần (3 ở cấp 4, 4 ở cấp 10); nghỉ ngắn hồi 1 lần, nghỉ dài hồi hết.',
+    actions: [{ label: 'Second Wind', kind: 'heal', target: 'self', cost: 'bonus', dice: '1d10+lvl' }],
+    uses: { max: 'tbl:fighter:1=2,4=3,10=4', recharge: 'shortOne' },
+  },
+  { id: 'fighter-weapon-mastery', level: 1, name: 'Weapon Mastery', description: 'Dùng thuộc tính Mastery của 3 loại vũ khí (4 ở cấp 4, 5 ở cấp 10, 6 ở cấp 16). Chọn ở tab Trang bị — app tự áp.', automation: 'builtin' },
+  {
+    id: 'fighter-action-surge',
+    level: 2,
+    name: 'Action Surge',
+    description: 'Trong lượt của bạn: thêm 1 Action (không dùng cho Magic action). 1 lần mỗi nghỉ ngắn/dài (2 lần ở cấp 17, nhưng 1 lần mỗi lượt).',
+    actions: [{ label: 'Action Surge', kind: 'surge' }],
+    uses: { max: 'tbl:fighter:2=1,17=2', recharge: 'short' },
+  },
+  { id: 'fighter-tactical-mind', level: 2, name: 'Tactical Mind', description: 'Trượt một lần kiểm tra chỉ số: tốn 1 lần Second Wind để cộng 1d10 (không trúng thì không mất lượt).' },
+  { id: 'fighter-subclass-3', level: 3, name: 'Fighter Subclass', description: 'Chọn subclass.' },
+  { id: 'fighter-extra-attack', level: 5, name: 'Extra Attack', description: 'Đánh 2 lần mỗi Attack action (3 ở cấp 11, 4 ở cấp 20). App tự đếm.', automation: 'builtin' },
+  { id: 'fighter-tactical-shift', level: 5, name: 'Tactical Shift', description: 'Khi dùng Second Wind: được di chuyển tối đa nửa tốc độ không bị đòn cơ hội.' },
+  {
+    id: 'fighter-indomitable',
+    level: 9,
+    name: 'Indomitable',
+    description: 'Trượt save: tung lại, cộng thêm cấp Fighter, phải lấy kết quả mới. 1 lần (2 ở cấp 13, 3 ở cấp 17) mỗi nghỉ dài.',
+    uses: { max: 'tbl:fighter:9=1,13=2,17=3', recharge: 'long' },
+  },
+  { id: 'fighter-tactical-master', level: 9, name: 'Tactical Master', description: 'Khi đánh bằng vũ khí có Mastery: được đổi sang Push, Sap hoặc Slow cho đòn đó.' },
+  { id: 'fighter-two-extra-attacks', level: 11, name: 'Two Extra Attacks', description: 'Đánh 3 lần mỗi Attack action. App tự đếm.' },
+  { id: 'fighter-studied-attacks', level: 13, name: 'Studied Attacks', description: 'Đánh trượt một sinh vật: đòn kế tiếp vào nó trước hết lượt sau của bạn có lợi thế.' },
+  { id: 'fighter-three-extra-attacks', level: 20, name: 'Three Extra Attacks', description: 'Đánh 4 lần mỗi Attack action. App tự đếm.' },
+];
+
+const PALADIN: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'paladin-lay-on-hands',
+    level: 1,
+    name: 'Lay On Hands',
+    description: 'Quỹ HP = 5 × cấp Paladin, hồi khi nghỉ dài. Bonus Action chạm: hồi số HP chọn từ quỹ (5 HP để chữa Poisoned).',
+    actions: [{ label: 'Lay On Hands', kind: 'poolHeal', cost: 'bonus' }],
+    uses: { max: 'paladin:5*lvl', recharge: 'long' },
+  },
+  { id: 'paladin-spellcasting', level: 1, name: 'Spellcasting', description: 'Half caster, ability = CHA. Ô phép, DC tự tính ở tab Phép.' },
+  { id: 'paladin-weapon-mastery', level: 1, name: 'Weapon Mastery', description: 'Mastery của 2 loại vũ khí. Chọn ở tab Trang bị — app tự áp.' },
+  { id: 'paladin-fighting-style', level: 2, name: 'Fighting Style', description: 'Chọn 1 feat Fighting Style, hoặc Blessed Warrior (2 cantrip Cleric).' },
+  { id: 'paladin-smite', level: 2, name: "Paladin's Smite", description: 'Luôn chuẩn bị Divine Smite; đúc 1 lần không tốn ô mỗi nghỉ dài. App: chip Divine Smite ở “Sát thương thêm” (✎ quản lý → mẫu).' },
+  {
+    id: 'paladin-channel-divinity',
+    level: 3,
+    name: 'Channel Divinity',
+    description: 'Divine Sense (Bonus Action, 10 phút: biết vị trí Celestial / Fiend / Undead trong 60 ft) và lựa chọn của subclass. 2 lần (3 ở cấp 11); nghỉ ngắn hồi 1, nghỉ dài hồi hết.',
+    uses: { max: 'tbl:paladin:3=2,11=3', recharge: 'shortOne' },
+  },
+  { id: 'paladin-subclass-3', level: 3, name: 'Paladin Subclass', description: 'Chọn Oath.' },
+  { id: 'paladin-extra-attack', level: 5, name: 'Extra Attack', description: 'Đánh 2 lần mỗi Attack action. App tự đếm.' },
+  { id: 'paladin-faithful-steed', level: 5, name: 'Faithful Steed', description: 'Luôn chuẩn bị Find Steed; đúc 1 lần không tốn ô mỗi nghỉ dài.' },
+  {
+    id: 'paladin-aura-of-protection',
+    level: 6,
+    name: 'Aura of Protection',
+    description: 'Bạn và đồng minh trong 10 ft (30 ft ở cấp 18) cộng CHA mod (tối thiểu +1) vào mọi save, khi bạn không Incapacitated. App tự cộng.',
+    passive: { auraSave: { ability: 'cha', radius: { 6: 10, 18: 30 } } },
+  },
+  { id: 'paladin-abjure-foes', level: 9, name: 'Abjure Foes', description: 'Channel Divinity: tối đa CHA mod sinh vật trong 60 ft cứu WIS hoặc Frightened 1 phút (chỉ di chuyển hoặc 1 hành động).' },
+  { id: 'paladin-aura-of-courage', level: 10, name: 'Aura of Courage', description: 'Bạn và đồng minh trong aura miễn nhiễm Frightened.' },
+  {
+    id: 'paladin-radiant-strikes',
+    level: 11,
+    name: 'Radiant Strikes',
+    description: 'Đòn cận chiến bằng vũ khí (hoặc tay không) trúng: +1d8 radiant. App tự cộng.',
+    passive: { riders: [{ label: 'Radiant Strikes', dice: '1d8', type: 'radiant', scope: 'melee' }] },
+  },
+  { id: 'paladin-restoring-touch', level: 14, name: 'Restoring Touch', description: 'Lay On Hands: tốn 5 HP từ quỹ để gỡ 1 trong các trạng thái Blinded, Charmed, Deafened, Frightened, Paralyzed, Stunned.' },
+  { id: 'paladin-aura-expansion', level: 18, name: 'Aura Expansion', description: 'Aura tăng lên 30 ft. App tự áp.' },
+];
+
+const RANGER: Omit<ClassFeatureDef, 'class'>[] = [
+  { id: 'ranger-spellcasting', level: 1, name: 'Spellcasting', description: 'Half caster, ability = WIS. Ô phép, DC tự tính ở tab Phép.' },
+  {
+    id: 'ranger-favored-enemy',
+    level: 1,
+    name: 'Favored Enemy',
+    description: "Luôn chuẩn bị Hunter's Mark; đúc không tốn ô 2 lần (3 ở cấp 5, 4 ở cấp 9, 5 ở cấp 13, 6 ở cấp 17) mỗi nghỉ dài. Dấu ấn đặt ở ô 🎯 Mục tiêu.",
+    uses: { max: 'tbl:ranger:1=2,5=3,9=4,13=5,17=6', recharge: 'long' },
+  },
+  { id: 'ranger-weapon-mastery', level: 1, name: 'Weapon Mastery', description: 'Mastery của 2 loại vũ khí. App tự áp.' },
+  { id: 'ranger-deft-explorer', level: 2, name: 'Deft Explorer', description: 'Expertise 1 kỹ năng đã thành thạo; biết thêm 2 ngôn ngữ.' },
+  { id: 'ranger-fighting-style', level: 2, name: 'Fighting Style', description: 'Chọn 1 feat Fighting Style, hoặc Druidic Warrior (2 cantrip Druid).' },
+  { id: 'ranger-subclass-3', level: 3, name: 'Ranger Subclass', description: 'Chọn subclass.' },
+  { id: 'ranger-extra-attack', level: 5, name: 'Extra Attack', description: 'Đánh 2 lần mỗi Attack action. App tự đếm.' },
+  {
+    id: 'ranger-roving',
+    level: 6,
+    name: 'Roving',
+    description: 'Tốc độ +10 ft khi không mặc giáp nặng; có tốc độ leo và bơi bằng tốc độ đi. App tự cộng.',
+    passive: { speed: { bonus: 10, noHeavyArmor: true } },
+  },
+  { id: 'ranger-expertise', level: 9, name: 'Expertise', description: 'Expertise thêm 2 kỹ năng đã thành thạo.' },
+  {
+    id: 'ranger-tireless',
+    level: 10,
+    name: 'Tireless',
+    description: 'Magic action: nhận 1d8 + WIS HP tạm, WIS mod lần (tối thiểu 1) mỗi nghỉ dài. Nghỉ ngắn giảm 1 Exhaustion.',
+    actions: [{ label: 'Tireless', kind: 'tempHp', target: 'self', cost: 'action', dice: '1d8+mod:wis' }],
+    uses: { max: 'wis-mod', recharge: 'long' },
+  },
+  { id: 'ranger-relentless-hunter', level: 13, name: 'Relentless Hunter', description: "Nhận sát thương không làm mất tập trung Hunter's Mark." },
+  {
+    id: 'ranger-natures-veil',
+    level: 14,
+    name: "Nature's Veil",
+    description: 'Bonus Action: Invisible đến hết lượt kế của bạn. WIS mod lần (tối thiểu 1) mỗi nghỉ dài.',
+    actions: [{ label: "Nature's Veil", kind: 'effect', target: 'self', cost: 'bonus', effect: { name: "Nature's Veil", condition: 'invisible', rounds: 1 } }],
+    uses: { max: 'wis-mod', recharge: 'long' },
+  },
+  { id: 'ranger-precise-hunter', level: 17, name: 'Precise Hunter', description: "Lợi thế khi đánh sinh vật mang Hunter's Mark của bạn." },
+  { id: 'ranger-feral-senses', level: 18, name: 'Feral Senses', description: 'Blindsight 30 ft.' },
+  { id: 'ranger-foe-slayer', level: 20, name: 'Foe Slayer', description: "Xúc xắc sát thương của Hunter's Mark thành d10." },
+];
+
+const BARD: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'bard-inspiration',
+    level: 1,
+    name: 'Bardic Inspiration',
+    description:
+      'Bonus Action: 1 sinh vật trong 60 ft nhận 1 xúc xắc Inspiration (d6; d8 ở cấp 5, d10 ở cấp 10, d12 ở cấp 15) trong 1 giờ — khi trượt một lần tung d20, cộng xúc xắc đó vào. CHA mod lần (tối thiểu 1) mỗi nghỉ dài; từ cấp 5 (Font of Inspiration) hồi khi nghỉ ngắn.',
+    actions: [
+      {
+        label: 'Bardic Inspiration',
+        kind: 'effect',
+        cost: 'bonus',
+        dice: '1d6',
+        diceByLevel: { 5: '1d8', 10: '1d10', 15: '1d12' },
+        effect: { name: 'Bardic Inspiration', note: 'Xúc xắc Bardic Inspiration {dice}: trượt một lần tung d20 thì cộng vào (1 giờ)' },
+      },
+    ],
+    uses: { max: 'cha-mod', recharge: 'long', shortFrom: 5 },
+  },
+  { id: 'bard-spellcasting', level: 1, name: 'Spellcasting', description: 'Full caster, ability = CHA. Ô phép, DC tự tính ở tab Phép.' },
+  { id: 'bard-expertise', level: 2, name: 'Expertise', description: 'Expertise 2 kỹ năng đã thành thạo (thêm 2 ở cấp 9).' },
+  {
+    id: 'bard-jack-of-all-trades',
+    level: 2,
+    name: 'Jack of All Trades',
+    description: 'Cộng nửa Proficiency Bonus (làm tròn xuống) vào kiểm tra kỹ năng chưa thành thạo (kể cả Initiative). App tự cộng.',
+    passive: { jackOfAllTrades: true },
+  },
+  { id: 'bard-subclass-3', level: 3, name: 'Bard Subclass', description: 'Chọn College.' },
+  { id: 'bard-font-of-inspiration', level: 5, name: 'Font of Inspiration', description: 'Bardic Inspiration hồi khi nghỉ ngắn; có thể tốn ô phép để hồi 1 lần. App tự áp phần nghỉ ngắn.' },
+  { id: 'bard-countercharm', level: 7, name: 'Countercharm', description: 'Reaction: sinh vật trong 30 ft trượt save chống Charmed/Frightened được tung lại với lợi thế.' },
+  { id: 'bard-magical-secrets', level: 10, name: 'Magical Secrets', description: 'Chọn phép từ danh sách Bard, Cleric, Druid hoặc Wizard khi học phép mới.' },
+  { id: 'bard-superior-inspiration', level: 18, name: 'Superior Inspiration', description: 'Tung Initiative: hồi Bardic Inspiration lên tối thiểu 2 lần.' },
+  { id: 'bard-words-of-creation', level: 20, name: 'Words of Creation', description: 'Luôn chuẩn bị Power Word Heal và Power Word Kill; có thể nhắm thêm 1 sinh vật trong 10 ft mục tiêu đầu.' },
+];
+
+const CLERIC: Omit<ClassFeatureDef, 'class'>[] = [
+  { id: 'cleric-spellcasting', level: 1, name: 'Spellcasting', description: 'Full caster, ability = WIS. Ô phép, DC tự tính ở tab Phép.' },
+  { id: 'cleric-divine-order', level: 1, name: 'Divine Order', description: 'Chọn: Protector (giáp nặng, vũ khí quân sự) hoặc Thaumaturge (thêm 1 cantrip, cộng WIS vào Arcana/Religion).' },
+  {
+    id: 'cleric-channel-divinity',
+    level: 2,
+    name: 'Channel Divinity',
+    description:
+      'Divine Spark (Magic action, 30 ft): hồi 1d8 + WIS cho 1 sinh vật, hoặc gây 1d8 + WIS radiant/necrotic (CON save nửa) — 2d8 ở cấp 7, 3d8 ở cấp 13, 4d8 ở cấp 18. Turn Undead: Undead trong 30 ft cứu WIS hoặc Frightened + Incapacitated 1 phút. 2 lần (3 ở cấp 6, 4 ở cấp 18); nghỉ ngắn hồi 1, nghỉ dài hồi hết.',
+    actions: [
+      { label: 'Divine Spark (hồi)', kind: 'heal', cost: 'action', diceByLevel: { 2: '1d8+mod:wis', 7: '2d8+mod:wis', 13: '3d8+mod:wis', 18: '4d8+mod:wis' } },
+      {
+        label: 'Divine Spark (gây)',
+        kind: 'save',
+        cost: 'action',
+        type: 'radiant',
+        save: { ability: 'con', dc: 'spell', halfOnSave: true },
+        diceByLevel: { 2: '1d8+mod:wis', 7: '2d8+mod:wis', 13: '3d8+mod:wis', 18: '4d8+mod:wis' },
+      },
+      {
+        label: 'Turn Undead',
+        kind: 'aoe',
+        cost: 'action',
+        area: 'cầu 30ft',
+        save: { ability: 'wis', dc: 'spell' },
+        effect: { name: 'Turn Undead', condition: 'frightened', rounds: 10, note: 'Frightened + Incapacitated, phải tránh xa; hết khi nhận sát thương' },
+      },
+    ],
+    uses: { max: 'tbl:cleric:2=2,6=3,18=4', recharge: 'shortOne' },
+  },
+  { id: 'cleric-subclass-3', level: 3, name: 'Cleric Subclass', description: 'Chọn Domain.' },
+  { id: 'cleric-sear-undead', level: 5, name: 'Sear Undead', description: 'Turn Undead: Undead trượt save nhận thêm WIS mod d8 radiant.' },
+  { id: 'cleric-blessed-strikes', level: 7, name: 'Blessed Strikes', description: 'Chọn: Divine Strike (1 lần mỗi lượt, đòn vũ khí +1d8 necrotic/radiant) hoặc Potent Spellcasting (cộng WIS vào sát thương cantrip Cleric).' },
+  { id: 'cleric-divine-intervention', level: 10, name: 'Divine Intervention', description: 'Magic action: đúc 1 phép Cleric cấp ≤ 5 không tốn ô, không cần vật liệu. 1 lần mỗi nghỉ dài.' },
+  { id: 'cleric-improved-blessed-strikes', level: 14, name: 'Improved Blessed Strikes', description: 'Divine Strike lên 2d8; Potent Spellcasting thêm HP tạm.' },
+  { id: 'cleric-greater-divine-intervention', level: 20, name: 'Greater Divine Intervention', description: 'Divine Intervention có thể đúc Wish (sau đó 2d4 nghỉ dài mới dùng lại).' },
+];
+
 const SORCERER: Omit<ClassFeatureDef, 'class'>[] = [
   {
     id: 'sorc-spellcasting',
@@ -654,10 +862,15 @@ export const CLASS_FEATURES: ClassFeatureDef[] = [
   ...DRUID.map((f) => ({ ...f, class: 'druid' })),
   ...SORCERER.map((f) => ({ ...f, class: 'sorcerer' })),
   ...WIZARD.map((f) => ({ ...f, class: 'wizard' })),
+  ...FIGHTER.map((f) => ({ ...f, class: 'fighter' })),
+  ...PALADIN.map((f) => ({ ...f, class: 'paladin' })),
+  ...RANGER.map((f) => ({ ...f, class: 'ranger' })),
+  ...BARD.map((f) => ({ ...f, class: 'bard' })),
+  ...CLERIC.map((f) => ({ ...f, class: 'cleric' })),
 ];
 
 /** Classes we have a feature table for. */
-export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid', 'sorcerer', 'wizard'];
+export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid', 'sorcerer', 'wizard', 'fighter', 'paladin', 'ranger', 'bard', 'cleric'];
 
 /** The class features this sheet has earned, from CLASS_FEATURES, ordered by level. */
 export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
@@ -669,6 +882,11 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
     druid: druidLevel(sheet),
     sorcerer: classLevelOf(sheet, 'sorcerer'),
     wizard: classLevelOf(sheet, 'wizard'),
+    fighter: classLevelOf(sheet, 'fighter'),
+    paladin: classLevelOf(sheet, 'paladin'),
+    ranger: classLevelOf(sheet, 'ranger'),
+    bard: classLevelOf(sheet, 'bard'),
+    cleric: classLevelOf(sheet, 'cleric'),
   };
   for (const f of CUSTOM_CLASS_FEATURES) levels[f.class] ??= classLevelOf(sheet, f.class);
   return [...CLASS_FEATURES, ...CUSTOM_CLASS_FEATURES]
@@ -738,5 +956,19 @@ export function subclassUsesMax(
   const m = /^(str|dex|con|int|wis|cha)-mod(\+1)?$/.exec(spec);
   if (m) return Math.max(1, mod(m[1] as 'str') + (m[2] ? 1 : 0));
   if (spec === 'prof') return sheet.proficiencyBonus;
+  // a table by class level: "tbl:fighter:1=2,4=3,10=4"
+  const t = /^tbl:([a-z]+):(.+)$/.exec(spec);
+  if (t) {
+    const lv = classLevelOf(sheet, t[1]);
+    let n = 0;
+    for (const pair of t[2].split(',')) {
+      const [at, val] = pair.split('=').map(Number);
+      if (lv >= at) n = val;
+    }
+    return n;
+  }
+  // a formula on one class's level: "paladin:5*lvl"
+  const c = /^([a-z]+):(.+)$/.exec(spec);
+  if (c && !/^(mod|dc)$/.test(c[1])) return Math.max(1, Number(resolveFeatureFormula(c[2], sheet, c[1])) || 0);
   return Math.max(1, Number(resolveFeatureFormula(spec, sheet)) || 0);
 }
