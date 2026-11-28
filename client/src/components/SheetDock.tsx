@@ -111,7 +111,10 @@ import { AbilitiesTab, FeatsTab } from './sheet/ListTabs.js';
 import { SpellAdder } from './sheet/SpellAdder.js';
 import { FirearmControls } from './sheet/FirearmControls.js';
 import { MadnessPanel } from './sheet/MadnessPanel.js';
+import { ArcaneRecoveryPanel, MetamagicBar, SorcererPanel, SpellbookBar, WildShapePanel, type ScribeMode } from './sheet/CasterFeatures.js';
 import { openCharacterBuilder, useCharacterBuilder } from '../characterBuilder.js';
+import { passiveCheckFloor, passiveHas, passiveSaveAdvantage } from '@dnd-table/shared';
+import { canCastAsRitual, isSpellbookSpell, scribeSpell, sorcererLevel, spellbookCounts, wizardLevel } from '@dnd-table/shared';
 import { afterShots, canFire, coverDexSaveBonus, exhaustionPenalty, expendJaegerMomentum, attackKindOf, featFeatureDefs, featureAttackMod, jaegerLevel } from '@dnd-table/shared';
 
 const ABILITY_LABEL: Record<Ability, string> = {
@@ -718,8 +721,12 @@ function BasicTab({ draft, commit }: EditorCtx) {
   const actions = allActions(draft, linkedToken?.effects);
   const roll = (label: string, mod: number, kind: 'check' | 'save' | 'other' = 'other', ab?: Ability) => {
     // Oaken Resolve (Wood Wose): Advantage on STR / CON saves — cancels a Disadvantage
+    // …and a feature's save advantage (Danger Sense: DEX), not while Incapacitated
+    const featAdv = kind === 'save' && ab && !tokenIncapacitated(linkedToken) ? passiveSaveAdvantage(draft, ab) : null;
     const effMode: RollMode =
-      kind === 'save' && ab && effectSaveAdvantage(linkedToken?.effects, ab) ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode;
+      kind === 'save' && ab && (effectSaveAdvantage(linkedToken?.effects, ab) || featAdv) ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode;
+    // Indomitable Might: a STR check / save total below the STR score uses the score
+    const floor = ab && kind !== 'other' ? passiveCheckFloor(draft, ab, { save: kind === 'save' }) : undefined;
     // plain ability checks don't go through skillBonus/saveBonus, so add Exhaustion here
     let notation = d20Check(mod + (kind === 'check' ? exhaustionPenalty(draft.exhaustion) : 0), effMode);
     let extra = '';
@@ -728,7 +735,10 @@ function BasicTab({ draft, commit }: EditorCtx) {
       notation = `${notation}+${gb.dice}`;
       extra = ` +${gb.dice} (${gb.name})`;
     }
-    rollDice(`${draft.name} · ${label}${effMode === 'advantage' ? ' (lợi thế)' : effMode === 'disadvantage' ? ' (bất lợi)' : ''}${extra}`, notation);
+    rollDice(`${draft.name} · ${label}${effMode === 'advantage' ? ` (lợi thế${featAdv ? ` · ${featAdv}` : ''})` : effMode === 'disadvantage' ? ' (bất lợi)' : ''}${extra}`, notation, {
+      totalMin: floor?.totalMin,
+      floorWhy: floor?.why.join(', ') || undefined,
+    });
     if (gb && draft.tokenId) removeEffect(draft.tokenId, gb.id);
   };
 
@@ -1066,7 +1076,13 @@ function BasicTab({ draft, commit }: EditorCtx) {
               className="roll-btn"
               title="Tung initiative và đưa lên thanh initiative"
               onClick={() =>
-                rollInitiativeForMe(draft.name, initiativeBonus(draft), draft.tokenId, rollMode)
+                rollInitiativeForMe(
+                  draft.name,
+                  initiativeBonus(draft),
+                  draft.tokenId,
+                  // Feral Instinct: Advantage on Initiative
+                  passiveHas(draft, 'initiativeAdvantage') ? (rollMode === 'disadvantage' ? 'normal' : 'advantage') : rollMode,
+                )
               }
             >
               ⚔ Init {fmtMod(initiativeBonus(draft))}
@@ -1464,6 +1480,7 @@ function ActionRow({
       <span className="ar-name" title={action.description}>
         {action.name}
         {action.source === 'weapon' && <em> · trang bị</em>}
+        {action.source === 'wildShape' && <em> · 🐾 hình thú</em>}
       </span>
       <span className="ar-detail">
         {isAttack
@@ -1958,7 +1975,7 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
     set(rUsed < rMax ? { raging: true, rageUsed: rUsed + 1 } : { raging: true });
   }
 
-  const hasQuickActions = bl > 0 || ml > 0 || wl > 0 || dl > 0 || rl > 0 || hasBoomingBlade;
+  const hasQuickActions = bl > 0 || ml > 0 || wl > 0 || dl > 0 || rl > 0 || hasBoomingBlade || sorcererLevel(draft) > 0 || wizardLevel(draft) > 0;
 
   return (
     <div className="cf-block">
@@ -2071,7 +2088,13 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
                   🌳 Wood Wose {woseActive ? '— ĐANG BẬT (bấm để tắt)' : '(−1 Wild Shape)'}
                 </button>
               )}
-              <span className="hint">Dùng stat block quái từ Bestiary cho hình dạng thú.</span>
+              <WildShapePanel
+                draft={draft}
+                commit={commit}
+                token={linkedToken}
+                spendBonus={() => spendTurn('bonus')}
+                extraTempHp={circletHp}
+              />
             </>
           ) : (
             <span className="hint">Wild Shape từ cấp Druid 2.</span>
@@ -2081,6 +2104,12 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
           </span>
         </div>
       )}
+
+      {sorcererLevel(draft) > 0 && (
+        <SorcererPanel draft={draft} commit={commit} token={linkedToken} spendBonus={() => spendTurn('bonus')} />
+      )}
+
+      {wizardLevel(draft) > 0 && <ArcaneRecoveryPanel draft={draft} commit={commit} />}
 
       {rl > 0 && (
         <div className="cf-auto">
@@ -2126,13 +2155,22 @@ function ClassFeatures({ draft, commit }: EditorCtx) {
             {ml > 0 && <em> · Monk {ml}</em>}
             {wl > 0 && <em> · Warlock {wl}</em>}
             {dl > 0 && <em> · Druid {dl}</em>}
+            {sorcererLevel(draft) > 0 && <em> · Sorcerer {sorcererLevel(draft)}</em>}
+            {wizardLevel(draft) > 0 && <em> · Wizard {wizardLevel(draft)}</em>}
           </summary>
           <div className="cf-list">
             {feats.map((f) => (
               <div key={f.id} className="cf-row">
                 <span className="cf-lvl">L{f.level}</span>
                 <span className="cf-body">
-                  <strong>{f.name}.</strong> {f.description}
+                  <strong>{f.name}.</strong>
+                  {(f.passive || f.actions || f.automation) && (
+                    <em className="cf-auto-tag" title="App tự áp năng lực này">
+                      {' '}
+                      ⚙ tự động
+                    </em>
+                  )}{' '}
+                  {f.description}
                 </span>
               </div>
             ))}
@@ -2324,7 +2362,8 @@ function BackgroundFeatures({ draft }: { draft: CharacterSheet }) {
 /** Subclass features, from the DM's local subclass data file. Separate from class features. */
 function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: string }) {
   // subclass features + local feats that carry buttons / uses (setting feats…)
-  const feats = [...derivedSubclassFeatures(draft, SUBCLASS_DEFS), ...featFeatureDefs(draft)];
+  // base-class features (no subclass tag) already sit in "Class features" — only their buttons / pools show here
+  const feats = [...derivedSubclassFeatures(draft, SUBCLASS_DEFS), ...featFeatureDefs(draft).filter((f) => f.subclass || f.actions || f.uses)];
   if (feats.length === 0) return null;
   const used = draft.subclassUses ?? {};
   const setUse = (id: string, n: number) =>
@@ -2417,6 +2456,11 @@ function Pips({ max, used, onChange }: { max: number; used: number; onChange: (u
 
 /* ------------------------------------------------------------- Feats / Abilities */
 
+/** Conditions that stop a creature from acting (and switch off features like Danger Sense). */
+function tokenIncapacitated(t: Token | undefined | null): boolean {
+  return (t?.effects ?? []).some((e) => e.condition && ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(e.condition));
+}
+
 function SkillsTab({ draft, commit }: EditorCtx) {
   const rollDice = useStore((s) => s.rollDice);
   const removeEffect = useStore((s) => s.removeEffect);
@@ -2433,7 +2477,13 @@ function SkillsTab({ draft, commit }: EditorCtx) {
       notation = `${notation}+${gb.dice}`;
       extra = ` +${gb.dice} (${gb.name})`;
     }
-    rollDice(`${draft.name} · ${SKILL_LABEL_VI[sk] ?? sk}${modeTag}${extra}`, notation);
+    // Reliable Talent (a proficient skill's d20 is at least 10), Indomitable Might (STR total ≥ STR score)
+    const floor = passiveCheckFloor(draft, SKILLS[sk], { proficient: draft.skillProficiencies.includes(sk) || draft.skillExpertise.includes(sk) });
+    rollDice(`${draft.name} · ${SKILL_LABEL_VI[sk] ?? sk}${modeTag}${extra}`, notation, {
+      d20Min: floor.d20Min,
+      totalMin: floor.totalMin,
+      floorWhy: floor.why.join(', ') || undefined,
+    });
     if (gb && draft.tokenId) removeEffect(draft.tokenId, gb.id);
   }
 
@@ -2542,6 +2592,18 @@ function SpellsTab({ draft, commit }: EditorCtx) {
   const spells = draft.spells ?? [];
   const prepared = spells.filter((s) => s.level === 0 || s.prepared).length;
   const wl = warlockLevel(draft);
+  const wiz = wizardLevel(draft) > 0;
+  const [scribeMode, setScribeMode] = useState<ScribeMode>(() => (spellbookCounts(draft).freeLeft > 0 ? 'free' : 'copied'));
+  /** A new leveled Wizard spell goes into the spellbook: free from leveling, or copied for gold. */
+  function addSpell(sp: Spell) {
+    if (wiz && sp.level > 0 && scribeMode !== 'none') {
+      const r = scribeSpell(draft, sp, scribeMode);
+      if (typeof r === 'string') return flashError(r);
+      if (scribeMode === 'copied') flashError(`📖 Đã chép ${sp.name} vào sổ: −${50 * sp.level} gp, mất ${2 * sp.level} giờ`);
+      return commit(r);
+    }
+    set({ spells: [...spells, sp] });
+  }
 
   const set = (patch: Partial<CharacterSheet>) => commit({ ...draft, ...patch });
   const upd = (id: string, patch: Partial<Spell>) =>
@@ -2602,6 +2664,12 @@ function SpellsTab({ draft, commit }: EditorCtx) {
         </p>
       )}
 
+      {wiz && <SpellbookBar draft={draft} mode={scribeMode} setMode={setScribeMode} />}
+      {sorcererLevel(draft) >= 2 && <MetamagicBar draft={draft} commit={commit} />}
+      {draft.wildShape && (
+        <p className="hint over">🐾 Đang Wild Shape ({draft.wildShape.name}): không đúc phép được (Druid cấp 18 trở lên thì được — Beast Spells).</p>
+      )}
+
       {casting && (
         <p className="hint cast-armed">
           🪄 Đang ra <strong>{casting.spell.name}</strong> — bấm token địch trên bản đồ. (Esc để hủy)
@@ -2619,6 +2687,8 @@ function SpellsTab({ draft, commit }: EditorCtx) {
                 sp={sp}
                 canCast={caster !== 'none'}
                 onCast={(castAtLevel) => beginCast(draft.id, sp, castAtLevel)}
+                onRitual={canCastAsRitual(draft, sp) ? () => beginCast(draft.id, sp, undefined, false, { ritual: true }) : undefined}
+                inBook={wiz && isSpellbookSpell(draft, sp) ? (sp.scribed ?? 'free') : undefined}
                 onRecast={
                   canRecastNow(sp, concOn)
                     ? () => {
@@ -2646,7 +2716,7 @@ function SpellsTab({ draft, commit }: EditorCtx) {
         ))}
 
       <div className="edit-only">
-        <SpellAdder draft={draft} onAdd={(sp) => set({ spells: [...spells, sp] })} />
+        <SpellAdder draft={draft} onAdd={addSpell} />
       </div>
       {spells.length === 0 && <p className="empty">Chưa có phép nào.</p>}
     </div>
@@ -2662,12 +2732,18 @@ function SpellRow({
   spellSlots,
   onCast,
   onRecast,
+  onRitual,
+  inBook,
   recastHint,
   onChange,
   onRescale,
   onDelete,
 }: {
   sp: Spell;
+  /** Cast as a ritual: no slot, 10 minutes longer. */
+  onRitual?: () => void;
+  /** Wizard spellbook: how this spell got into the book. */
+  inBook?: 'free' | 'copied';
   canCast: boolean;
   /** Multiclass: the sheet's casting classes (a spell picks one → its ability / DC). */
   castingClasses: string[];
@@ -2724,6 +2800,12 @@ function SpellRow({
           onChange={(e) => onChange({ level: Math.max(0, Math.min(9, Number(e.target.value))) })}
         />
         {sp.concentration && <span className="sr-tag" title="Cần tập trung">C</span>}
+        {sp.ritual && <span className="sr-tag" title="Ritual: đúc thêm 10 phút, không tốn ô">R</span>}
+        {inBook && (
+          <span className="sr-tag" title={inBook === 'copied' ? 'Trong sổ phép: chép (đã trả vàng)' : 'Trong sổ phép: miễn phí khi lên cấp'}>
+            📖
+          </span>
+        )}
         {showAgonizingBlast && eligibleForAgonizingBlast && (
           <button
             className={`sr-agonizing ${sp.agonizingBlast ? 'on' : ''}`}
@@ -2793,6 +2875,11 @@ function SpellRow({
             title="Ra phép (chọn mục tiêu)"
           >
             🪄
+          </button>
+        )}
+        {canCast && onRitual && (
+          <button className="roll-btn" onClick={onRitual} title="Đúc dạng nghi thức (Ritual): thêm 10 phút, không tốn ô phép, không tốn action">
+            📖R
           </button>
         )}
         {canCast && onRecast && (

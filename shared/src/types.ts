@@ -72,6 +72,8 @@ export interface DamagePart {
   minDie?: number;
   /** Damage dice below this are rolled again once (the new roll stands). */
   rerollBelow?: number;
+  /** Up to this many of the lowest damage dice (below the die's average) are rolled again once (Empowered Spell). */
+  rerollLowest?: number;
 }
 
 /**
@@ -129,7 +131,7 @@ export interface SheetAction {
   /** Reach / range text for display, e.g. "5 ft", "20/60 ft", "120 ft". */
   range?: string;
   description?: string;
-  source?: 'manual' | 'weapon'; // 'weapon' = derived from an equipped item
+  source?: 'manual' | 'weapon' | 'wildShape'; // 'weapon' = derived from an equipped item; 'wildShape' = a beast form's attack
   /** For attacks: whether it's a physical strike or a spell attack. Drives which
    *  standing riders + weapon features (Rage, Sneak Attack) apply. Default 'weapon'. */
   attackKind?: 'weapon' | 'spell';
@@ -379,6 +381,22 @@ export interface CharacterSheet {
   jaeger?: JaegerState;
   /** Druid: Wild Shape uses spent (max is derived from Druid level). */
   wildShapeUsed?: number;
+  /** Druid: beast forms the character knows (SRD stat block ids). */
+  wildShapeForms?: string[];
+  /** Druid: the beast form currently taken, with what it replaced (put back when it ends). */
+  wildShape?: WildShapeState | null;
+  /** Sorcerer: Sorcery Points spent (max = Sorcerer level). */
+  sorceryUsed?: number;
+  /** Sorcerer: Metamagic options known. */
+  metamagic?: MetamagicKey[];
+  /** Sorcerer: Metamagic chosen for the next spell cast (spent when it is cast). */
+  metamagicArmed?: MetamagicKey[];
+  /** Transmuted Spell: the damage type the next spell turns into. */
+  metamagicTransmute?: string;
+  /** Sorcerous Restoration used since the last long rest. */
+  sorcRestoreUsed?: boolean;
+  /** Spell slots created with Sorcery Points, by slot level — they vanish on a long rest. */
+  createdSlots?: Record<string, number>;
   /** Subclass-feature limited-use pools spent, keyed by feature id. */
   subclassUses?: Record<string, number>;
   /** Hit dice spent, keyed by die size ('d8'). */
@@ -606,6 +624,12 @@ export interface ActiveEffect {
   rollAdvantage?: 'attack'[];
   /** The bearer's attacks score a critical hit on this natural roll or higher (e.g. 19). */
   critMin?: number;
+  /** Concentration started by this effect is kept with advantage on the CON save (Extended Spell). */
+  concAdvantage?: boolean;
+  /** The bearer's spell attack rolls have advantage while it lasts (Innate Sorcery). */
+  spellAttackAdvantage?: boolean;
+  /** The bearer's spell save DC is higher by this much while it lasts (Innate Sorcery). */
+  spellDcBonus?: number;
   /** Attacks against the bearer have disadvantage (Dodge; not while it is incapacitated). */
   attackersDisadvantage?: boolean;
   /** The next attack against the bearer by someone other than the source has advantage, then it clears (Help). */
@@ -620,6 +644,8 @@ export interface ActiveEffect {
 export interface Concentration {
   name: string;
   since: number; // round it started
+  /** CON saves to keep it have advantage (Extended Spell). */
+  advantage?: boolean;
 }
 
 export type RollMode = 'normal' | 'advantage' | 'disadvantage';
@@ -697,6 +723,37 @@ export interface ClassEntry {
   level: number;
 }
 
+export type MetamagicKey =
+  | 'careful'
+  | 'distant'
+  | 'empowered'
+  | 'extended'
+  | 'heightened'
+  | 'quickened'
+  | 'seeking'
+  | 'subtle'
+  | 'transmuted'
+  | 'twinned';
+
+/** A Wild Shape in progress: the beast taken and the character's own numbers it covers. */
+export interface WildShapeState {
+  beastId: string;
+  name: string;
+  cr: string;
+  size: TokenSize;
+  /** Beast traits (Pack Tactics, Keen Smell…) shown while in the form. */
+  traits: StatblockTrait[];
+  speedNote?: string;
+  prev: {
+    str: number;
+    dex: number;
+    con: number;
+    speed: number;
+    acOverride: number | null;
+    size?: TokenSize;
+  };
+}
+
 /** A spell on a character sheet — known, and (level 1+) optionally prepared. */
 export interface Spell {
   id: string;
@@ -708,6 +765,8 @@ export interface Spell {
   concentration?: boolean;
   ritual?: boolean;
   prepared: boolean;
+  /** Wizard spellbook: how the spell got into the book (free on level-up, or copied for gold). */
+  scribed?: 'free' | 'copied';
   /** Set when a species grants this spell (removed if the species changes). */
   fromSpecies?: string;
   /** Granted by a worn magic item (`MagicItemKey`) — removed automatically when it is taken off.
@@ -1351,7 +1410,7 @@ export interface ReactPrompt {
    *  the roll, e.g. "impose disadvantage on the attack roll"). Same id on every prompt of one hold. */
   holdsAttack?: string;
   /** A character's own reaction (Protection / Interception, a counter-attack, a step away): its owner answers it. */
-  style?: 'protection' | 'interception' | 'counter' | 'stepAway';
+  style?: 'protection' | 'interception' | 'counter' | 'stepAway' | 'halve' | 'reduce';
   ownerId?: string;
   /** The feature (`subclassUses` key) whose pool the reaction spends. */
   featureId?: string;

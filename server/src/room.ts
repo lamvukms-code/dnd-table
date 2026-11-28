@@ -47,8 +47,13 @@ import {
   diceFacesOf,
   minDieBonus,
   rerollLowDice,
+  rerollLowestDice,
+  endWildShape,
   passiveHas,
   passiveReactions,
+  passiveSaveAdvantage,
+  passiveCheckFloor,
+  barbarianLevel,
   subclassUsesMax,
   resolveFeatureFormula,
   spellAttackBonus,
@@ -186,6 +191,14 @@ interface Intercept {
   tokenId: string;
   by: string;
   dice: string;
+}
+
+/** The target's own damage cut taken before the roll (Uncanny Dodge halves, Deflect Attacks reduces). */
+interface SelfCut {
+  tokenId: string;
+  by: string;
+  halve?: boolean;
+  dice?: string;
 }
 
 export class Room {
@@ -328,6 +341,44 @@ export class Room {
     tk.tempHp = sheet.tempHp;
   }
 
+  /** A token that can't take actions or reactions right now. */
+  private incapacitated(token: Token): boolean {
+    return (token.effects ?? []).some((e) => e.condition && ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(e.condition));
+  }
+
+  /**
+   * Relentless Rage: a raging Barbarian dropped to 0 HP makes a DC 10 CON save (+5 for each earlier
+   * success, reset by a short or long rest) and on a success stays up at 2 × Barbarian level HP.
+   */
+  private relentlessRage(token: Token, sheet: CharacterSheet): boolean {
+    if (!sheet.raging || !passiveHas(sheet, 'relentlessRage')) return false;
+    const key = 'barb-relentless-rage';
+    const times = sheet.subclassUses?.[key] ?? 0;
+    const dc = 10 + 5 * times;
+    const s = this.rollTokenSave(token, 'con', dc);
+    if (!s.pass) {
+      this.pendingBaneLogs.push(`🔥 ${sheet.name} · Relentless Rage: CON ${s.total} vs DC ${dc} — thất bại`);
+      return false;
+    }
+    sheet.currentHp = 2 * barbarianLevel(sheet);
+    sheet.subclassUses = { ...(sheet.subclassUses ?? {}), [key]: times + 1 };
+    this.mirrorSheetToToken(sheet);
+    this.pendingBaneLogs.push(`🔥 ${sheet.name} · Relentless Rage: CON ${s.total} vs DC ${dc} — trụ lại với ${sheet.currentHp} HP (lần sau DC ${dc + 5})`);
+    return true;
+  }
+
+  /** Wild Shape changes the linked token's size; leaving the form puts the old size back. */
+  private syncWildShapeSize(before: CharacterSheet | undefined, after: CharacterSheet): void {
+    if (!after.tokenId) return;
+    const tk = this.tokenAnywhere(after.tokenId);
+    if (!tk) return;
+    if (after.wildShape) {
+      if (tk.size !== after.wildShape.size) tk.size = after.wildShape.size;
+    } else if (before?.wildShape?.prev.size) {
+      tk.size = before.wildShape.prev.size;
+    }
+  }
+
   private tempOf(token: Token): number {
     return this.linkedSheet(token)?.tempHp ?? token.tempHp ?? 0;
   }
@@ -345,7 +396,16 @@ export class Room {
       sheet.tempHp = r.temp;
       this.mirrorSheetToToken(sheet);
       const throughTemp = amount - r.absorbed;
-      if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0) {
+      if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0 && this.relentlessRage(token, sheet)) {
+        // stayed on its feet
+      } else if (sheet.currentHp <= 0 && (hpBefore ?? 0) > 0) {
+        if (sheet.wildShape) {
+          // Wild Shape ends on 0 HP: the character's own numbers come back
+          const size = sheet.wildShape.prev.size;
+          this.pendingBaneLogs.push(`🐾 ${sheet.name}: hết Wild Shape (${sheet.wildShape.name}) — về 0 HP`);
+          Object.assign(sheet, endWildShape(sheet));
+          if (size) token.size = size;
+        }
         sheet.deathSaves = onDrop(throughTemp - (hpBefore ?? 0), sheet.maxHp);
         this.setDowned(token, true);
         this.pendingBaneLogs.push(
@@ -1164,6 +1224,12 @@ export class Room {
         raw += rr.delta;
         mine = rr.faces;
       }
+      // Empowered Spell: the lowest few dice rolled again once
+      if (p.rerollLowest) {
+        const rr = rerollLowestDice(n, mine, p.rerollLowest);
+        raw += rr.delta;
+        mine = rr.faces;
+      }
       faces.push(...mine);
       // Great Weapon Fighting: a 1 or 2 on a damage die counts as 3
       if (p.minDie) raw += minDieBonus(mine, p.minDie);
@@ -1241,7 +1307,8 @@ export class Room {
       baneMindSaveBonus(this.godsBane(), sheet?.id, vsCondition);
     // advantage from the bearer's effects (effect save advantage) and a forced mode
     // (close-range disadvantage) cancel each other like any 5e advantage/disadvantage
-    const mechAdv = mechanicSaveAdvantage(this.mechOf(token), { ability, magical, vsCondition });
+    const featAdv = this.incapacitated(token) ? null : passiveSaveAdvantage(sheet, ability);
+    const mechAdv = mechanicSaveAdvantage(this.mechOf(token), { ability, magical, vsCondition }) ?? featAdv ?? undefined;
     const adv = forced === 'advantage' || effectSaveAdvantage(token.effects, ability) || !!mechAdv;
     // Sunlight Weakness & co. (light where it stands) and Aversion-style effects: disadvantage on its saves
     const lightDis = activeLightRules(this.mechOf(token), lightAt(this.state, token)).save;
@@ -1257,7 +1324,9 @@ export class Room {
       d20 = causality.natural;
       this.systemLog(`${token.label}: cứu ${ability.toUpperCase()}${causality.note}`);
     }
-    const total = d20 + bonus;
+    // Indomitable Might: a STR save total below the STR score uses the score
+    const floor = passiveCheckFloor(sheet, ability, { save: true }).totalMin ?? 0;
+    const total = Math.max(d20 + bonus, floor);
     const pass = d20 === 20 ? true : d20 === 1 ? false : total >= dc;
     return { d20, total, pass, bonus, modeNote };
   }
@@ -1296,7 +1365,7 @@ export class Room {
     if (!token.concentration || damage <= 0) return;
     const dc = concentrationDc(damage);
     const sheet = this.linkedSheet(token);
-    const adv = passiveHas(sheet, 'concentrationAdvantage') ? 'advantage' : undefined;
+    const adv = passiveHas(sheet, 'concentrationAdvantage') || token.concentration.advantage ? 'advantage' : undefined;
     const { d20, total, pass: kept, bonus } = this.rollTokenSave(token, 'con', dc, false, undefined, adv);
     this.pushRoll({
       id: nanoid(8),
@@ -1905,9 +1974,9 @@ export class Room {
   }
 
   /** Attacks waiting for the DM's answer to a reaction that comes before the roll (by hold id). */
-  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string; intercept?: Intercept }>();
+  private heldAttacks = new Map<string, { actor: Participant; action: Extract<ClientAction, { t: 'attack' }>; dis?: string; intercept?: Intercept; selfCut?: SelfCut }>();
   /** Set just before a held attack is run again: skip the hold, apply the disadvantage / Interception if any. */
-  private resumingAttack: { dis?: string; intercept?: Intercept } | null = null;
+  private resumingAttack: { dis?: string; intercept?: Intercept; selfCut?: SelfCut } | null = null;
   /** Attacks sent while another one waits for its reaction answer — run in order once it resolves. */
   private attackQueue: { actor: Participant; action: Extract<ClientAction, { t: 'attack' }> }[] = [];
 
@@ -1954,13 +2023,18 @@ export class Room {
       }
     }
     // the target's own reactions to a melee attack (a counter-attack, a step away), from its features
-    const own: { featureId: string; name: string; style: 'counter' | 'stepAway'; sheet: CharacterSheet }[] = [];
+    const own: { featureId: string; name: string; style: 'counter' | 'stepAway' | 'halve' | 'reduce'; sheet: CharacterSheet }[] = [];
     const tSheet = this.linkedSheet(target);
-    if (tSheet && attacker && action.attackRange === 'melee' && this.canReact(target, {})) {
+    if (tSheet && attacker && this.canReact(target, {})) {
+      const types = (action.damageParts ?? []).map((p) => (p.type || '').toLowerCase());
       for (const r of passiveReactions(tSheet)) {
+        const k = r.reaction.kind;
+        // a counter / step away answers melee attacks only; Deflect-style cuts need a matching damage type
+        if ((k === 'counter' || k === 'stepAway') && action.attackRange !== 'melee') continue;
+        if (k === 'reduce' && r.reaction.types && !passiveHas(tSheet, 'deflectAnyType') && !types.some((t) => r.reaction.types!.includes(t))) continue;
         const max = r.uses ? subclassUsesMax(r.uses.max, tSheet) : Infinity;
         if ((tSheet.subclassUses?.[r.featureId] ?? 0) >= max) continue;
-        own.push({ featureId: r.featureId, name: r.name, style: r.reaction.kind, sheet: tSheet });
+        own.push({ featureId: r.featureId, name: r.name, style: k, sheet: tSheet });
       }
     }
     if (!found.length && !styles.length && !own.length) return false;
@@ -1977,7 +2051,14 @@ export class Room {
         actionName: o.name,
         triggerTokenId: attacker?.id,
         triggerName: attacker?.label,
-        why: o.style === 'counter' ? `${by} đang đánh cận chiến bạn — phản đòn trước khi đòn trúng` : `${by} đang đánh cận chiến bạn — lùi ra trước khi đòn trúng`,
+        why:
+          o.style === 'counter'
+            ? `${by} đang đánh cận chiến bạn — phản đòn trước khi đòn trúng`
+            : o.style === 'stepAway'
+              ? `${by} đang đánh cận chiến bạn — lùi ra trước khi đòn trúng`
+              : o.style === 'halve'
+                ? `${by} đang tấn công bạn — nếu trúng, chỉ nhận nửa sát thương (tốn reaction khi trúng)`
+                : `${by} đang tấn công bạn — nếu trúng, giảm sát thương (tốn reaction khi trúng)`,
         holdsAttack: holdId,
         style: o.style,
         ownerId: o.sheet.ownerId,
@@ -2080,7 +2161,7 @@ export class Room {
     const held = this.heldAttacks.get(holdId);
     if (!held) return;
     this.heldAttacks.delete(holdId);
-    this.resumingAttack = { dis: held.dis, intercept: held.intercept };
+    this.resumingAttack = { dis: held.dis, intercept: held.intercept, selfCut: held.selfCut };
     const err = this.apply(held.actor, held.action);
     this.resumingAttack = null;
     if (err) this.systemLog(`⚠ Đòn chờ reaction không chạy được: ${err}`);
@@ -2699,7 +2780,17 @@ export class Room {
           this.state.reactPrompts = list.filter((x) => x.id !== p.id);
           const r = this.state.tokens.find((t) => t.id === p.tokenId);
           const held = p.holdsAttack ? this.heldAttacks.get(p.holdsAttack) : undefined;
-          if (action.use && r && held && this.canReact(r, {}) && (p.style === 'counter' || p.style === 'stepAway')) {
+          if (action.use && r && held && this.canReact(r, {}) && (p.style === 'halve' || p.style === 'reduce')) {
+            // paid only if the attack hits (see the damage step)
+            const sheet = this.linkedSheet(r);
+            const rx = sheet ? passiveReactions(sheet).find((x) => x.featureId === p.featureId) : undefined;
+            held.selfCut = {
+              tokenId: r.id,
+              by: `${p.tokenName} · ${p.actionName}`,
+              halve: p.style === 'halve',
+              dice: rx?.reaction.dice && sheet ? resolveFeatureFormula(rx.reaction.dice, sheet, rx.classKey) : undefined,
+            };
+          } else if (action.use && r && held && this.canReact(r, {}) && (p.style === 'counter' || p.style === 'stepAway')) {
             const cancelled = this.ownReaction(p, r, held);
             if (cancelled && p.holdsAttack) {
               this.cancelHeldAttack(p.holdsAttack, cancelled);
@@ -2979,6 +3070,16 @@ export class Room {
             causalityNote = c.note;
           }
         }
+        // Reliable Talent: a low d20 counts as the floor; Indomitable Might: a low total counts as the score
+        if (action.d20Min && result.d20 && result.d20.natural < action.d20Min) {
+          const from = result.d20.natural;
+          result = forceD20Value(result, action.d20Min);
+          causalityNote += ` · ${action.floorWhy ?? 'sàn'}: d20 ${from} → ${action.d20Min}`;
+        }
+        if (action.totalMin && result.total < action.totalMin) {
+          causalityNote += ` · ${action.floorWhy ?? 'sàn'}: tổng ${result.total} → ${action.totalMin}`;
+          result = { ...result, total: action.totalMin };
+        }
         // Homebrew: skill / ability / save checks crit on nat 20 and fail on nat 1.
         const checkNat = result.d20?.isCrit
           ? ('success' as const)
@@ -3107,6 +3208,13 @@ export class Room {
         }
         // The client pre-rolled damage for the outcome it saw; a changed roll means the server re-rolls it.
         if (baneNote && action.external) action.external = { ...action.external, partTotals: undefined };
+        // Seeking Spell: a missed spell attack rolls its d20 once more (the new roll stands)
+        if (action.rerollMiss && attackRoll.d20 && !resolveAttack(attackRoll, ac).hit) {
+          const again = rollNotation('1d20').total;
+          attackRoll = forceD20Value(attackRoll, again);
+          if (action.external) action.external = { ...action.external, partTotals: undefined };
+          this.pendingBaneLogs.push(`✨ Seeking Spell: trượt → đổ lại d20 = ${again}`);
+        }
         const res = resolveAttack(attackRoll, ac);
         // Adamantine / crit-immune (token's own defences OR its linked sheet's
         // equipped gear): a crit lands as an ordinary hit.
@@ -3220,6 +3328,19 @@ export class Room {
             const before = outcome.totalFinal;
             outcome = { ...outcome, totalFinal: Math.max(0, before - red) };
             this.pendingBaneLogs.push(`🛡 ${resume.intercept.by} · Interception: giảm ${red} sát thương (${resume.intercept.dice}) — ${before} → ${outcome.totalFinal}`);
+          }
+        }
+        // the target's own cut taken before the roll: Uncanny Dodge halves, Deflect Attacks reduces
+        if (outcome && resume?.selfCut) {
+          const me = this.state.tokens.find((t) => t.id === resume.selfCut!.tokenId);
+          if (me && this.canReact(me, {}) && outcome.totalFinal > 0) {
+            this.spendReaction(me, {});
+            const before = outcome.totalFinal;
+            const red = resume.selfCut.halve ? Math.ceil(before / 2) : resume.selfCut.dice ? rollNotation(resume.selfCut.dice).total : 0;
+            outcome = { ...outcome, totalFinal: Math.max(0, before - red) };
+            this.pendingBaneLogs.push(
+              `🛡 ${resume.selfCut.by}: ${resume.selfCut.halve ? 'nửa sát thương' : `giảm ${red} (${resume.selfCut.dice})`} — ${before} → ${outcome.totalFinal}`,
+            );
           }
         }
         if (outcome && damageResult && tgtMechs.length && target.autoReactions !== false) {
@@ -3816,7 +3937,7 @@ export class Room {
           const src = srcId && this.state.tokens.find((t) => t.id === srcId);
           if (src) {
             this.dropConcentration(src, `chuyển sang ${effect.name}`, actor);
-            src.concentration = { name: effect.name, since: this.state.initiative.round };
+            src.concentration = { name: effect.name, since: this.state.initiative.round, ...(effect.concAdvantage ? { advantage: true } : {}) };
           }
         }
         target.effects = [...(target.effects ?? []), effect];
@@ -4006,7 +4127,10 @@ export class Room {
           }
           const out = resolveDamageParts(rd.rolled, this.effectiveDefenses(target));
           // Evasion: a DEX save for half takes none on a success and half on a failure
-          const evade = action.ability === 'dex' && !!action.damageHalfOnSave && hasEvasion(this.mechOf(target));
+          const evade =
+            action.ability === 'dex' &&
+            !!action.damageHalfOnSave &&
+            (hasEvasion(this.mechOf(target)) || (passiveHas(this.linkedSheet(target), 'evasion') && !this.incapacitated(target)));
           const base = evade ? (pass ? 0 : Math.floor(out.totalFinal / 2)) : pass ? Math.floor(out.totalFinal / 2) : out.totalFinal;
           if (evade) this.pendingBaneLogs.push(`${target.label}: Evasion — ${pass ? 'không nhận sát thương' : 'chỉ nhận nửa'}`);
           const dealt = this.baneReduce(target, action.sourceTokenId, base);
@@ -4045,7 +4169,7 @@ export class Room {
             const src = srcId && this.state.tokens.find((t) => t.id === srcId);
             if (src && src.concentration?.name !== effect.name) {
               this.dropConcentration(src, `chuyển sang ${effect.name}`, actor);
-              src.concentration = { name: effect.name, since: this.state.initiative.round };
+              src.concentration = { name: effect.name, since: this.state.initiative.round, ...(effect.concAdvantage ? { advantage: true } : {}) };
             }
           }
           target.effects = [...(target.effects ?? []), effect];
@@ -4385,6 +4509,7 @@ export class Room {
           ? this.state.sheets.map((s) => (s.id === incoming.id ? incoming : s))
           : [...this.state.sheets, incoming];
         this.mirrorSheetToToken(incoming);
+        this.syncWildShapeSize(existing, incoming);
         this.syncDowned(incoming);
         this.touch();
         break;

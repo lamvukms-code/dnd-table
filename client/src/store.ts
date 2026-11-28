@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import {
   abilityMod,
+  canCastInWildShape,
+  carefulCount,
+  metamagicCost,
+  metamagicDamage,
+  metamagicLabel,
+  sorceryPointsLeft,
+  type MetamagicKey,
   combineRollModes,
   conditionAttackMode,
   conditionAutoCrit,
@@ -146,6 +153,8 @@ interface AttackParams {
   mastery?: Extract<ClientAction, { t: 'attack' }>['mastery'];
   /** Cleave's extra attack. */
   cleave?: boolean;
+  /** Seeking Spell: a miss rolls the d20 again once. */
+  rerollMiss?: boolean;
 }
 
 export interface AoeMode {
@@ -176,7 +185,7 @@ interface StoreState {
   setDddiceKey: (key: string | null) => void;
   setDddiceConnected: (connected: boolean) => void;
   /** Roll dice — via the dddice 3D engine when enabled, else server RNG. */
-  rollDice: (label: string, notation: string, opts?: { private?: boolean }) => Promise<void>;
+  rollDice: (label: string, notation: string, opts?: { private?: boolean; d20Min?: number; totalMin?: number; floorWhy?: string }) => Promise<void>;
   /** Attack a token — rolls (dddice or server) then lets the server resolve vs AC. */
   attackRoll: (params: AttackParams) => Promise<void>;
   /** Level-up round keys (`<roundId>:<sheetId>`) already claimed from this browser — hides the button at once. */
@@ -205,10 +214,10 @@ interface StoreState {
   /** Point-click spell casting: arm a spell, then click a token on the map. `castAtLevel`
    *  (Vancian upcast only) picks which slot level to burn — the spell's own effect/damage
    *  is unaffected (still adjusted by hand, per this codebase's spell-math convention). */
-  castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number; repeat?: boolean } | null;
+  castingSpell: { sheetId: string; spell: Spell; castAtLevel?: number; repeat?: boolean; meta?: MetamagicKey[]; ritual?: boolean } | null;
   /** `repeat`: re-use a spell that lasts (Call Lightning…) — `spell` is already its `recastForm`;
    *  only the action economy is paid, no slot, no new concentration. */
-  beginCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean) => void;
+  beginCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean, opts?: { ritual?: boolean }) => void;
   /** Same point-click flow as `castingSpell`, but the caster is a monster token (DM only) — the
    *  fixed spell attack bonus travels with it since a token has no ability scores to derive it from. */
   castingMonsterSpell: { tokenId: string; spell: Spell; spellAttackBonus: number } | null;
@@ -227,7 +236,7 @@ interface StoreState {
   openBestiary: (id: string | null) => void;
   resolveCastOnToken: (targetTokenId: string, opts?: { aoeId?: string; skipConc?: boolean; paid?: boolean }) => Promise<void>;
   /** Spend the action economy + spell slot for one cast (asks before casting without a slot). false = cancelled. */
-  payCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean) => boolean;
+  payCast: (sheetId: string, spell: Spell, castAtLevel?: number, repeat?: boolean, opts?: { meta?: MetamagicKey[]; ritual?: boolean }) => boolean;
   /** Armed AoE template awaiting placement on the map. */
   aoe: AoeMode | null;
   /** Waiting for a click on the map to answer a pick-a-point request. */
@@ -274,6 +283,8 @@ let reconnectTimer: number | undefined;
 // The bestiary / homebrew arrive in their own `static` events (see protocol.ts) and are spliced into
 // every `room` the store holds, so the rest of the app keeps reading `room.bestiary` / `room.homebrew`.
 let staticBestiary: RoomState['bestiary'] = [];
+/** Careful Spell: allies already spared in each AoE cast (by aoeId). */
+const carefulSpared = new Map<string, number>();
 let staticHomebrew: RoomState['homebrew'] = [];
 
 export const useStore = create<StoreState>((set, get) => {
@@ -522,7 +533,16 @@ export const useStore = create<StoreState>((set, get) => {
 
     rollDice: async (label, notation, opts) => {
       const external = await externalRoll(notation);
-      rawSend({ t: 'roll', label, notation, private: opts?.private, external: external ?? undefined });
+      rawSend({
+        t: 'roll',
+        label,
+        notation,
+        private: opts?.private,
+        external: external ?? undefined,
+        ...(opts?.d20Min ? { d20Min: opts.d20Min } : {}),
+        ...(opts?.totalMin ? { totalMin: opts.totalMin } : {}),
+        ...(opts?.floorWhy ? { floorWhy: opts.floorWhy } : {}),
+      });
     },
 
     attackRoll: async ({
@@ -544,6 +564,7 @@ export const useStore = create<StoreState>((set, get) => {
       grappleOnHit,
       mastery,
       cleave,
+      rerollMiss,
     }) => {
       const room = get().room;
       // Fold condition-implied advantage/disadvantage into the manual roll mode.
@@ -626,7 +647,9 @@ export const useStore = create<StoreState>((set, get) => {
             reasons.push(...lightWhy, ...fxWhy);
           }
           // the attacker's own effects that give advantage (taking aim…)
-          const advWhy = (atkTok.effects ?? []).filter((e) => e.rollAdvantage?.includes('attack')).map((e) => e.name);
+          const advWhy = (atkTok.effects ?? [])
+            .filter((e) => e.rollAdvantage?.includes('attack') || (attackKind === 'spell' && e.spellAttackAdvantage))
+            .map((e) => e.name);
           if (advWhy.length) {
             mode = combineRollModes(mode, 'advantage');
             reasons.push(...advWhy);
@@ -666,7 +689,15 @@ export const useStore = create<StoreState>((set, get) => {
             reasons.push('tầm xa');
           }
         }
-        const finalMode = combineRollModes(rollMode ?? 'normal', mode);
+        let finalMode = combineRollModes(rollMode ?? 'normal', mode);
+        // Elusive: no attack roll against the character has Advantage while it can act
+        const tgtSheet = tgtTok ? room?.sheets.find((s) => s.tokenId === tgtTok.id) : undefined;
+        const tgtIncap = (tgtTok?.effects ?? []).some((e) => e.condition && ['incapacitated', 'paralyzed', 'petrified', 'stunned', 'unconscious'].includes(e.condition));
+        if (finalMode === 'advantage' && tgtSheet && !tgtIncap && passiveHas(tgtSheet, 'elusive')) {
+          finalMode = 'normal';
+          if (mode === 'advantage') mode = 'normal';
+          reasons.push('Elusive: mất lợi thế');
+        }
         notation = d20Check(attackBonus, finalMode);
         if (mode !== 'normal') condNote = ` [${mode === 'advantage' ? 'lợi thế' : 'bất lợi'}: ${reasons.join(', ')}]`;
         else if (reasons.length) condNote = ` [${reasons.join(', ')}]`;
@@ -690,6 +721,7 @@ export const useStore = create<StoreState>((set, get) => {
           grappleOnHit,
           mastery,
           cleave,
+          rerollMiss,
         });
       if (!dddiceActive()) return plain();
       const attack = await externalRoll(notation);
@@ -717,6 +749,7 @@ export const useStore = create<StoreState>((set, get) => {
           grappleOnHit,
           mastery,
           cleave,
+          rerollMiss,
           external: { attack },
         });
       }
@@ -772,6 +805,7 @@ export const useStore = create<StoreState>((set, get) => {
         grappleOnHit,
         mastery,
         cleave,
+        rerollMiss,
         external: { attack, crit: effectiveCrit, partTotals },
       });
     },
@@ -839,13 +873,19 @@ export const useStore = create<StoreState>((set, get) => {
       rawSend({ t: 'grantTempHp', targetTokenId: tok.id, notation: String(ww.tempHp), label: 'Rampant Growth (HP tạm)', sourceSheetId: sheet.id });
       return true;
     },
-    beginCast: (sheetId, spell, castAtLevel, repeat) => {
+    beginCast: (sheetId, spell, castAtLevel, repeat, opts) => {
       // Save spells with a parseable template: place the area on the map instead of clicking one target.
       const spec = spell.castKind === 'save' ? parseArea(spell.area) : null;
-      const casterTokenId = get().room?.sheets.find((s) => s.id === sheetId)?.tokenId;
+      const caster = get().room?.sheets.find((s) => s.id === sheetId);
+      const casterTokenId = caster?.tokenId;
+      // Metamagic chosen on the sheet rides along with this cast (paid once, in payCast)
+      const meta = repeat || opts?.ritual ? [] : [...(caster?.metamagicArmed ?? [])];
+      const ritual = opts?.ritual;
       if (spec && casterTokenId) {
         const selfRange = /bản thân|self/i.test(spell.range ?? '');
-        const rangeFeet = selfRange ? 0 : parseRangeFeet(spell.range);
+        const baseRange = selfRange ? 0 : parseRangeFeet(spell.range);
+        // Distant Spell: double range (touch becomes 30 ft)
+        const rangeFeet = meta.includes('distant') && !selfRange ? (baseRange > 5 ? baseRange * 2 : 30) : baseRange;
         set({
           castingSpell: null,
           aoe: {
@@ -857,9 +897,9 @@ export const useStore = create<StoreState>((set, get) => {
             onConfirm: (ids, aoeId) => {
               // Pay once for the whole area — cancelling (no slot) or lacking the action must stop
               // the cast for EVERY target, not just the first one.
-              if (!get().payCast(sheetId, spell, castAtLevel, repeat)) return;
+              if (!get().payCast(sheetId, spell, castAtLevel, repeat, { meta, ritual })) return;
               ids.forEach((id, i) => {
-                set({ castingSpell: { sheetId, spell, castAtLevel, repeat } });
+                set({ castingSpell: { sheetId, spell, castAtLevel, repeat, meta, ritual } });
                 void get().resolveCastOnToken(id, { aoeId, skipConc: i > 0, paid: true });
               });
             },
@@ -867,7 +907,7 @@ export const useStore = create<StoreState>((set, get) => {
         });
         return;
       }
-      set({ castingSpell: { sheetId, spell, castAtLevel, repeat } });
+      set({ castingSpell: { sheetId, spell, castAtLevel, repeat, meta, ritual } });
     },
     cancelCast: () => set({ castingSpell: null, castingMonsterSpell: null, aoe: null }),
     beginMonsterCast: (tokenId, spell, spellAttackBonus) => {
@@ -914,12 +954,27 @@ export const useStore = create<StoreState>((set, get) => {
     },
     bestiaryFocus: null,
     openBestiary: (id) => set({ bestiaryFocus: id }),
-    payCast: (sheetId, spell, castAtLevel, repeat) => {
+    payCast: (sheetId, spell, castAtLevel, repeat, opts) => {
       const sheet = get().room?.sheets.find((s) => s.id === sheetId);
       if (!sheet) return false;
-      const econ = economyKindOf(spell.actionType);
+      if (!repeat && !canCastInWildShape(sheet) && !window.confirm(`Đang Wild Shape (${sheet.wildShape?.name}): hình thú không đúc phép được. Vẫn đúc?`)) return false;
+      // a ritual takes 10 minutes more and no slot — outside the turn's action economy
+      if (opts?.ritual) return true;
+      const meta = opts?.meta ?? [];
+      const cost = metamagicCost(meta);
+      if (cost > sorceryPointsLeft(sheet)) {
+        set({ error: `Không đủ Sorcery Points cho Metamagic (cần ${cost}, còn ${sorceryPointsLeft(sheet)}). Bỏ chọn bớt rồi đúc lại.` });
+        return false;
+      }
+      const econ0 = economyKindOf(spell.actionType);
+      // Quickened Spell: an Action spell is cast as a Bonus Action
+      const econ = econ0 === 'action' && meta.includes('quickened') ? 'bonus' : econ0;
       if (econ && !get().spendEconomy(sheet.tokenId, econ)) return false;
-      if (repeat) return true; // re-use of a lasting spell: the first cast paid the slot
+      const metaPatch: Partial<CharacterSheet> = meta.length ? { sorceryUsed: (sheet.sorceryUsed ?? 0) + cost, metamagicArmed: [] } : {};
+      if (repeat) {
+        if (meta.length) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...metaPatch }, base: sheet });
+        return true; // re-use of a lasting spell: the first cast paid the slot
+      }
       const slot = spendSpellSlot(sheet, spell.level, castAtLevel);
       // remember the slot level so later recasts roll that level's dice
       const keepLevel =
@@ -928,9 +983,9 @@ export const useStore = create<StoreState>((set, get) => {
           : {};
       if (!slot.available) {
         if (!window.confirm(`${slot.reason}. Vẫn ra phép? (không trừ spell slot)`)) return false;
-        if (keepLevel.spells) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...keepLevel }, base: sheet });
-      } else if (Object.keys(slot.patch).length > 0 || keepLevel.spells) {
-        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch, ...keepLevel }, base: sheet });
+        if (keepLevel.spells || meta.length) rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...keepLevel, ...metaPatch }, base: sheet });
+      } else if (Object.keys(slot.patch).length > 0 || keepLevel.spells || meta.length) {
+        rawSend({ t: 'upsertSheet', sheet: { ...sheet, ...slot.patch, ...keepLevel, ...metaPatch }, base: sheet });
       }
       return true;
     },
@@ -945,24 +1000,44 @@ export const useStore = create<StoreState>((set, get) => {
       const castAtLevel = cast.castAtLevel && cast.castAtLevel > spell.level ? cast.castAtLevel : undefined;
       const pactLvl = spell.level > 0 && casterTypeOf(sheet) === 'pact' ? sheet.pactSlots?.level : undefined;
       const shownLvl = pactLvl && pactLvl > spell.level ? pactLvl : castAtLevel;
-      const label = `${sheet.name} · ${spell.name}${shownLvl ? ` (ô cấp ${shownLvl})` : ''}${cast.repeat ? ' (lặp lại)' : ''}`;
+      const meta = cast.meta ?? [];
+      const label = `${sheet.name} · ${spell.name}${shownLvl ? ` (ô cấp ${shownLvl})` : ''}${cast.repeat ? ' (lặp lại)' : ''}${cast.ritual ? ' (nghi thức)' : ''}${metamagicLabel(meta)}`;
       // An AOE cast resolves once per target hit (see `beginCast`'s aoe.onConfirm) — economy
       // and the spell slot must only be spent once per cast, on the first target.
       const firstTarget = !opts?.skipConc;
-      if (firstTarget && !opts?.paid && !get().payCast(sheetId, spell, cast.castAtLevel, cast.repeat)) return;
+      if (firstTarget && !opts?.paid && !get().payCast(sheetId, spell, cast.castAtLevel, cast.repeat, { meta, ritual: cast.ritual })) return;
+      // Careful Spell: up to CHA-mod allies caught in the area just succeed (no damage, no effect)
+      if (meta.includes('careful') && opts?.aoeId && spell.castKind === 'save' && targetTokenId !== sheet.tokenId) {
+        const tgt = room.tokens.find((t) => t.id === targetTokenId);
+        const ally = !!tgt && (!!tgt.controllerId || room.sheets.some((s) => s.tokenId === tgt.id));
+        const n = carefulSpared.get(opts.aoeId) ?? 0;
+        if (ally && n < carefulCount(sheet)) {
+          carefulSpared.set(opts.aoeId, n + 1);
+          set({ error: `✨ Careful Spell: ${tgt!.label} tự đỗ save, không nhận sát thương.` });
+          return;
+        }
+      }
+      const ext = meta.includes('extended');
+      const durMul = ext ? 2 : 1;
+      const concAdv: Partial<ActiveEffect> = ext ? { concAdvantage: true } : {};
 
       // Upcast: extra dice per slot level above the spell's own, read from the spell DB's
       // "Nâng ô: +1d6" guidance. Pact Magic always casts at the Pact slot level.
-      const effLevel =
+      const effLevel0 =
         spell.level > 0 && casterTypeOf(sheet) === 'pact' && sheet.pactSlots
           ? Math.max(spell.level, sheet.pactSlots.level)
           : (cast.castAtLevel ?? spell.level);
+      // Twinned Spell: one effective level higher (one more target), no bigger slot spent
+      const effLevel = spell.level > 0 && meta.includes('twinned') ? Math.min(9, effLevel0 + 1) : effLevel0;
       const perLevel = spell.level > 0 ? parseUpcast(findCantrip(spell.name)?.guidance) : undefined;
       const upPart = upcastDamagePart(perLevel, spell.level, effLevel, spell.damage?.[0]?.type);
-      const spellDamage = spell.damage && upPart ? [...spell.damage, upPart] : spell.damage;
+      const spellDamage = metamagicDamage(spell.damage && upPart ? [...spell.damage, upPart] : spell.damage, meta, sheet);
       const healExtra = perLevel && effLevel > spell.level ? scaleDice(perLevel, effLevel - spell.level) : '';
       const atkBonus = spellAttackBonus(sheet, spell) ?? 0;
-      const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
+      // Innate Sorcery on the caster's token: +1 spell save DC
+      const casterFx = room.tokens.find((t) => t.id === sheet.tokenId)?.effects ?? [];
+      const dcBonus = Math.max(0, ...casterFx.map((e) => e.spellDcBonus ?? 0));
+      const dc = spell.save?.dcOverride ?? (spellSaveDc(sheet, spell) ?? 10) + dcBonus;
       const castAbil = spellcastingAbilityOf(sheet, spell);
       const castMod = castAbil ? abilityMod(sheet.abilities[castAbil]) : 0;
       // A volley feature: a damaging cantrip (not self-range, not a multi-beam one) is cast several
@@ -996,6 +1071,7 @@ export const useStore = create<StoreState>((set, get) => {
             sourceSheetId: sheetId,
             concentration: true,
             note: spell.notes,
+            ...concAdv,
           },
         });
       }
@@ -1048,6 +1124,7 @@ export const useStore = create<StoreState>((set, get) => {
             sourceSheetId: sheetId,
             concentration: spell.concentration,
             rider: spell.rider,
+            ...concAdv,
           },
         });
         return;
@@ -1067,7 +1144,8 @@ export const useStore = create<StoreState>((set, get) => {
           dc,
           label: volleyN > 1 ? `${label} (phát ${shot + 1}/${volleyN})` : label,
           sourceSheetId: sheetId,
-          rollMode: closeDis ? 'disadvantage' : undefined,
+          // Heightened Spell: the target saves with disadvantage
+          rollMode: closeDis || meta.includes('heightened') ? 'disadvantage' : undefined,
           teleportOnFail:
             (spell.teleportOnFail ?? findCantrip(spell.name)?.teleportOnFail) && casterTok
               ? { maxFeet: (spell.teleportOnFail ?? findCantrip(spell.name)!.teleportOnFail!).maxFeet, fromTokenId: casterTok.id }
@@ -1103,8 +1181,9 @@ export const useStore = create<StoreState>((set, get) => {
                     : undefined,
                 turnDamage: sfx?.turnDamage,
                 charges: sfx?.charges,
+                ...concAdv,
                 expiresRound: spell.effect.expiresInRounds
-                  ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds
+                  ? (room.initiative.round ?? 1) + spell.effect.expiresInRounds * durMul
                   : undefined,
               }
             : undefined,
@@ -1157,6 +1236,7 @@ export const useStore = create<StoreState>((set, get) => {
             moveOnHit: mvHit,
             effectOnCrit: critFx,
             pushFeetOnHit: spell.repellingBlast ? 10 : undefined,
+            rerollMiss: meta.includes('seeking') || undefined,
           });
         }
         // burst spells: hit or miss, the area bursts — save-for-half for everyone around the target
@@ -1261,8 +1341,9 @@ export const useStore = create<StoreState>((set, get) => {
             resist: fx.resist,
             saveAdvantage: fx.saveAdvantage,
             deathSaveAdvantage: fx.deathSaveAdvantage,
+            ...concAdv,
             expiresRound: fx.expiresInRounds
-              ? (room.initiative.round ?? 1) + fx.expiresInRounds
+              ? (room.initiative.round ?? 1) + fx.expiresInRounds * durMul
               : undefined,
           },
         });

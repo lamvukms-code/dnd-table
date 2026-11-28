@@ -37,3 +37,6 @@ export * from './statePatch.js';
 export * from './settingReference.js';
 export * from './weaponMastery.js';
 export * from './bestiaryGroups.js';
+export * from './sorcerer.js';
+export * from './spellbook.js';
+export * from './wildShape.js';

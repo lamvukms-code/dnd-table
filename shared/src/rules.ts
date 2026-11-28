@@ -1,3 +1,4 @@
+import { sorcererLongRest } from './sorcerer.js';
 import type {
   Ability,
   ActiveEffect,
@@ -38,6 +39,7 @@ import {
   passiveHas,
   passiveMax,
   passiveMediumArmorMod,
+  passiveSaveProficient,
   passiveUnarmedDie,
   passiveUnarmoredAc,
 } from './featurePassives.js';
@@ -81,7 +83,8 @@ export function exhaustionPenalty(level: number | undefined): number {
 
 export function saveBonus(sheet: CharacterSheet, ability: Ability): number {
   const base = abilityMod(sheet.abilities[ability]);
-  return base + (sheet.saveProficiencies.includes(ability) ? sheet.proficiencyBonus : 0) + exhaustionPenalty(sheet.exhaustion);
+  const prof = sheet.saveProficiencies.includes(ability) || passiveSaveProficient(sheet, ability);
+  return base + (prof ? sheet.proficiencyBonus : 0) + exhaustionPenalty(sheet.exhaustion);
 }
 
 export function skillBonus(sheet: CharacterSheet, skill: string): number {
@@ -290,6 +293,8 @@ function weaponAbilityUsed(sheet: CharacterSheet, it: InventoryItem): Ability {
 
 /** Action-economy entries contributed by currently equipped weapons (+ the off-hand Light attack). */
 export function derivedActions(sheet: CharacterSheet): SheetAction[] {
+  // in a Wild Shape beast form the beast's own attacks replace weapon attacks
+  if (sheet.wildShape) return [];
   const weapons = sheet.inventory.filter((it) => it.type === 'weapon' && it.equipped);
   const lights = lightMeleeWeapons(sheet);
   // weapons in hand for melee (a bow slung on the back doesn't stop Dueling)
@@ -1124,7 +1129,13 @@ export function applySpellProgression(sheet: CharacterSheet): CharacterSheet {
   if (casterTypeOf(sheet) === 'none') {
     return sheet.pactSlots ? { ...sheet, pactSlots: null } : sheet;
   }
-  const target = computeSpellSlots(sheet);
+  // slots a Sorcerer made with Font of Magic sit on top of the table until the next long rest
+  const created = sheet.createdSlots ?? {};
+  const target = computeSpellSlots(sheet).map((t) => ({ ...t, max: t.max + (created[String(t.level)] ?? 0) }));
+  for (const [lvl, n] of Object.entries(created)) {
+    if (n > 0 && !target.some((t) => t.level === Number(lvl))) target.push({ level: Number(lvl), max: n, used: 0 });
+  }
+  target.sort((a, b) => a.level - b.level);
   const spellSlots = target.map((t) => ({
     ...t,
     used: Math.min(t.max, sheet.spellSlots.find((s) => s.level === t.level)?.used ?? 0),
@@ -1321,10 +1332,12 @@ export function resolveDamageParts(
 export function allActions(sheet: CharacterSheet, effects?: ActiveEffect[]): SheetAction[] {
   const unarmed = monkUnarmedAction(sheet) ?? unarmedAction(sheet);
   const bonusUnarmed = monkBonusUnarmedAction(sheet);
+  // a Wild Shape beast fights with its own stat-block attacks only
+  const shaped = !!sheet.wildShape;
   const base = [
     ...derivedActions(sheet),
-    unarmed,
-    ...(bonusUnarmed ? [bonusUnarmed] : []),
+    ...(shaped ? [] : [unarmed]),
+    ...(bonusUnarmed && !shaped ? [bonusUnarmed] : []),
     ...sheet.actions.map((a) => ({ ...a, source: a.source ?? ('manual' as const) })),
   ];
   return applyWeaponImbue(sheet, base, effects);
@@ -1478,6 +1491,10 @@ export function applyShortRest(sheet: CharacterSheet): CharacterSheet {
     // 2024 Monk: all Focus Points return on a short (or long) rest.
     focusUsed: 0,
     jaeger: jaegerAfterRest(sheet, 'short'),
+    // Relentless Rage's DC goes back to 10 after a short or long rest
+    ...(sheet.subclassUses?.['barb-relentless-rage']
+      ? { subclassUses: Object.fromEntries(Object.entries(sheet.subclassUses).filter(([k]) => k !== 'barb-relentless-rage')) }
+      : {}),
     // 2024 Druid: regain one expended Wild Shape on a short rest.
     wildShapeUsed:
       typeof sheet.wildShapeUsed === 'number'
@@ -1546,6 +1563,10 @@ export function applyLongRest(sheet: CharacterSheet): CharacterSheet {
     focusUsed: 0,
     jaeger: jaegerAfterRest(sheet, 'long'),
     wildShapeUsed: 0,
+    // Sorcerer: points back, restoration ready, slots made with Font of Magic vanish
+    ...(sheet.sorceryUsed || sheet.sorcRestoreUsed || Object.keys(sheet.createdSlots ?? {}).length || sheet.metamagicArmed?.length
+      ? sorcererLongRest({ ...sheet, spellSlots: sheet.spellSlots.map((s) => ({ ...s, used: 0 })) })
+      : {}),
     subclassUses: {},
     speciesUses: {},
     hitDiceUsed: regainHitDice(sheet).hitDiceUsed,

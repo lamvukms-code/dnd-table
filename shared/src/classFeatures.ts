@@ -29,7 +29,13 @@ export interface ClassFeatureDef {
     | 'focus'
     | 'stunning-strike'
     | 'pact-magic'
-    | 'wild-shape';
+    | 'wild-shape'
+    | 'sorcery'
+    | 'spellbook';
+  /** Mechanics the app runs for this feature (same shapes as subclass features). */
+  passive?: FeaturePassive;
+  actions?: FeatureAction[];
+  uses?: SubclassFeatureDef['uses'];
 }
 
 /**
@@ -90,6 +96,7 @@ const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'rogue-steady-aim',
+    actions: [{ label: 'Steady Aim', kind: 'effect', target: 'self', cost: 'bonus', effect: { name: 'Steady Aim', rollAdvantage: ['attack'], speedPenalty: 999, untilEndOfTurn: true } }],
     level: 3,
     name: 'Steady Aim',
     description:
@@ -105,6 +112,7 @@ const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'rogue-uncanny-dodge',
+    passive: { reaction: { kind: 'halve' } },
     level: 5,
     name: 'Uncanny Dodge',
     description: 'Reaction khi bị 1 đòn tấn công thấy được trúng: giảm nửa sát thương đòn đó.',
@@ -117,12 +125,14 @@ const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'rogue-evasion',
+    passive: { evasion: true },
     level: 7,
     name: 'Evasion',
     description: 'Khi chịu save DEX để giảm nửa sát thương: thành công = 0 sát thương, thất bại = nửa.',
   },
   {
     id: 'rogue-reliable-talent',
+    passive: { checkMin: { d20: 10, proficientOnly: true } },
     level: 7,
     name: 'Reliable Talent',
     description: 'Với kiểm tra kỹ năng bạn thành thạo, coi kết quả d20 dưới 10 thành 10.',
@@ -141,12 +151,14 @@ const ROGUE: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'rogue-slippery-mind',
+    passive: { saveProficiency: ['wis', 'cha'] },
     level: 15,
     name: 'Slippery Mind',
     description: 'Thành thạo save WIS và CHA.',
   },
   {
     id: 'rogue-elusive',
+    passive: { elusive: true },
     level: 18,
     name: 'Elusive',
     description: 'Không đòn tấn công nào có lợi thế nhắm bạn khi bạn chưa bị Incapacitated.',
@@ -183,6 +195,7 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'barb-danger-sense',
+    passive: { saveAdvantage: ['dex'] },
     level: 2,
     name: 'Danger Sense',
     description: 'Lợi thế save DEX với hiệu ứng bạn thấy được (khi không bị Incapacitated).',
@@ -216,6 +229,7 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'barb-feral-instinct',
+    passive: { initiativeAdvantage: true },
     level: 7,
     name: 'Feral Instinct',
     description: 'Lợi thế initiative.',
@@ -235,6 +249,7 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'barb-relentless-rage',
+    passive: { relentlessRage: true },
     level: 11,
     name: 'Relentless Rage',
     description: 'Khi xuống 0 HP mà đang Rage và không chết ngay: save CON DC 10 (+5 mỗi lần) để về 1 HP.',
@@ -259,6 +274,7 @@ const BARBARIAN: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'barb-indomitable-might',
+    passive: { checkMin: { score: 'str' } },
     level: 18,
     name: 'Indomitable Might',
     description: 'Kiểm tra STR: nếu tổng dưới điểm STR thì tính bằng điểm STR.',
@@ -308,6 +324,7 @@ const MONK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'monk-deflect-attacks',
+    passive: { reaction: { kind: 'reduce', dice: '1d10+mod:dex+lvl', types: ['bludgeoning', 'piercing', 'slashing'] } },
     level: 3,
     name: 'Deflect Attacks',
     description:
@@ -342,6 +359,7 @@ const MONK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'monk-evasion',
+    passive: { evasion: true },
     level: 7,
     name: 'Evasion',
     description: 'Save DEX để giảm nửa: thành công = 0, thất bại = nửa.',
@@ -360,12 +378,14 @@ const MONK: Omit<ClassFeatureDef, 'class'>[] = [
   },
   {
     id: 'monk-deflect-energy',
+    passive: { deflectAnyType: true },
     level: 13,
     name: 'Deflect Energy',
     description: 'Deflect Attacks áp dụng cho mọi loại sát thương.',
   },
   {
     id: 'monk-disciplined-survivor',
+    passive: { saveProficiency: 'all' },
     level: 14,
     name: 'Disciplined Survivor',
     description: 'Thành thạo mọi saving throw. Dùng 1 Focus Point để reroll 1 save.',
@@ -478,7 +498,7 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
     level: 2,
     name: 'Wild Shape',
     description:
-      'Bonus Action: biến thành một Beast bạn từng thấy (giới hạn CR/loại theo cấp). Số lần dùng = 2 (3 từ cấp 6, 4 từ cấp 17); hồi 1 khi nghỉ ngắn, hồi hết khi nghỉ dài. Ở app: dùng stat block quái từ Bestiary cho hình dạng thú.',
+      'Bonus Action: biến thành một Beast đã biết (4 hình dạng, 6 ở cấp 4, 8 ở cấp 8). CR tối đa 1/4 (1/2 ở cấp 4, 1 ở cấp 8), chưa được bay tới cấp 8. Nhận HP tạm = cấp Druid. Thay STR/DEX/CON, AC, tốc độ, cỡ và đòn đánh bằng của thú; giữ HP, INT/WIS/CHA, proficiency. Không đúc phép được. Hết khi về 0 HP hoặc tự thôi. Số lần = 2 (3 từ cấp 6, 4 từ cấp 17); hồi 1 khi nghỉ ngắn. App: phần 🐾 Wild Shape.',
     automation: 'wild-shape',
   },
   {
@@ -523,16 +543,121 @@ const DRUID: Omit<ClassFeatureDef, 'class'>[] = [
   },
 ];
 
+const SORCERER: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'sorc-spellcasting',
+    level: 1,
+    name: 'Spellcasting',
+    description: 'Full caster, ability = CHA. Ô phép, DC, spell attack tự tính ở tab Phép.',
+  },
+  {
+    id: 'sorc-innate-sorcery',
+    automation: 'sorcery',
+    level: 1,
+    name: 'Innate Sorcery',
+    description:
+      'Bonus Action, 1 phút: +1 spell save DC phép Sorcerer và lợi thế đòn phép Sorcerer. 2 lần mỗi nghỉ dài. App: nút ✨ Innate Sorcery ở phần Sorcerer.',
+  },
+  {
+    id: 'sorc-font-of-magic',
+    automation: 'sorcery',
+    level: 2,
+    name: 'Font of Magic',
+    description:
+      'Sorcery Points = cấp Sorcerer, hồi khi nghỉ dài. Đổi 1 ô phép thành điểm bằng cấp ô (không tốn action); Bonus Action đổi điểm thành ô: cấp 1 = 2, cấp 2 = 3, cấp 3 = 5, cấp 4 = 6, cấp 5 = 7 điểm. Ô tạo ra biến mất khi nghỉ dài.',
+  },
+  {
+    id: 'sorc-metamagic',
+    automation: 'sorcery',
+    level: 2,
+    name: 'Metamagic',
+    description:
+      'Biết 2 lựa chọn (4 ở cấp 10, 6 ở cấp 17). 1 Metamagic mỗi phép (Empowered, Seeking dùng chung được). App: chọn ở phần Sorcerer, bật trước khi bấm 🪄, tự trừ điểm khi đúc.',
+  },
+  {
+    id: 'sorc-restoration',
+    automation: 'sorcery',
+    level: 5,
+    name: 'Sorcerous Restoration',
+    description: 'Khi nghỉ ngắn: hồi tối đa nửa cấp Sorcerer (làm tròn xuống) Sorcery Points. 1 lần mỗi nghỉ dài.',
+  },
+  {
+    id: 'sorc-incarnate',
+    automation: 'sorcery',
+    level: 7,
+    name: 'Sorcery Incarnate',
+    description: 'Hết lượt Innate Sorcery thì tốn 2 Sorcery Points để bật. Khi Innate Sorcery đang bật: tối đa 2 Metamagic mỗi phép.',
+  },
+  {
+    id: 'sorc-apotheosis',
+    level: 20,
+    name: 'Arcane Apotheosis',
+    description: 'Khi Innate Sorcery đang bật: 1 Metamagic mỗi lượt không tốn Sorcery Points.',
+  },
+];
+
+const WIZARD: Omit<ClassFeatureDef, 'class'>[] = [
+  {
+    id: 'wiz-spellcasting',
+    automation: 'spellbook',
+    level: 1,
+    name: 'Spellcasting (Spellbook)',
+    description:
+      'Full caster, ability = INT. Sổ phép: 6 phép cấp 1 lúc đầu, +2 phép mỗi cấp Wizard (miễn phí). Phép tìm được chép vào sổ tốn 2 giờ và 50 gp mỗi cấp phép. Chuẩn bị phép từ sổ (số lượng theo bảng).',
+  },
+  {
+    id: 'wiz-ritual-adept',
+    automation: 'spellbook',
+    level: 1,
+    name: 'Ritual Adept',
+    description: 'Đúc phép Ritual có trong sổ dù chưa chuẩn bị (thêm 10 phút, không tốn ô). App: nút 📖 trên phép Ritual.',
+  },
+  {
+    id: 'wiz-arcane-recovery',
+    automation: 'spellbook',
+    level: 1,
+    name: 'Arcane Recovery',
+    description:
+      'Sau nghỉ ngắn, 1 lần mỗi nghỉ dài: hồi ô phép đã dùng, tổng cấp ≤ nửa cấp Wizard (làm tròn lên), không ô cấp 6+.',
+  },
+  {
+    id: 'wiz-scholar',
+    level: 2,
+    name: 'Scholar',
+    description: 'Expertise một kỹ năng: Arcana, History, Investigation, Medicine, Nature hoặc Religion.',
+  },
+  {
+    id: 'wiz-memorize',
+    level: 5,
+    name: 'Memorize Spell',
+    description: 'Khi nghỉ ngắn: đổi 1 phép đã chuẩn bị lấy 1 phép cấp 1+ khác trong sổ.',
+  },
+  {
+    id: 'wiz-spell-mastery',
+    level: 18,
+    name: 'Spell Mastery',
+    description: 'Chọn 1 phép cấp 1 và 1 phép cấp 2 trong sổ: đúc ở cấp gốc không tốn ô.',
+  },
+  {
+    id: 'wiz-signature',
+    level: 20,
+    name: 'Signature Spells',
+    description: 'Chọn 2 phép cấp 3 trong sổ: luôn chuẩn bị, mỗi phép 1 lần đúc cấp 3 không tốn ô mỗi nghỉ ngắn/dài.',
+  },
+];
+
 export const CLASS_FEATURES: ClassFeatureDef[] = [
   ...ROGUE.map((f) => ({ ...f, class: 'rogue' })),
   ...BARBARIAN.map((f) => ({ ...f, class: 'barbarian' })),
   ...MONK.map((f) => ({ ...f, class: 'monk' })),
   ...WARLOCK.map((f) => ({ ...f, class: 'warlock' })),
   ...DRUID.map((f) => ({ ...f, class: 'druid' })),
+  ...SORCERER.map((f) => ({ ...f, class: 'sorcerer' })),
+  ...WIZARD.map((f) => ({ ...f, class: 'wizard' })),
 ];
 
 /** Classes we have a feature table for. */
-export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid'];
+export const SUPPORTED_FEATURE_CLASSES = ['rogue', 'barbarian', 'monk', 'warlock', 'druid', 'sorcerer', 'wizard'];
 
 /** The class features this sheet has earned, from CLASS_FEATURES, ordered by level. */
 export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
@@ -542,11 +667,20 @@ export function derivedClassFeatures(sheet: CharacterSheet): ClassFeatureDef[] {
     monk: monkLevel(sheet),
     warlock: warlockLevel(sheet),
     druid: druidLevel(sheet),
+    sorcerer: classLevelOf(sheet, 'sorcerer'),
+    wizard: classLevelOf(sheet, 'wizard'),
   };
   for (const f of CUSTOM_CLASS_FEATURES) levels[f.class] ??= classLevelOf(sheet, f.class);
   return [...CLASS_FEATURES, ...CUSTOM_CLASS_FEATURES]
     .filter((f) => f.level <= (levels[f.class] ?? 0))
     .sort((a, b) => a.level - b.level);
+}
+
+/** Class features this sheet has that carry mechanics (passives, buttons, use pools), as feature defs. */
+export function classMechanicDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
+  return derivedClassFeatures(sheet)
+    .filter((f) => f.passive || f.actions || f.uses)
+    .map((f) => ({ id: f.id, class: f.class, subclass: '', level: f.level, name: f.name, description: f.description, passive: f.passive, actions: f.actions, uses: f.uses }));
 }
 
 /**

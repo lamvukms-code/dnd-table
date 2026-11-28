@@ -47,7 +47,18 @@ export type ClientAction =
   | { t: 'setRole'; participantId: string; role: 'dm' | 'player' }
   /** DM: drop an offline participant from the room list (their sheets stay; they can come back). */
   | { t: 'removeParticipant'; participantId: string }
-  | { t: 'roll'; label: string; notation: string; private?: boolean; external?: ExternalRoll }
+  | {
+      t: 'roll';
+      label: string;
+      notation: string;
+      private?: boolean;
+      external?: ExternalRoll;
+      /** A d20 below this counts as this (Reliable Talent). */
+      d20Min?: number;
+      /** A total below this counts as this (Indomitable Might); `floorWhy` names the feature. */
+      totalMin?: number;
+      floorWhy?: string;
+    }
   /** DM: madness saving throw (WIS + INT mod) for these tokens; a failure stuns and rolls the tier's table. */
   | { t: 'madnessSave'; targetTokenIds: string[]; dc: number; tier: MadnessTier; label?: string }
   /** DM: roll a madness effect straight onto a sheet (no save). */
@@ -69,6 +80,8 @@ export type ClientAction =
       t: 'attack';
       label: string;
       attackNotation: string;
+      /** Seeking Spell: on a miss the d20 is rolled once more and the new roll stands. */
+      rerollMiss?: boolean;
       damageParts: DamagePart[];
       targetTokenId: string;
       attackerSheetId?: string;

@@ -358,3 +358,25 @@ export function rerollLowDice(notation: string, faces: number[], below: number, 
   });
   return { delta, faces: out };
 }
+
+/**
+ * Empowered Spell: roll again up to `count` of the lowest damage dice that came up below the die's
+ * average (the new rolls stand). Returns the change in total and the faces after the rerolls.
+ */
+export function rerollLowestDice(notation: string, faces: number[], count: number, rng: Rng = defaultRng): { delta: number; faces: number[] } {
+  const sides: number[] = [];
+  for (const t of parseTerms(notation)) if (t.kind === 'dice') for (let i = 0; i < (t.count ?? 0); i++) sides.push(t.sides ?? 0);
+  const order = faces
+    .map((f, i) => ({ f, i, s: sides[i] ?? 0 }))
+    .filter((x) => x.s > 0 && x.f > 0 && x.f < (x.s + 1) / 2)
+    .sort((a, b) => a.f / a.s - b.f / b.s)
+    .slice(0, Math.max(0, count));
+  const out = [...faces];
+  let delta = 0;
+  for (const x of order) {
+    const n = 1 + Math.floor(rng() * x.s);
+    delta += n - x.f;
+    out[x.i] = n;
+  }
+  return { delta, faces: out };
+}

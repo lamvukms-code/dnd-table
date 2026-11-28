@@ -1,6 +1,6 @@
 import type { Ability, CharacterSheet, DamagePart, Defenses, SheetAction } from './types.js';
 import { emptyDefenses } from './types.js';
-import { derivedSubclassFeatures, type SubclassFeatureDef } from './classFeatures.js';
+import { classMechanicDefs, derivedSubclassFeatures, type SubclassFeatureDef } from './classFeatures.js';
 import { SRD_FEATS_DRAFT, type FeatDef } from './feats.draft.js';
 import { findInvocationDraft, WARLOCK_INVOCATIONS_DRAFT, type InvocationDef } from './invocations.draft.js';
 import type { FeatureAction } from './featureActions.js';
@@ -64,15 +64,40 @@ export interface FeaturePassive {
   spellIgnoreHalfCover?: boolean;
   /** Ranged spell attacks: range multiplied by this. */
   spellRangeMultiplier?: number;
-  /** A reaction the character may take when hit at by a melee attack (offered to its player). */
+  /** A reaction the character may take when attacked (offered to its player before the roll). */
   reaction?: FeatureReaction;
+  /** Advantage on these saving throws (Danger Sense: DEX), not while Incapacitated. */
+  saveAdvantage?: Ability[];
+  /** Proficiency in these saving throws, or all of them (Slippery Mind, Disciplined Survivor). */
+  saveProficiency?: Ability[] | 'all';
+  /** Advantage on Initiative rolls (Feral Instinct). */
+  initiativeAdvantage?: boolean;
+  /** Evasion: a DEX save for half takes none on a success, half on a failure (not while Incapacitated). */
+  evasion?: boolean;
+  /**
+   * A floor on ability checks: `d20` = treat a lower d20 as this (Reliable Talent, with `proficientOnly`);
+   * `score` = a STR check / save total below the ability score uses the score (Indomitable Might).
+   */
+  checkMin?: { d20?: number; proficientOnly?: boolean; score?: Ability };
+  /** No attack roll against the character has Advantage unless it is Incapacitated (Elusive). */
+  elusive?: boolean;
+  /** Dropping to 0 HP while raging: a CON save (DC 10, +5 each time) to stay at 2 × Barbarian level HP. */
+  relentlessRage?: boolean;
+  /** The damage-reducing reaction works on any damage type (Deflect Energy). */
+  deflectAnyType?: boolean;
 }
 
 /** A reaction to being attacked in melee, answered by the player before the roll. */
 export interface FeatureReaction {
-  kind: 'counter' | 'stepAway';
-  /** counter: damage of the counter-attack (a spell attack against the attacker). */
+  /**
+   * counter / stepAway: answer a melee attack before it lands. halve: an attack that hits deals half
+   * (Uncanny Dodge). reduce: an attack that hits deals `dice` less (Deflect Attacks) — `types` limits it.
+   */
+  kind: 'counter' | 'stepAway' | 'halve' | 'reduce';
+  /** counter: damage of the counter-attack (a spell attack against the attacker). reduce: the reduction. */
   dice?: string;
+  /** reduce: only attacks dealing one of these damage types. */
+  types?: string[];
   type?: string;
   /** counter: a hit makes the attack fail and stuns the attacker until the end of its turn. */
   stunOnHit?: boolean;
@@ -179,8 +204,8 @@ export function localFeatDef(name: string): LocalFeatDef | undefined {
 /** The sheet's local feats that carry mechanics, shaped like subclass features (id "feat:<id>",
  *  no class: `lvl` in formulas = character level) so the same UI / rest / rider code handles them. */
 export function featFeatureDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
-  // invocations with mechanics ride along (same UI / rest / rider code)
-  const out: SubclassFeatureDef[] = invocationFeatureDefs(sheet);
+  // base-class features and invocations with mechanics ride along (same UI / rest / rider code)
+  const out: SubclassFeatureDef[] = [...classMechanicDefs(sheet), ...invocationFeatureDefs(sheet)];
   if (!FEATS.length) return out;
   for (const f of sheet.feats ?? []) {
     const d = localFeatDef(f.name);
@@ -445,7 +470,17 @@ export function featureAttackMod(
 /** Any active passive with this flag set (pact weapon, concentration advantage, spell-attack tweaks…). */
 export function passiveHas(
   sheet: CharacterSheet | undefined,
-  key: 'pactWeapon' | 'concentrationAdvantage' | 'cantripVolley' | 'spellNoCloseRangedPenalty' | 'spellIgnoreHalfCover',
+  key:
+    | 'pactWeapon'
+    | 'concentrationAdvantage'
+    | 'cantripVolley'
+    | 'spellNoCloseRangedPenalty'
+    | 'spellIgnoreHalfCover'
+    | 'initiativeAdvantage'
+    | 'evasion'
+    | 'elusive'
+    | 'relentlessRage'
+    | 'deflectAnyType',
 ): boolean {
   return !!sheet && activePassives(sheet).some((p) => !!p.passive[key]);
 }
@@ -461,4 +496,42 @@ export function passiveReactions(sheet: CharacterSheet): { featureId: string; na
   return activePassives(sheet)
     .filter((p) => p.passive.reaction)
     .map((p) => ({ featureId: p.feature.id, name: p.feature.name.replace(/\s*\((invocation|feat)\)$/, ''), reaction: p.passive.reaction!, classKey: p.feature.class, uses: p.feature.uses }));
+}
+
+/** Advantage on this save from a feature (Danger Sense). The caller checks Incapacitated. */
+export function passiveSaveAdvantage(sheet: CharacterSheet | undefined, ability: Ability): string | null {
+  if (!sheet) return null;
+  const p = activePassives(sheet).find((x) => x.passive.saveAdvantage?.includes(ability));
+  return p ? p.feature.name : null;
+}
+
+/** Proficient in this save through a feature (Slippery Mind, Disciplined Survivor). */
+export function passiveSaveProficient(sheet: CharacterSheet, ability: Ability): boolean {
+  return activePassives(sheet).some((x) => x.passive.saveProficiency === 'all' || (Array.isArray(x.passive.saveProficiency) && x.passive.saveProficiency.includes(ability)));
+}
+
+/**
+ * Floors for one check / save: the lowest d20 that counts (Reliable Talent on a proficient check) and
+ * the lowest total (Indomitable Might: the STR score).
+ */
+export function passiveCheckFloor(
+  sheet: CharacterSheet | undefined,
+  ability: Ability,
+  opts: { proficient?: boolean; save?: boolean } = {},
+): { d20Min?: number; totalMin?: number; why: string[] } {
+  const out: { d20Min?: number; totalMin?: number; why: string[] } = { why: [] };
+  if (!sheet) return out;
+  for (const p of activePassives(sheet)) {
+    const c = p.passive.checkMin;
+    if (!c) continue;
+    if (c.d20 && !opts.save && (!c.proficientOnly || opts.proficient)) {
+      out.d20Min = Math.max(out.d20Min ?? 0, c.d20);
+      out.why.push(p.feature.name);
+    }
+    if (c.score && c.score === ability) {
+      out.totalMin = Math.max(out.totalMin ?? 0, sheet.abilities[ability]);
+      out.why.push(p.feature.name);
+    }
+  }
+  return out;
 }

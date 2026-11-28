@@ -2098,3 +2098,16 @@ label.mt-btn { border: 1px solid var(--line); background: var(--panel-2); }
 .sbd-edit input[type='range'] { width: 60px; }
 .sbd-edit .link.danger { color: #e57373; }
 .sbd-edit label.chk { flex-direction: row; align-items: center; gap: 2px; }
+
+/* Sorcerer / Wizard / Druid caster panels */
+.metamagic-bar, .spellbook-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; }
+.metamagic-bar .hint.over, .spells-tab .hint.over { color: var(--danger, #e66); }
+.sorc-panel .font-of-magic { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sorc-panel .sp-pips { font-weight: 700; }
+.mm-known { width: 100%; }
+.mm-known .mm-opt { display: block; margin: 2px 0; }
+.wild-shape { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.wild-shape .ws-active { display: flex; flex-direction: column; gap: 4px; }
+.wild-shape .ws-forms { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.wild-shape .ws-traits { margin: 0; padding-left: 18px; font-size: 12px; }
+.cf-auto-tag { color: var(--accent, #8bd); font-size: 11px; font-style: normal; }
