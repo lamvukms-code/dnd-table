@@ -1,5 +1,5 @@
-import type { BackgroundDef, CustomClassDef, HeirloomDef, Statblock } from '@dnd-table/shared';
-import { registerCustomClass } from '@dnd-table/shared';
+import type { BackgroundDef, BestiaryGroupDef, CustomClassDef, HeirloomDef, Statblock } from '@dnd-table/shared';
+import { DEFAULT_BESTIARY_GROUPS, registerCustomClass } from '@dnd-table/shared';
 
 /**
  * Campaign reference data — all OPTIONAL, all git-ignored `client/src/data/*.local.json`.
@@ -22,6 +22,14 @@ function objectFrom<T>(mods: Record<string, unknown>): Record<string, T> {
   const v = (Object.values(mods)[0] as { default?: unknown } | undefined)?.default;
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, T>) : {};
 }
+
+/** Bestiary grouping/order (book names, which open first); falls back to generic defaults. */
+const bestiaryGroupsLocal = arrayFrom<BestiaryGroupDef>(
+  import.meta.glob('./data/bestiaryGroups.local.json', { eager: true }),
+);
+export const BESTIARY_GROUPS: BestiaryGroupDef[] = bestiaryGroupsLocal.length
+  ? bestiaryGroupsLocal
+  : DEFAULT_BESTIARY_GROUPS;
 
 /** Character backgrounds for the sheet picker. */
 export const BACKGROUND_DEFS: BackgroundDef[] = arrayFrom(

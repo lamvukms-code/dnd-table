@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageField } from './ImageField.js';
+import { BESTIARY_GROUPS } from '../campaignData.js';
 import {
   ABILITIES,
   abilityMod,
   d20Check,
   findCantrip,
   fmtMod,
+  groupBestiary,
   parse5eToolsBestiary,
   WEAPON_TRAITS,
   WEAPON_TRAIT_VI,
@@ -55,16 +57,7 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return bestiary;
-    return bestiary.filter(
-      (b) =>
-        b.name.toLowerCase().includes(s) ||
-        b.meta.toLowerCase().includes(s) ||
-        b.tags.some((t) => t.toLowerCase().includes(s)),
-    );
-  }, [bestiary, q]);
+  const groups = useMemo(() => groupBestiary(bestiary, q, BESTIARY_GROUPS), [bestiary, q]);
 
   const selected = bestiary.find((b) => b.id === selId) ?? null;
 
@@ -122,23 +115,31 @@ export function BestiaryPanel({ onClose }: { onClose: () => void }) {
         <div className="bestiary-body">
           <div className="be-list">
             <input
-              placeholder="Tìm tên / loại / tag…"
+              placeholder="Tìm tên / nguồn / tag / cr 3…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
             <div className="be-list-scroll">
-              {filtered.map((b) => (
-                <button
-                  key={b.id}
-                  className={`be-item ${b.id === selId ? 'on' : ''}`}
-                  onClick={() => setSelId(b.id)}
-                >
-                  <span className="be-dot" style={{ background: b.color }} />
-                  <span className="be-name">{b.name}</span>
-                  {b.cr && <span className="be-cr">CR {b.cr}</span>}
-                </button>
+              {groups.map((g) => (
+                <div key={g.key}>
+                  <div className="be-group-head">
+                    <span>{g.label}</span>
+                    <span>{g.items.length}</span>
+                  </div>
+                  {g.items.map((b) => (
+                    <button
+                      key={b.id}
+                      className={`be-item ${b.id === selId ? 'on' : ''}`}
+                      onClick={() => setSelId(b.id)}
+                    >
+                      <span className="be-dot" style={{ background: b.color }} />
+                      <span className="be-name">{b.name}</span>
+                      {b.cr && <span className="be-cr">CR {b.cr}</span>}
+                    </button>
+                  ))}
+                </div>
               ))}
-              {filtered.length === 0 && <p className="empty">Trống.</p>}
+              {groups.length === 0 && <p className="empty">Trống.</p>}
             </div>
             <div className="be-list-actions">
               <button onClick={create}>+ Mới</button>

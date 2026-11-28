@@ -36,3 +36,4 @@ export * from './speakerCards.js';
 export * from './statePatch.js';
 export * from './settingReference.js';
 export * from './weaponMastery.js';
+export * from './bestiaryGroups.js';

@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { cameraFollow, forgetLastCamera, onCameraMessage, postCamera, requestCamera } from '../cameraSync.js';
 import {
+  groupBestiary,
   attackRangeOf,
   attackKindOf,
   addCurrency,
@@ -82,7 +83,7 @@ import { GodsBaneTokenBox } from './GodsBanePanel.js';
 import { RollModeToggle, type RollMode } from './SheetDock.js';
 import { setMapViewCenterGetter } from '../mapView.js';
 import { ZonePopup, ZONE_LIBRARY, type ZonePopupState } from './ZonePopup.js';
-import { ZONE_LAYOUTS } from '../campaignData.js';
+import { BESTIARY_GROUPS, ZONE_LAYOUTS } from '../campaignData.js';
 import { ExhaustionStepper } from './Exhaustion.js';
 import { DefenseLine, EffectChips, PcStatblock, StatDiamond } from './InspectorParts.js';
 import { LIGHT_ICON } from './LightChip.js';
@@ -3006,46 +3007,77 @@ function TokenInspector({
 function BestiaryPalette() {
   const bestiary = useStore((s) => s.room?.bestiary ?? []);
   const [q, setQ] = useState('');
+  // Which groups are expanded while not searching; groups marked `open` start expanded.
+  const [open, setOpen] = useState<Set<string>>(
+    () => new Set(BESTIARY_GROUPS.filter((g) => g.open).map((g) => g.key)),
+  );
   if (bestiary.length === 0) return null;
-  const term = q.trim().toLowerCase();
-  const list = bestiary
-    .filter((s) => !term || `${s.name} ${s.cr} ${(s.tags ?? []).join(' ')}`.toLowerCase().includes(term))
-    .slice(0, 40);
+  const searching = q.trim() !== '';
+  const groups = groupBestiary(bestiary, q, BESTIARY_GROUPS);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+  const toggle = (k: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
   return (
     <details className="mt-item" {...MT_GROUP}>
       <summary className="mt-btn" title={`Kéo quái vào bản đồ (${bestiary.length})`}>
         👹<span className="mt-count">{bestiary.length}</span>
       </summary>
       <div className="token-palette bestiary-palette mt-flyout">
-      <div className="mt-flyout-title">👹 Kéo quái vào bản đồ</div>
-      <input
-        className="bp-search"
-        value={q}
-        placeholder="Tìm quái… (giữ Shift khi thả = tung HP)"
-        onChange={(e) => setQ(e.target.value)}
-      />
-      <div className="tp-list">
-        {list.map((s) => (
-          <div
-            key={s.id}
-            className="tp-chip"
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('text/statblock-id', s.id);
-              e.dataTransfer.effectAllowed = 'copy';
-            }}
-            title={`Kéo "${s.name}" (CR ${s.cr || '?'}, AC ${s.ac}, HP ${s.maxHp}) vào bản đồ`}
-          >
-            <span
-              className="tp-dot"
-              style={s.imageUrl ? { background: `center/cover url(${s.imageUrl})` } : { background: s.color }}
-            />
-            {s.name}
-            {s.cr ? <small> · CR {s.cr}</small> : null}
-          </div>
-        ))}
-        {list.length === 0 && <span className="hint">Không thấy.</span>}
-      </div>
+        <div className="mt-flyout-title">👹 Kéo quái vào bản đồ</div>
+        <input
+          className="bp-search"
+          value={q}
+          placeholder="Tìm tên / nguồn / tag / cr 3…"
+          onChange={(e) => setQ(e.target.value)}
+        />
+        <div className="bp-hint">
+          {searching ? `${total} kết quả · ` : ''}giữ Shift khi thả = tung HP
+        </div>
+        <div className="bp-groups">
+          {groups.map((g) => {
+            const isOpen = searching || open.has(g.key);
+            return (
+              <div key={g.key} className={`bp-group ${isOpen ? 'open' : ''}`}>
+                <button className="bp-group-head" onClick={() => toggle(g.key)} disabled={searching}>
+                  <span className="bp-caret">{isOpen ? '▾' : '▸'}</span>
+                  {g.label}
+                  <span className="bp-group-n">{g.items.length}</span>
+                </button>
+                {isOpen && (
+                  <div className="bp-rows">
+                    {g.items.map((s) => (
+                      <div
+                        key={s.id}
+                        className="bp-row"
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/statblock-id', s.id);
+                          e.dataTransfer.effectAllowed = 'copy';
+                        }}
+                        title={`Kéo "${s.name}" (CR ${s.cr || '?'}, AC ${s.ac}, HP ${s.maxHp}) vào bản đồ`}
+                      >
+                        <span
+                          className="tp-dot"
+                          style={
+                            s.imageUrl ? { background: `center/cover url(${s.imageUrl})` } : { background: s.color }
+                          }
+                        />
+                        <span className="bp-name">{s.name}</span>
+                        {s.cr ? <span className="bp-cr">CR {s.cr}</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {groups.length === 0 && <span className="hint">Không thấy.</span>}
+        </div>
       </div>
     </details>
   );

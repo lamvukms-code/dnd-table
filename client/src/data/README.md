@@ -68,4 +68,5 @@ a missing file = empty list, and its topbar button hides itself.
 | `npcChapters.local.json` | `{ "<chapter tag>": "Pretty name" }` | NPC panel chapter filter |
 | `heirlooms.local.json` | `HeirloomDef[]` | **🏺 Bảo vật** panel (level-gated properties) |
 | `zones.local.json` | `{ code, name, readAloud?, dmNotes?, chapter? }[]` | zone tool search/auto-fill |
+| `bestiaryGroups.local.json` | `BestiaryGroupDef[]` (`{ key, label, tags?, sources?, open? }`, in display order) | Bestiary panel + drag-to-map palette groups |
 | `zoneLayouts.local.json` | `{ "<map file id>": { chapter, rooms: [{code,x,y,w,h}] } }` | auto-zones for a known map |
