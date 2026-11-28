@@ -2,6 +2,7 @@ import type { Ability, CharacterSheet, DamagePart, Defenses, SheetAction } from 
 import { emptyDefenses } from './types.js';
 import { derivedSubclassFeatures, type SubclassFeatureDef } from './classFeatures.js';
 import { SRD_FEATS_DRAFT, type FeatDef } from './feats.draft.js';
+import { findInvocationDraft, WARLOCK_INVOCATIONS_DRAFT, type InvocationDef } from './invocations.draft.js';
 import type { FeatureAction } from './featureActions.js';
 import { abilityMod, attackRangeOf, classLevelOf, isUnarmedAction } from './rules.js';
 import { resolveFeatureFormula } from './featureActions.js';
@@ -44,6 +45,41 @@ export interface FeaturePassive {
   rangeMultiplier?: number;
   /** Once per turn, a melee critical hit or dropping a creature to 0 HP grants one extra melee attack (reminder). */
   extraAttackOnCritOrKill?: boolean;
+  /** Only while the character is in this form (`sheet.activeForm`, set by a 'form' button); '*' = any form. */
+  whileForm?: string;
+  /** Advantage on Constitution saves to keep concentration. */
+  concentrationAdvantage?: boolean;
+  /** Pact weapons (items marked `pactWeapon`) may use CHA for attack and damage, and are always proficient. */
+  pactWeapon?: boolean;
+  /** Attacks per Attack action while a pact weapon is equipped (2 = an extra attack). */
+  pactExtraAttack?: number;
+  /** Damaging cantrips (not self-range, not multi-beam ones) are cast this many times in one action
+   *  instead of growing their dice: the character's cantrip tier (2 / 3 / 4 at levels 5 / 11 / 17). */
+  cantripVolley?: boolean;
+  /** Cantrip damage dice below this are rolled again once (the new roll stands). */
+  cantripRerollBelow?: number;
+  /** Ranged spell attacks: no disadvantage with an enemy within 5 ft. */
+  spellNoCloseRangedPenalty?: boolean;
+  /** Ranged spell attacks ignore half cover. */
+  spellIgnoreHalfCover?: boolean;
+  /** Ranged spell attacks: range multiplied by this. */
+  spellRangeMultiplier?: number;
+  /** A reaction the character may take when hit at by a melee attack (offered to its player). */
+  reaction?: FeatureReaction;
+}
+
+/** A reaction to being attacked in melee, answered by the player before the roll. */
+export interface FeatureReaction {
+  kind: 'counter' | 'stepAway';
+  /** counter: damage of the counter-attack (a spell attack against the attacker). */
+  dice?: string;
+  type?: string;
+  /** counter: a hit makes the attack fail and stuns the attacker until the end of its turn. */
+  stunOnHit?: boolean;
+  /** counter: the feature's use is spent only once the counter deals damage (else on use). */
+  spendUseOnDamage?: boolean;
+  /** stepAway: feet moved away (default 5). */
+  feet?: number;
 }
 
 export interface FeatureRider {
@@ -63,6 +99,14 @@ export interface FeatureRider {
   attackMod?: number;
   /** Only with a Heavy weapon the character is proficient with. */
   heavyOnly?: boolean;
+  /** Only with a pact weapon (item marked `pactWeapon`). */
+  pactWeaponOnly?: boolean;
+  /** Arming spends one Pact Magic slot (the dice may use `pslot1` = that slot's level + 1). */
+  spendsPactSlot?: boolean;
+  /** Spell scope: cantrips only. */
+  cantripOnly?: boolean;
+  /** Only while the character is in this form ('*' = any form). */
+  whileForm?: string;
 }
 
 /** A feat from the DM's local data: the picker entry plus optional mechanics (like a subclass feature). */
@@ -93,6 +137,40 @@ export function registerFeatDefs(defs: LocalFeatDef[]): void {
   for (const f of defs) if (!have.has(f.name.toLowerCase())) SRD_FEATS_DRAFT.push(f);
 }
 
+/** Eldritch Invocations with mechanics: the built-in list plus the DM's local ones (which also join the picker). */
+export function registerInvocationDefs(defs: InvocationDef[]): void {
+  const have = new Set(WARLOCK_INVOCATIONS_DRAFT.map((f) => f.name.toLowerCase()));
+  for (const d of defs) {
+    const i = WARLOCK_INVOCATIONS_DRAFT.findIndex((x) => x.name.toLowerCase() === d.name.toLowerCase());
+    if (i >= 0) WARLOCK_INVOCATIONS_DRAFT[i] = { ...WARLOCK_INVOCATIONS_DRAFT[i], ...d };
+    else if (!have.has(d.name.toLowerCase())) WARLOCK_INVOCATIONS_DRAFT.push(d);
+  }
+}
+
+/** The sheet's invocations (features of that name) that carry mechanics, shaped like Warlock features. */
+export function invocationFeatureDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
+  const out: SubclassFeatureDef[] = [];
+  const seen = new Set<string>();
+  for (const f of sheet.features ?? []) {
+    const d = findInvocationDraft(f.name);
+    if (!d || seen.has(d.id) || (!d.passive && !d.actions && !d.uses && !d.forms)) continue;
+    seen.add(d.id);
+    out.push({ id: `inv:${d.id}`, class: 'warlock', subclass: 'invocation', level: 0, name: `${d.name} (invocation)`, description: d.guidance, passive: d.passive, actions: d.actions, uses: d.uses });
+    // per-form passives (a summoned weapon's modes): one entry each, active only in that form
+    for (const [form, p] of Object.entries(d.forms ?? {})) {
+      const { note, ...passive } = p;
+      out.push({ id: `inv:${d.id}:${form}`, class: 'warlock', subclass: 'invocation', level: 0, name: `${d.name} · ${form}`, description: note ?? '', passive: { ...passive, whileForm: form } });
+    }
+  }
+  return out;
+}
+
+/** Does the sheet have this invocation (a feature of that name)? */
+export function hasInvocation(sheet: CharacterSheet | undefined, name: string): boolean {
+  const n = name.trim().toLowerCase();
+  return !!sheet && (sheet.features ?? []).some((f) => f.name.trim().toLowerCase() === n);
+}
+
 export function localFeatDef(name: string): LocalFeatDef | undefined {
   const n = name.trim().toLowerCase();
   return FEATS.find((f) => f.name.toLowerCase() === n);
@@ -101,8 +179,9 @@ export function localFeatDef(name: string): LocalFeatDef | undefined {
 /** The sheet's local feats that carry mechanics, shaped like subclass features (id "feat:<id>",
  *  no class: `lvl` in formulas = character level) so the same UI / rest / rider code handles them. */
 export function featFeatureDefs(sheet: CharacterSheet): SubclassFeatureDef[] {
-  if (!FEATS.length) return [];
-  const out: SubclassFeatureDef[] = [];
+  // invocations with mechanics ride along (same UI / rest / rider code)
+  const out: SubclassFeatureDef[] = invocationFeatureDefs(sheet);
+  if (!FEATS.length) return out;
   for (const f of sheet.feats ?? []) {
     const d = localFeatDef(f.name);
     if (!d || (!d.passive && !d.actions && !d.uses)) continue;
@@ -131,8 +210,15 @@ export function activePassives(sheet: CharacterSheet): ActivePassive[] {
     : [];
   const feats = featFeatureDefs(sheet)
     .filter((f) => f.passive)
-    .map((f) => ({ feature: f, passive: f.passive!, classLevel: sheet.level }));
-  return [...sub, ...feats];
+    .map((f) => ({ feature: f, passive: f.passive!, classLevel: f.class ? classLevelOf(sheet, f.class) || sheet.level : sheet.level }));
+  return [...sub, ...feats].filter((p) => formOk(sheet, p.passive.whileForm));
+}
+
+/** A `whileForm` condition against the sheet's current form ('*' = any form). */
+export function formOk(sheet: CharacterSheet, whileForm: string | undefined): boolean {
+  if (!whileForm) return true;
+  const cur = sheet.activeForm ?? '';
+  return whileForm === '*' ? !!cur : cur.toLowerCase() === whileForm.toLowerCase();
 }
 
 /** Range multiplier for the sheet's ranged weapon attacks (1 = none). */
@@ -312,6 +398,9 @@ function riderFits(
   sheet?: CharacterSheet,
 ): boolean {
   if (r.heavyOnly && (kind !== 'weapon' || !sheet || !isProficientHeavy(sheet, action))) return false;
+  if (r.pactWeaponOnly && (kind !== 'weapon' || !sheet || !isPactWeaponAction(sheet, action))) return false;
+  if (r.cantripOnly && action.id !== 'cantrip') return false;
+  if (r.whileForm && (!sheet || !formOk(sheet, r.whileForm))) return false;
   const scope = r.scope ?? 'weapon';
   if (scope === 'any') return true;
   if (scope === 'spell') return kind === 'spell';
@@ -320,6 +409,12 @@ function riderFits(
   if (scope === 'melee') return attackRangeOf(action) === 'melee';
   if (scope === 'ranged') return attackRangeOf(action) === 'ranged';
   return true;
+}
+
+/** Is this weapon row (or off-hand row) made with a pact weapon? */
+export function isPactWeaponAction(sheet: CharacterSheet, action: Pick<SheetAction, 'id'>): boolean {
+  const m = /^(?:weapon|offhand):(.+)$/.exec(action.id);
+  return !!m && sheet.inventory.some((it) => it.id === m[1] && it.pactWeapon);
 }
 
 /** Damage parts the sheet's feature riders add to one attack: standing ones always, armed ones when armed. */
@@ -345,4 +440,25 @@ export function featureAttackMod(
   return featureRiders(sheet)
     .filter((r) => r.rider.armed && r.rider.attackMod && armed.has(r.id) && (!r.rider.whileRaging || !!sheet.raging) && riderFits(r.rider, kind, action, sheet))
     .reduce((n, r) => n + (r.rider.attackMod ?? 0), 0);
+}
+
+/** Any active passive with this flag set (pact weapon, concentration advantage, spell-attack tweaks…). */
+export function passiveHas(
+  sheet: CharacterSheet | undefined,
+  key: 'pactWeapon' | 'concentrationAdvantage' | 'cantripVolley' | 'spellNoCloseRangedPenalty' | 'spellIgnoreHalfCover',
+): boolean {
+  return !!sheet && activePassives(sheet).some((p) => !!p.passive[key]);
+}
+
+/** Highest number a passive gives for this key (attacks with a pact weapon, reroll threshold, range ×). */
+export function passiveMax(sheet: CharacterSheet | undefined, key: 'pactExtraAttack' | 'cantripRerollBelow' | 'spellRangeMultiplier'): number {
+  if (!sheet) return 0;
+  return activePassives(sheet).reduce((m, p) => Math.max(m, p.passive[key] ?? 0), 0);
+}
+
+/** The reactions to melee attacks the sheet has now, with the feature they come from. */
+export function passiveReactions(sheet: CharacterSheet): { featureId: string; name: string; reaction: FeatureReaction; classKey: string; uses?: SubclassFeatureDef['uses'] }[] {
+  return activePassives(sheet)
+    .filter((p) => p.passive.reaction)
+    .map((p) => ({ featureId: p.feature.id, name: p.feature.name.replace(/\s*\((invocation|feat)\)$/, ''), reaction: p.passive.reaction!, classKey: p.feature.class, uses: p.feature.uses }));
 }

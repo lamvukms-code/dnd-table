@@ -2,6 +2,7 @@ import type { ActiveEffect, CharacterSheet, ClassEntry, SheetAction, Spell, Turn
 import { abilityMod, casterTypeOf, castingClassesOf, classLevelOf, sheetClasses } from './rules.js';
 import { customExtraAttack } from './classDefaults.js';
 import { jaegerBloodFrenzy } from './jaeger.js';
+import { passiveMax } from './featurePassives.js';
 
 // ---------------------------------------------------------------------------
 // Action economy (Action / Bonus Action / Reaction) + Extra Attack
@@ -37,6 +38,9 @@ export function attacksPerAction(sheet: CharacterSheet): number {
     }
     for (const [lvl, n] of customExtraAttack(name)) if (c.level >= lvl && n > best) best = n;
   }
+  // Thirsting / Devouring Blade: extra attacks while a pact weapon is in hand
+  const pact = passiveMax(sheet, 'pactExtraAttack');
+  if (pact > best && sheet.inventory.some((it) => it.pactWeapon && it.equipped)) best = pact;
   // Sanguine Chapter 17 (Blood Frenzy): three attacks while bloodied.
   if (jaegerBloodFrenzy(sheet) && best < 3) best = 3;
   return best;

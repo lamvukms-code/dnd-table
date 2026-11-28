@@ -1,5 +1,5 @@
 import type { CharacterSheet } from './types.js';
-import type { FeatureAction } from './featureActions.js';
+import { resolveFeatureFormula, type FeatureAction } from './featureActions.js';
 import type { FeaturePassive } from './featurePassives.js';
 import { barbarianLevel, classLevelOf, druidLevel, monkLevel, rogueLevel, warlockLevel } from './rules.js';
 
@@ -46,7 +46,8 @@ export interface SubclassFeatureDef {
   name: string;
   description: string;
   /** A limited-use pool this feature grants (rendered as a pip tracker). */
-  uses?: { max: number | 'cha-mod' | 'wis-mod' | 'con-mod' | 'str-mod' | 'int-mod' | 'dex-mod' | 'wis-mod+1' | 'con-mod+1' | 'prof'; recharge: 'short' | 'long' };
+  /** `max`: a number, 'cha-mod' (at least 1), 'prof', or a feature formula ("2*mod:cha", at least 1). */
+  uses?: { max: number | string; recharge: 'short' | 'long' };
   /** Buttons this feature puts on the sheet (see featureActions.ts). */
   actions?: FeatureAction[];
   /** Always-on mechanics: AC, speed, resistances, extra damage… (see featurePassives.ts). */
@@ -602,5 +603,6 @@ export function subclassUsesMax(
   const mod = (a: 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha') => Math.floor((sheet.abilities[a] - 10) / 2);
   const m = /^(str|dex|con|int|wis|cha)-mod(\+1)?$/.exec(spec);
   if (m) return Math.max(1, mod(m[1] as 'str') + (m[2] ? 1 : 0));
-  return sheet.proficiencyBonus;
+  if (spec === 'prof') return sheet.proficiencyBonus;
+  return Math.max(1, Number(resolveFeatureFormula(spec, sheet)) || 0);
 }

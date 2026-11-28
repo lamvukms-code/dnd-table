@@ -340,3 +340,21 @@ export function resolveAttack(
 export function minDieBonus(faces: number[], min: number): number {
   return faces.reduce((n, f) => n + (f > 0 && f < min ? min - f : 0), 0);
 }
+
+/**
+ * Re-roll once every die face below `below` (the new roll stands). `notation` gives the die sizes,
+ * in the same order as `faces` (its dice terms, as rolled). Returns the change to the total and the new faces.
+ */
+export function rerollLowDice(notation: string, faces: number[], below: number, rng: Rng = defaultRng): { delta: number; faces: number[] } {
+  const sides: number[] = [];
+  for (const t of parseTerms(notation)) if (t.kind === 'dice') for (let i = 0; i < (t.count ?? 0); i++) sides.push(t.sides ?? 0);
+  let delta = 0;
+  const out = faces.map((f, i) => {
+    const s = sides[i];
+    if (!s || f <= 0 || f >= below) return f;
+    const n = 1 + Math.floor(rng() * s);
+    delta += n - f;
+    return n;
+  });
+  return { delta, faces: out };
+}

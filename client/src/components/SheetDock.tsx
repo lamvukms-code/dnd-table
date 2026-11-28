@@ -2358,6 +2358,7 @@ function SubclassFeatures({ draft, commit, targetId }: EditorCtx & { targetId?: 
                     featureName={f.name}
                     actions={f.actions}
                     targetId={targetId}
+                    setForm={(form) => commit({ ...draft, activeForm: form ?? null })}
                     onWeaponFired={() => {
                       if (!(draft.featureRidersArmed ?? []).length && !draft.damageRiders.some((r) => r.once && r.enabled)) return;
                       commit({

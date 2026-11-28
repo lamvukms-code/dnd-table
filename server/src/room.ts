@@ -46,6 +46,12 @@ import {
   abilityMod as abilityModOf,
   diceFacesOf,
   minDieBonus,
+  rerollLowDice,
+  passiveHas,
+  passiveReactions,
+  subclassUsesMax,
+  resolveFeatureFormula,
+  spellAttackBonus,
   hasStyle,
   shieldEquipped,
   expendJaegerMomentum,
@@ -98,6 +104,7 @@ import {
   type InitiativeEntry,
   type MultiDamageOutcome,
   type Participant,
+  type ReactPrompt,
   type RollLogEntry,
   type RollResult,
   type RoomState,
@@ -1151,6 +1158,12 @@ export class Room {
         raw = r.total;
         mine = diceFacesOf(r);
       }
+      // low dice rolled again once, the new roll stands
+      if (p.rerollBelow) {
+        const rr = rerollLowDice(n, mine, p.rerollBelow);
+        raw += rr.delta;
+        mine = rr.faces;
+      }
       faces.push(...mine);
       // Great Weapon Fighting: a 1 or 2 on a damage die counts as 3
       if (p.minDie) raw += minDieBonus(mine, p.minDie);
@@ -1282,7 +1295,9 @@ export class Room {
   private maybeBreakConcentration(token: Token, damage: number): void {
     if (!token.concentration || damage <= 0) return;
     const dc = concentrationDc(damage);
-    const { d20, total, pass: kept, bonus } = this.rollTokenSave(token, 'con', dc);
+    const sheet = this.linkedSheet(token);
+    const adv = passiveHas(sheet, 'concentrationAdvantage') ? 'advantage' : undefined;
+    const { d20, total, pass: kept, bonus } = this.rollTokenSave(token, 'con', dc, false, undefined, adv);
     this.pushRoll({
       id: nanoid(8),
       ts: Date.now(),
@@ -1938,11 +1953,37 @@ export class Room {
         else if (hasStyle(sheet, 'interception') && (shield || weapon)) styles.push({ r, sheet, style: 'interception' });
       }
     }
-    if (!found.length && !styles.length) return false;
+    // the target's own reactions to a melee attack (a counter-attack, a step away), from its features
+    const own: { featureId: string; name: string; style: 'counter' | 'stepAway'; sheet: CharacterSheet }[] = [];
+    const tSheet = this.linkedSheet(target);
+    if (tSheet && attacker && action.attackRange === 'melee' && this.canReact(target, {})) {
+      for (const r of passiveReactions(tSheet)) {
+        const max = r.uses ? subclassUsesMax(r.uses.max, tSheet) : Infinity;
+        if ((tSheet.subclassUses?.[r.featureId] ?? 0) >= max) continue;
+        own.push({ featureId: r.featureId, name: r.name, style: r.reaction.kind, sheet: tSheet });
+      }
+    }
+    if (!found.length && !styles.length && !own.length) return false;
     const holdId = nanoid(8);
     this.heldAttacks.set(holdId, { actor, action });
     const list = (this.state.reactPrompts ??= []);
     const by = attacker?.label ?? 'Đòn đánh';
+    for (const o of own) {
+      list.push({
+        id: nanoid(8),
+        tokenId: target.id,
+        tokenName: o.sheet.name || target.label,
+        actionId: o.featureId,
+        actionName: o.name,
+        triggerTokenId: attacker?.id,
+        triggerName: attacker?.label,
+        why: o.style === 'counter' ? `${by} đang đánh cận chiến bạn — phản đòn trước khi đòn trúng` : `${by} đang đánh cận chiến bạn — lùi ra trước khi đòn trúng`,
+        holdsAttack: holdId,
+        style: o.style,
+        ownerId: o.sheet.ownerId,
+        featureId: o.featureId,
+      });
+    }
     for (const { r, sheet, style } of styles) {
       list.push({
         id: nanoid(8),
@@ -1974,8 +2015,63 @@ export class Room {
         holdsAttack: holdId,
       });
     }
-    this.systemLog(`⏸ ${action.label || 'Đòn đánh'}: chờ ${styles.length && !found.length ? 'người chơi' : 'DM'} quyết định reaction trước khi tung`);
+    this.systemLog(`⏸ ${action.label || 'Đòn đánh'}: chờ ${(styles.length || own.length) && !found.length ? 'người chơi' : 'DM'} quyết định reaction trước khi tung`);
     return true;
+  }
+
+  /**
+   * A character's own reaction to a melee attack, taken before the roll. Returns why the attack
+   * now fails (it is then dropped), or null when it still goes ahead.
+   */
+  private ownReaction(p: ReactPrompt, me: Token, held: { action: Extract<ClientAction, { t: 'attack' }> }): string | null {
+    const sheet = this.linkedSheet(me);
+    const attacker = held.action.attackerTokenId ? this.state.tokens.find((t) => t.id === held.action.attackerTokenId) : undefined;
+    const r = sheet ? passiveReactions(sheet).find((x) => x.featureId === p.featureId) : undefined;
+    if (!sheet || !attacker || !r) return null;
+    const spendUse = () => {
+      if (r.uses) sheet.subclassUses = { ...(sheet.subclassUses ?? {}), [r.featureId]: (sheet.subclassUses?.[r.featureId] ?? 0) + 1 };
+    };
+    this.spendReaction(me, {});
+    if (r.reaction.kind === 'stepAway') {
+      spendUse();
+      const fm = this.forceMove(me, attacker, 'push', r.reaction.feet ?? 5);
+      const out = edgeFeet(attacker, tokenSpan(attacker), me, tokenSpan(me)) > 5;
+      this.systemLog(`💨 ${sheet.name} · ${r.name}: lùi ${fm.feet} ft (không bị đòn cơ hội)${out ? ' — ra khỏi tầm với, đòn hụt' : ''}`);
+      return out ? `${sheet.name} đã lùi ra khỏi tầm (${r.name})` : null;
+    }
+    // counter-attack: a spell attack against the attacker
+    if (!r.reaction.spendUseOnDamage) spendUse();
+    const bonus = spellAttackBonus(sheet) ?? sheet.proficiencyBonus;
+    const roll = rollNotation(`1d20+${bonus}`);
+    const res = resolveAttack(roll, this.tokenAc(attacker));
+    let note = `${sheet.name} · ${r.name}: đánh trả ${roll.total} vs AC ${this.tokenAc(attacker)} — ${res.hit ? 'TRÚNG' : 'trượt'}`;
+    if (res.hit && r.reaction.dice) {
+      const dice = resolveFeatureFormula(r.reaction.dice, sheet, r.classKey);
+      const out = resolveDamageParts([{ part: { dice, type: r.reaction.type ?? 'force' }, raw: rollNotation(dice).total }], this.effectiveDefenses(attacker));
+      const took = this.applyDamage(attacker, out.totalFinal, { types: [r.reaction.type ?? 'force'] });
+      if (took.applied + took.absorbed > 0 && r.reaction.spendUseOnDamage) spendUse();
+      this.maybeBreakConcentration(attacker, out.totalFinal);
+      note += ` · ${out.totalFinal} sát thương ${r.reaction.type ?? 'force'}`;
+    }
+    if (res.hit && r.reaction.stunOnHit) {
+      attacker.effects = [...(attacker.effects ?? []), { id: nanoid(8), name: `Choáng (${r.name})`, condition: 'stunned', endsAfterOwnTurns: 1, note: 'Đến hết lượt hiện tại của nó' }];
+      note += ` · ${attacker.label} bị Stunned, đòn của nó thất bại`;
+    }
+    this.systemLog(`⚔ ${note}`);
+    return res.hit && r.reaction.stunOnHit ? `${attacker.label} bị phản đòn (${r.name})` : null;
+  }
+
+  /** A parked attack that no longer happens (the target stepped away, a counter stopped it). */
+  private cancelHeldAttack(holdId: string, why: string): void {
+    const held = this.heldAttacks.get(holdId);
+    this.heldAttacks.delete(holdId);
+    this.state.reactPrompts = (this.state.reactPrompts ?? []).filter((p) => p.holdsAttack !== holdId);
+    this.systemLog(`✖ ${held?.action.label || 'Đòn đánh'}: không thành — ${why}`);
+    while (this.attackQueue.length && !this.heldAttacks.size) {
+      const next = this.attackQueue.shift()!;
+      const e = this.apply(next.actor, next.action);
+      if (e) this.systemLog(`⚠ Đòn xếp hàng không chạy được: ${e}`);
+    }
   }
 
   /** Every prompt of a hold answered: run the parked attack (with disadvantage if a reaction imposed it). */
@@ -2603,7 +2699,14 @@ export class Room {
           this.state.reactPrompts = list.filter((x) => x.id !== p.id);
           const r = this.state.tokens.find((t) => t.id === p.tokenId);
           const held = p.holdsAttack ? this.heldAttacks.get(p.holdsAttack) : undefined;
-          if (action.use && r && held && this.canReact(r, {})) {
+          if (action.use && r && held && this.canReact(r, {}) && (p.style === 'counter' || p.style === 'stepAway')) {
+            const cancelled = this.ownReaction(p, r, held);
+            if (cancelled && p.holdsAttack) {
+              this.cancelHeldAttack(p.holdsAttack, cancelled);
+              this.touch();
+              break;
+            }
+          } else if (action.use && r && held && this.canReact(r, {})) {
             if (p.style === 'protection') {
               this.spendReaction(r, {});
               held.dis = `${p.tokenName} · Protection`;
@@ -2951,10 +3054,13 @@ export class Room {
         const baseAc = this.tokenAc(target);
         const rawCover = target.cover ?? 'none';
         // cover-reducing feat: ranged WEAPON attacks ignore half cover, three-quarters counts as half
+        const atkSheetForCover = action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : undefined;
         const cover =
           action.attackRange === 'ranged' && action.attackKind !== 'spell'
-            ? passiveRangedCover(action.attackerSheetId ? this.state.sheets.find((s) => s.id === action.attackerSheetId) : undefined, rawCover)
-            : rawCover;
+            ? passiveRangedCover(atkSheetForCover, rawCover)
+            : action.attackRange === 'ranged' && action.attackKind === 'spell' && rawCover === 'half' && passiveHas(atkSheetForCover, 'spellIgnoreHalfCover')
+              ? 'none'
+              : rawCover;
         const ac = baseAc + coverAcBonus(cover);
         let attackRoll: RollResult;
         if (action.external) {
@@ -3013,7 +3119,9 @@ export class Room {
         // Monster mechanics on this attack: a wider crit range, or an automatic crit (target grappled by it).
         const atkMechs = this.mechOf(attackerTok);
         const nat = attackRoll.d20?.natural;
-        const critFrom = atkMechs.length ? critMin(atkMechs, action.actionName) : 20;
+        // a wider crit range: monster mechanics, or an effect on the attacker (a minute of 19–20…)
+        const fxCrit = Math.min(20, ...(attackerTok?.effects ?? []).map((e) => e.critMin ?? 20));
+        const critFrom = Math.min(atkMechs.length ? critMin(atkMechs, action.actionName) : 20, fxCrit);
         if (nat && nat < 20 && nat >= critFrom) {
           Object.assign(res, { hit: true, crit: true, fumble: false });
           if (action.external) action.external = { ...action.external, partTotals: undefined }; // re-roll as a crit

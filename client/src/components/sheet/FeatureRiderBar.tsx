@@ -41,8 +41,14 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
   const setRiders = (r: DamageRider[]) => commit({ ...sheet, damageRiders: r });
   const upd = (id: string, patch: Partial<DamageRider>) => setRiders(mine.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
-  function toggleFeat(id: string, featureId: string, spendsUse?: boolean) {
+  function toggleFeat(id: string, featureId: string, spendsUse?: boolean, spendsPactSlot?: boolean) {
     const on = armed.has(id);
+    // a smite fed by a Pact Magic slot: arming spends one, un-arming before the swing gives it back
+    let pactSlots = sheet.pactSlots;
+    if (spendsPactSlot && pactSlots) {
+      if (!on && pactSlots.used >= pactSlots.max && !window.confirm('Hết ô Pact Magic. Vẫn bật?')) return;
+      pactSlots = { ...pactSlots, used: Math.max(0, Math.min(pactSlots.max, pactSlots.used + (on ? -1 : 1))) };
+    }
     const next = on ? [...armed].filter((x) => x !== id) : [...armed, id];
     let uses = used;
     if (spendsUse) {
@@ -53,7 +59,7 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
       // arming spends a use, un-arming before the swing gives it back
       uses = { ...used, [featureId]: Math.max(0, u + (on ? -1 : 1)) };
     }
-    commit({ ...sheet, featureRidersArmed: next, subclassUses: uses });
+    commit({ ...sheet, featureRidersArmed: next, subclassUses: uses, ...(spendsPactSlot ? { pactSlots } : {}) });
   }
 
   const typeText = (t: string) => (t && t !== 'same' ? ` ${t}` : '');
@@ -92,7 +98,7 @@ export function FeatureRiderBar({ sheet, commit }: { sheet: CharacterSheet; comm
               key={r.id}
               className={`cf-btn fr-chip ${on ? 'on' : ''}`}
               title={`Năng lực, 1 lần/lượt: bật trước khi tung ${cond}${r.rider.spendsUse ? ' (tốn 1 lượt dùng)' : ''}`}
-              onClick={() => toggleFeat(r.id, r.featureId, r.rider.spendsUse)}
+              onClick={() => toggleFeat(r.id, r.featureId, r.rider.spendsUse, r.rider.spendsPactSlot)}
             >
               ⚔ {r.label}
               {r.rider.attackMod ? ` ${r.rider.attackMod > 0 ? '+' : ''}${r.rider.attackMod} trúng /` : ''} +{r.dice}

@@ -1,9 +1,10 @@
-import { registerExtraSpells, registerFeatDefs, registerMonsterMechanics, type CantripDef, type LocalFeatDef, type MonsterMechanic } from '@dnd-table/shared';
+import { registerExtraSpells, registerFeatDefs, registerInvocationDefs, registerMonsterMechanics, type CantripDef, type InvocationDef, type LocalFeatDef, type MonsterMechanic } from '@dnd-table/shared';
 
 /**
  * A setting's own spells and feats (published, non-SRD content) live in git-ignored local files:
  *   client/src/data/spells.local.json  — CantripDef[] (same shape as the SRD spell DB entries)
  *   client/src/data/feats.local.json   — LocalFeatDef[] (FeatDef + optional passive / actions / uses)
+ *   client/src/data/invocations.local.json — InvocationDef[] (a setting's pact boons / invocations, with mechanics)
  * The repo ships neither. Registered once at startup, before anything looks a spell or feat up.
  */
 const spellMods = import.meta.glob('./data/spells.local.json', { eager: true });
@@ -17,6 +18,7 @@ const arr = <T,>(mods: Record<string, unknown>): T[] =>
 
 registerExtraSpells(arr<CantripDef>(spellMods));
 registerFeatDefs(arr<LocalFeatDef>(featMods));
+registerInvocationDefs(arr<InvocationDef>(import.meta.glob('./data/invocations.local.json', { eager: true })));
 
 // Hand-written monster mechanics per stat block name (client/src/data/monsterMechanics.local.json).
 const mechMods = import.meta.glob('./data/monsterMechanics.local.json', { eager: true });

@@ -25,6 +25,7 @@ import {
   SRD_WEAPONS,
   masterySlots,
   weaponInfo,
+  passiveHas,
 } from '@dnd-table/shared';
 import { useStore } from '../../store.js';
 import { nanoIdish } from '../../util.js';
@@ -302,6 +303,12 @@ export function EquipmentTab({ draft, commit }: EditorCtx) {
                     Heavy
                   </label>
                   <WeaponMasteryPicker draft={draft} commit={commit} item={it} onKind={(k) => setItem(it.id, { weaponKind: k })} />
+                  {(it.pactWeapon || passiveHas(draft, 'pactWeapon')) && (
+                    <label className="chk" title="Pact weapon (Pact of the Blade): đánh và sát thương dùng CHA nếu cao hơn, luôn thành thạo; Eldritch Smite / Lifedrinker / Thirsting Blade chỉ áp với vũ khí này.">
+                      <input type="checkbox" checked={!!it.pactWeapon} onChange={(e) => setItem(it.id, { pactWeapon: e.target.checked || undefined })} />
+                      Pact weapon
+                    </label>
+                  )}
                   <label>
                     +đánh phụ
                     <input

@@ -70,6 +70,8 @@ export interface DamagePart {
   traits?: WeaponTrait[];
   /** Great Weapon Fighting: a 1 or 2 on a damage die counts as this (3). */
   minDie?: number;
+  /** Damage dice below this are rolled again once (the new roll stands). */
+  rerollBelow?: number;
 }
 
 /**
@@ -285,6 +287,8 @@ export interface InventoryItem {
   heavy?: boolean;
   /** Which SRD weapon this is (properties + mastery), e.g. "longsword". Unset = found from the name. */
   weaponKind?: string;
+  /** Pact weapon (Pact of the Blade): CHA for attack/damage if better, always proficient. */
+  pactWeapon?: boolean;
   attackBonusMisc?: number; // magic / misc to hit
   damageBonusMisc?: number; // magic / misc to damage
 
@@ -393,6 +397,8 @@ export interface CharacterSheet {
   feats: Feat[];
   /** Weapon kinds (SRD weapon keys, e.g. "longsword") whose mastery this character uses. */
   weaponMasteries?: string[];
+  /** A form a feature put the character in (a summoned weapon's mode…): passives with `whileForm` need it. */
+  activeForm?: string | null;
   features: Feature[];
   inventory: InventoryItem[];
   currency: Currency;
@@ -596,6 +602,10 @@ export interface ActiveEffect {
   consumeOnAttack?: boolean;
   /** The bearer's walking speed is lower by this many feet (Slow mastery; the biggest one counts). */
   speedPenalty?: number;
+  /** The bearer's own rolls of these kinds have advantage while it lasts (aiming…). */
+  rollAdvantage?: 'attack'[];
+  /** The bearer's attacks score a critical hit on this natural roll or higher (e.g. 19). */
+  critMin?: number;
   /** Attacks against the bearer have disadvantage (Dodge; not while it is incapacitated). */
   attackersDisadvantage?: boolean;
   /** The next attack against the bearer by someone other than the source has advantage, then it clears (Help). */
@@ -1340,9 +1350,11 @@ export interface ReactPrompt {
   /** The attack that triggered it is parked until the DM answers (a reaction that must come before
    *  the roll, e.g. "impose disadvantage on the attack roll"). Same id on every prompt of one hold. */
   holdsAttack?: string;
-  /** A character's Fighting Style reaction (Protection / Interception): its owner answers it. */
-  style?: 'protection' | 'interception';
+  /** A character's own reaction (Protection / Interception, a counter-attack, a step away): its owner answers it. */
+  style?: 'protection' | 'interception' | 'counter' | 'stepAway';
   ownerId?: string;
+  /** The feature (`subclassUses` key) whose pool the reaction spends. */
+  featureId?: string;
 }
 
 /** The caster picks where a creature lands (within `maxFeet` of `anchorTokenId`). */

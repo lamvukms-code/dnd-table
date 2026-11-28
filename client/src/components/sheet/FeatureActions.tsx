@@ -25,10 +25,12 @@ interface Props {
   spendUse?: () => boolean;
   /** A weapon-style feature attack was rolled (armed riders it carried are now spent). */
   onWeaponFired?: () => void;
+  /** Put the character in a form (or out of it: undefined) — a 'form' button. */
+  setForm?: (form: string | undefined) => void;
 }
 
 /** Buttons a feature declares in local data, run through the app's usual attack / save / area flows. */
-export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, onWeaponFired }: Props) {
+export function FeatureActions({ sheet, classKey, featureName, actions, targetId, spendUse, onWeaponFired, setForm }: Props) {
   const send = useStore((s) => s.send);
   const attackRoll = useStore((s) => s.attackRoll);
   const damageRoll = useStore((s) => s.damageRoll);
@@ -40,6 +42,13 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
   if (!actions.length) return null;
 
   function run(a: FeatureAction) {
+    if (a.kind === 'form') {
+      const on = !!a.form && (sheet.activeForm ?? '').toLowerCase() === a.form.toLowerCase();
+      if (!on && (a.spendsUse ?? true) && spendUse && !spendUse()) return;
+      if (!on && a.cost && !spendEconomy(sheet.tokenId, a.cost)) return;
+      setForm?.(on ? undefined : a.form);
+      return;
+    }
     const self = sheet.tokenId;
     const tgt = a.target === 'self' ? self : targetId || undefined;
     const needsTarget = a.kind !== 'summon' && (a.kind === 'attack' || a.kind === 'damage' || a.kind === 'save' || ((a.kind === 'effect' || a.kind === 'heal' || a.kind === 'tempHp') && a.target !== 'self'));
@@ -184,7 +193,7 @@ export function FeatureActions({ sheet, classKey, featureName, actions, targetId
           title={[a.cost ? `tốn ${a.cost === 'action' ? 'action' : a.cost === 'bonus' ? 'bonus action' : 'reaction'}` : '', featureActionDice(a, sheet, classKey) ? featureActionDice(a, sheet, classKey) + (a.type ? ` ${a.type}` : '') : '', a.summon ? `AC ${resolveFeatureNumber(a.summon.ac, sheet, classKey)}, HP ${resolveFeatureNumber(a.summon.hp, sheet, classKey)}` : '', a.save ? `${a.save.ability.toUpperCase()} save DC ${resolveFeatureDc(a.save.dc, sheet)}` : ''].filter(Boolean).join(' · ')}
           onClick={() => run(a)}
         >
-          {a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : a.kind === 'summon' ? '👼' : '✦'} {a.label}
+          {a.kind === 'form' ? ((sheet.activeForm ?? '').toLowerCase() === (a.form ?? '').toLowerCase() ? '◉' : '○') : a.kind === 'attack' ? '⚔' : a.kind === 'aoe' ? '🔺' : a.kind === 'save' ? '🎯' : a.kind === 'heal' ? '✚' : a.kind === 'tempHp' ? '🛡' : a.kind === 'summon' ? '👼' : '✦'} {a.label}
         </button>
       ))}
     </span>

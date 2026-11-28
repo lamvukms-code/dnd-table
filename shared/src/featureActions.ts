@@ -12,7 +12,9 @@ import { abilityMod, classLevelOf, spellAttackBonus, spellSaveDc } from './rules
  */
 export interface FeatureAction {
   label: string;
-  kind: 'attack' | 'damage' | 'save' | 'aoe' | 'effect' | 'tempHp' | 'heal' | 'summon';
+  kind: 'attack' | 'damage' | 'save' | 'aoe' | 'effect' | 'tempHp' | 'heal' | 'summon' | 'form';
+  /** form: the form this button puts the character in (`sheet.activeForm`); passives with `whileForm` follow it. */
+  form?: string;
   /** Action economy spent (default: none). */
   cost?: 'action' | 'bonus' | 'reaction';
   /** Spend one use of the feature's own `uses` pool (default true when the feature has one). */
@@ -63,12 +65,24 @@ export interface FeatureEffect {
   saveAdvantage?: Ability[];
   /** Ends when the bearer drops to 0 HP or is incapacitated. */
   endsWhenDown?: boolean;
+  /** The bearer's attack rolls have advantage while it lasts. */
+  rollAdvantage?: 'attack'[];
+  /** Walking speed lower by this many feet (999 = speed 0). */
+  speedPenalty?: number;
+  /** The bearer's attacks crit on this natural roll or higher. */
+  critMin?: number;
+  /** Ends at the end of the bearer's current turn. */
+  untilEndOfTurn?: boolean;
+  /** Ends when the character who applied it starts its next turn. */
+  untilYourNextTurn?: boolean;
 }
 
 const ABILITIES: Ability[] = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 
 function termValue(term: string, sheet: CharacterSheet, classKey?: string): number | null {
   if (term === 'pb') return sheet.proficiencyBonus;
+  // the Pact Magic slot level + 1 (a smite that adds 1 die + 1 per slot level)
+  if (term === 'pslot1') return (sheet.pactSlots?.level ?? 1) + 1;
   if (term === 'lvl') return classKey ? classLevelOf(sheet, classKey) || sheet.level : sheet.level;
   const m = /^mod:(str|dex|con|int|wis|cha)$/.exec(term);
   return m ? abilityMod(sheet.abilities[m[1] as Ability]) : null;
@@ -77,9 +91,9 @@ function termValue(term: string, sheet: CharacterSheet, classKey?: string): numb
 /** Resolve a feature formula into plain dice notation ("1d6+mod:str" → "1d6+3", "2*lvl" → "10"). */
 export function resolveFeatureFormula(expr: string, sheet: CharacterSheet, classKey?: string): string {
   let s = expr.replace(/\s+/g, '');
-  s = s.replace(/(pb|lvl|mod:[a-z]{3})\/(\d+)/g, (_, t, n) => String(Math.floor((termValue(t, sheet, classKey) ?? 0) / Number(n))));
-  s = s.replace(/(\d+)\*(pb|lvl|mod:[a-z]{3})/g, (_, n, t) => String(Number(n) * (termValue(t, sheet, classKey) ?? 0)));
-  s = s.replace(/(pb|lvl|mod:[a-z]{3})/g, (t) => String(termValue(t, sheet, classKey) ?? 0));
+  s = s.replace(/(pslot1|pb|lvl|mod:[a-z]{3})\/(\d+)/g, (_, t, n) => String(Math.floor((termValue(t, sheet, classKey) ?? 0) / Number(n))));
+  s = s.replace(/(\d+)\*(pslot1|pb|lvl|mod:[a-z]{3})/g, (_, n, t) => String(Number(n) * (termValue(t, sheet, classKey) ?? 0)));
+  s = s.replace(/(pslot1|pb|lvl|mod:[a-z]{3})/g, (t) => String(termValue(t, sheet, classKey) ?? 0));
   // fold constant terms: "1d6+3+-1" → "1d6+2"; "4+3" → "7"
   const parts = s.match(/[+-]?[^+-]+/g) ?? [];
   let flat = 0;
@@ -170,6 +184,12 @@ export function buildFeatureEffect(
     rider: e.rider ? { dice: featureActionDice(e.rider, sheet, classKey), type: e.rider.type } : undefined,
     saveAdvantage: e.saveAdvantage,
     endsWhenDown: e.endsWhenDown,
+    rollAdvantage: e.rollAdvantage,
+    speedPenalty: e.speedPenalty,
+    critMin: e.critMin,
+    endsAfterOwnTurns: e.untilEndOfTurn ? 1 : undefined,
+    sourceTokenId: e.untilYourNextTurn ? sheet.tokenId || undefined : undefined,
+    untilSourceTurnStart: e.untilYourNextTurn && sheet.tokenId ? true : undefined,
     expiresRound: e.rounds ? round + e.rounds : undefined,
     save:
       e.repeat && a.save

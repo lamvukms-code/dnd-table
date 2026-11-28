@@ -1,3 +1,7 @@
+import type { SubclassFeatureDef } from './classFeatures.js';
+import type { FeatureAction } from './featureActions.js';
+import type { FeaturePassive } from './featurePassives.js';
+
 /**
  * Full 2024 Player's Handbook Warlock Eldritch Invocation list (28 invocations,
  * "ELDRITCH INVOCATION OPTIONS" section, alphabetical). Extracted from the DM's own
@@ -18,6 +22,14 @@
  */
 export interface InvocationDef {
   id: string;
+  /** Mechanics, same shape as a subclass feature (see featurePassives.ts / featureActions.ts). */
+  passive?: FeaturePassive;
+  actions?: FeatureAction[];
+  uses?: SubclassFeatureDef['uses'];
+  /** Extra passives that hold only in one form (`sheet.activeForm`), keyed by the form id. */
+  forms?: Record<string, FeaturePassive & { note?: string }>;
+  /** Setting / book name (local invocations). */
+  source?: string;
   name: string;
   /** Free-text prerequisite, e.g. "Warlock cấp 5+, có Pact of the Blade". Omitted = no prerequisite. */
   prerequisite?: string;
@@ -39,6 +51,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     id: 'inv-armor-of-shadows',
     name: 'Armor of Shadows',
     guidance: 'Cast Mage Armor lên bản thân không tốn spell slot.',
+    actions: [{ label: 'Mage Armor (không tốn ô)', kind: 'effect', target: 'self', cost: 'action', effect: { name: 'Mage Armor', acBase: 13, note: 'Armor of Shadows: AC 13 + DEX khi không mặc giáp' } }]
   },
   {
     id: 'inv-ascendant-step',
@@ -57,11 +70,13 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     name: 'Devouring Blade',
     prerequisite: 'Warlock cấp 12+, có Thirsting Blade',
     guidance: 'Extra Attack của Thirsting Blade cho thêm 2 đòn phụ thay vì 1.',
+    passive: { pactExtraAttack: 3 }
   },
   {
     id: 'inv-eldritch-mind',
     name: 'Eldritch Mind',
     guidance: 'Advantage khi cứu Constitution để giữ Concentration.',
+    passive: { concentrationAdvantage: true }
   },
   {
     id: 'inv-eldritch-smite',
@@ -69,6 +84,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     prerequisite: 'Warlock cấp 5+, có Pact of the Blade',
     guidance:
       '1 lần/lượt khi trúng đòn bằng pact weapon: tốn 1 spell slot để gây thêm 1d8 Force + 1d8 mỗi cấp slot, có thể làm mục tiêu Prone nếu Huge trở xuống.',
+    passive: { riders: [{ label: 'Eldritch Smite', dice: 'pslot1d8', type: 'force', armed: true, spendsPactSlot: true, pactWeaponOnly: true }] }
   },
   {
     id: 'inv-eldritch-spear',
@@ -84,6 +100,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     prerequisite: 'Warlock cấp 2+',
     guidance:
       'Cast False Life lên bản thân không tốn spell slot; luôn nhận số Temp HP cao nhất có thể (không roll dice).',
+    actions: [{ label: 'False Life (tối đa)', kind: 'tempHp', target: 'self', cost: 'action', dice: '12' }]
   },
   {
     id: 'inv-gaze-of-two-minds',
@@ -126,6 +143,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     prerequisite: 'Warlock cấp 9+, có Pact of the Blade',
     guidance:
       '1 lần/lượt khi trúng đòn bằng pact weapon: gây thêm 1d6 Necrotic/Psychic/Radiant (chọn 1) và có thể tốn 1 Hit Die để hồi HP = kết quả roll + mod Constitution (tối thiểu 1).',
+    passive: { riders: [{ label: 'Lifedrinker', dice: '1d6', type: 'necrotic', armed: true, pactWeaponOnly: true }] }
   },
   {
     id: 'inv-mask-of-many-faces',
@@ -162,6 +180,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     name: 'Pact of the Blade',
     guidance:
       'Bonus Action triệu hồi pact weapon (vũ khí cận chiến Simple/Martial tuỳ chọn) hoặc bond với 1 vũ khí phép đang chạm (không ai khác đang attune, không Warlock khác đang bond). Có proficiency với vũ khí, dùng được làm Spellcasting Focus. Tấn công bằng vũ khí này dùng Charisma thay Strength/Dexterity, damage type có thể đổi thành Necrotic/Psychic/Radiant. Bond mất khi dùng lại Bonus Action này, vũ khí cách xa >5ft từ 1 phút trở lên, hoặc chết.',
+    passive: { pactWeapon: true }
   },
   {
     id: 'inv-pact-of-the-chain',
@@ -188,6 +207,7 @@ export const WARLOCK_INVOCATIONS_DRAFT: InvocationDef[] = [
     name: 'Thirsting Blade',
     prerequisite: 'Warlock cấp 5+, có Pact of the Blade',
     guidance: 'Có Extra Attack riêng cho pact weapon: tấn công 2 lần thay vì 1 khi dùng Attack action.',
+    passive: { pactExtraAttack: 2 }
   },
   {
     id: 'inv-visions-of-distant-realms',

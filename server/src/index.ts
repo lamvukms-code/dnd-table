@@ -39,6 +39,8 @@ import {
   registerCustomClass,
   registerFeatureDefs,
   registerFeatDefs,
+  registerInvocationDefs,
+  type InvocationDef,
   registerMonsterMechanics,
   type MonsterMechanic,
   type LocalFeatDef,
@@ -103,6 +105,16 @@ if (existsSync(FEATS_FILE)) {
     if (Array.isArray(defs)) registerFeatDefs(defs as LocalFeatDef[]);
   } catch (e) {
     console.warn(`Không đọc được ${FEATS_FILE}:`, (e as Error).message);
+  }
+}
+// Local invocations / pact boons with mechanics (setting content: git-ignored).
+const INVOCATIONS_FILE = process.env.INVOCATIONS_FILE ?? join(__dirname, '..', '..', 'client', 'src', 'data', 'invocations.local.json');
+if (existsSync(INVOCATIONS_FILE)) {
+  try {
+    const defs = JSON.parse(readFileSync(INVOCATIONS_FILE, 'utf8')) as unknown;
+    if (Array.isArray(defs)) registerInvocationDefs(defs as InvocationDef[]);
+  } catch (e) {
+    console.warn(`Không đọc được ${INVOCATIONS_FILE}:`, (e as Error).message);
   }
 }
 // Local monster mechanics per stat block name (setting content: git-ignored).

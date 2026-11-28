@@ -19,6 +19,10 @@ import {
   inferAttackRange,
   rangedAtCloseQuarters,
   passiveNoCloseRangedPenalty,
+  passiveHas,
+  cantripTier,
+  totalLevelOf,
+  cantripSaveExtras,
   gridFeet,
   type AttackRange,
   effectiveArmorClass,
@@ -584,7 +588,8 @@ export const useStore = create<StoreState>((set, get) => {
           atkTok &&
           tgtTok &&
           rangedAtCloseQuarters('ranged', gridFeet(atkTok, tgtTok)) &&
-          !(atkSheet && passiveNoCloseRangedPenalty(atkSheet)) // feat: no close-range penalty
+          !(atkSheet && passiveNoCloseRangedPenalty(atkSheet)) && // feat: no close-range penalty
+          !(attackKind === 'spell' && passiveHas(atkSheet, 'spellNoCloseRangedPenalty'))
         ) {
           mode = combineRollModes(mode, 'disadvantage');
           reasons.push('tầm xa trong tầm cận chiến');
@@ -619,6 +624,12 @@ export const useStore = create<StoreState>((set, get) => {
           if (lightWhy.length || fxWhy.length) {
             mode = combineRollModes(mode, 'disadvantage');
             reasons.push(...lightWhy, ...fxWhy);
+          }
+          // the attacker's own effects that give advantage (taking aim…)
+          const advWhy = (atkTok.effects ?? []).filter((e) => e.rollAdvantage?.includes('attack')).map((e) => e.name);
+          if (advWhy.length) {
+            mode = combineRollModes(mode, 'advantage');
+            reasons.push(...advWhy);
           }
         }
         // Its target's traits (ranged weapon attacks against it have disadvantage).
@@ -954,6 +965,20 @@ export const useStore = create<StoreState>((set, get) => {
       const dc = spell.save?.dcOverride ?? spellSaveDc(sheet, spell) ?? 10;
       const castAbil = spellcastingAbilityOf(sheet, spell);
       const castMod = castAbil ? abilityMod(sheet.abilities[castAbil]) : 0;
+      // A volley feature: a damaging cantrip (not self-range, not a multi-beam one) is cast several
+      // times in the one action, each with the cantrip's base dice instead of the grown ones.
+      const tier = cantripTier(totalLevelOf(sheet));
+      const volleyN =
+        spell.level === 0 && tier > 1 && passiveHas(sheet, 'cantripVolley') && !!spellDamage?.length && !spell.beams && !/self|bản thân/i.test(spell.range ?? '')
+          ? tier
+          : 1;
+      const volleyDamage =
+        volleyN > 1 && spellDamage
+          ? spellDamage.map((p, i) => {
+              const m = i === 0 ? /^(\d+)d(\d+)(.*)$/.exec(p.dice) : null;
+              return m && Number(m[1]) % tier === 0 ? { ...p, dice: `${Number(m[1]) / tier}d${m[2]}${m[3]}` } : p;
+            })
+          : spellDamage;
 
       // Concentration spells whose branch places the concentration effect on the
       // TARGET establish concentration there; the rest (pure damage / attack /
@@ -1034,13 +1059,13 @@ export const useStore = create<StoreState>((set, get) => {
         const tgtTok = room.tokens.find((t) => t.id === targetTokenId);
         const closeDis = within != null && casterTok && tgtTok && tgtTok.id !== casterTok.id && gridFeet(casterTok, tgtTok) <= within;
         const sfx = spell.effect ? upcastEffect(spell.effect, spell.level, effLevel) : undefined;
-        rawSend({
+        for (let shot = 0; shot < volleyN; shot++) rawSend({
           t: 'spellSave',
             fromSpell: true,
           targetTokenId,
           ability: spell.save.ability,
           dc,
-          label,
+          label: volleyN > 1 ? `${label} (phát ${shot + 1}/${volleyN})` : label,
           sourceSheetId: sheetId,
           rollMode: closeDis ? 'disadvantage' : undefined,
           teleportOnFail:
@@ -1052,14 +1077,19 @@ export const useStore = create<StoreState>((set, get) => {
               ? { ...(spell.moveOnFail ?? findCantrip(spell.name)!.moveOnFail!), fromTokenId: casterTok.id }
               : undefined,
           damageOnFail:
-            spellDamage && spellDamage.length
-              ? spell.agonizingBlast && castMod
-                ? [...spellDamage, { dice: String(castMod), type: spellDamage[0].type, label: 'Agonizing Blast' }]
-                : spellDamage
+            volleyDamage && volleyDamage.length
+              ? cantripSaveExtras(
+                  sheet,
+                  spell.agonizingBlast && castMod
+                    ? [...volleyDamage, { dice: String(castMod), type: volleyDamage[0].type, label: 'Agonizing Blast' }]
+                    : volleyDamage,
+                  spell.level,
+                )
               : undefined,
           damageHalfOnSave: spell.save.halfOnSave,
           aoeId: opts?.aoeId,
-          effectOnFail: spell.effect
+          // the other effects don't repeat with the volley
+          effectOnFail: spell.effect && shot === 0
             ? {
                 id: '',
                 name: spell.effect.name || spell.name,
@@ -1096,7 +1126,7 @@ export const useStore = create<StoreState>((set, get) => {
             : undefined;
         const beams = ray
           ? Number(ray[1]) + (/Nâng ô:\s*\+1 tia(?!\s*\()/i.test(guide) ? Math.max(0, effLevel - spell.level) : 0)
-          : spell.beams && spell.beams > 1 ? spell.beams : 1;
+          : volleyN > 1 ? volleyN : spell.beams && spell.beams > 1 ? spell.beams : 1;
         // forced movement on a hit (a pull, or a push behind a save) and crit riders
         const mvDef = spell.moveOnHit ?? findCantrip(spell.name)?.moveOnHit;
         const mvHit = mvDef
@@ -1115,10 +1145,10 @@ export const useStore = create<StoreState>((set, get) => {
           : undefined;
         for (let i = 0; i < beams; i++) {
           await get().attackRoll({
-            label: beams > 1 ? `${label} (phép, tia ${i + 1}/${beams})` : `${label} (phép)`,
+            label: beams > 1 ? `${label} (phép, ${volleyN > 1 ? 'phát' : 'tia'} ${i + 1}/${beams})` : `${label} (phép)`,
             attackBonus: atkBonus,
             rollMode: 'normal',
-            damageParts: spellAttackParts(sheet, rayDamage ?? spellDamage, spell),
+            damageParts: spellAttackParts(sheet, rayDamage ?? volleyDamage, spell),
             targetTokenId,
             attackerSheetId: sheetId,
             attackerTokenId: sheet.tokenId,

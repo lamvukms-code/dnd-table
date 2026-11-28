@@ -35,6 +35,8 @@ import {
   featureRiderParts,
   passiveCheckBonus,
   passiveDefenses,
+  passiveHas,
+  passiveMax,
   passiveMediumArmorMod,
   passiveUnarmedDie,
   passiveUnarmoredAc,
@@ -293,14 +295,19 @@ export function derivedActions(sheet: CharacterSheet): SheetAction[] {
   // weapons in hand for melee (a bow slung on the back doesn't stop Dueling)
   const meleeWielded = weapons.filter((w) => (w.attackRange ?? inferAttackRange(w.rangeText)) === 'melee');
   const out: SheetAction[] = [];
+  const pact = passiveHas(sheet, 'pactWeapon');
   for (const it of weapons) {
-    const ab = weaponAbilityUsed(sheet, it);
+    const pactItem = pact && !!it.pactWeapon;
+    const usual = weaponAbilityUsed(sheet, it);
+    // Pact of the Blade: Charisma instead of Strength / Dexterity when it is better
+    const ab: Ability = pactItem && abilityMod(sheet.abilities.cha) > abilityMod(sheet.abilities[usual]) ? 'cha' : usual;
     const mod = abilityMod(sheet.abilities[ab]);
     const info = weaponInfo(it);
     const range = it.attackRange ?? inferAttackRange(it.rangeText);
     const ranged = range === 'ranged';
     const notes: string[] = [];
-    let toHit = mod + (it.proficient ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
+    let toHit = mod + (it.proficient || pactItem ? sheet.proficiencyBonus : 0) + (it.attackBonusMisc || 0);
+    if (pactItem) notes.push(`Pact weapon${ab === 'cha' ? ': dùng CHA' : ''}`);
     let dmgMod = mod + (it.damageBonusMisc || 0);
     // Fighting Styles that change the numbers (SRD 5.2.1 feats)
     if (ranged && hasStyle(sheet, 'archery')) {
@@ -596,16 +603,34 @@ export function spellRiderParts(sheet: CharacterSheet): DamagePart[] {
 export function spellAttackParts(
   sheet: CharacterSheet,
   spellDamage: DamagePart[] | undefined,
-  spell?: Pick<Spell, 'agonizingBlast' | 'castingClass'>,
+  spell?: Pick<Spell, 'agonizingBlast' | 'castingClass'> & { level?: number },
 ): DamagePart[] {
   const parts = [...(spellDamage ?? []).map((p) => ({ ...p })), ...spellRiderParts(sheet)];
-  parts.push(...featureRiderParts(sheet, 'spell', { id: 'spell' }, spellDamage?.[0]?.type ?? ''));
+  parts.push(...featureRiderParts(sheet, 'spell', { id: spell?.level === 0 ? 'cantrip' : 'spell' }, spellDamage?.[0]?.type ?? ''));
   if (spell?.agonizingBlast && spellDamage?.length) {
     const ab = spellcastingAbilityOf(sheet, spell);
     const mod = ab ? abilityMod(sheet.abilities[ab]) : 0;
     if (mod) parts.push({ dice: String(mod), type: spellDamage[0].type, label: 'Agonizing Blast' });
   }
-  return parts;
+  return withCantripReroll(sheet, parts, spell?.level);
+}
+
+/** A save cantrip's damage gets the cantrip-only riders and the low-die reroll too (not the attack riders). */
+export function cantripSaveExtras(sheet: CharacterSheet, parts: DamagePart[], level: number | undefined): DamagePart[] {
+  if (level !== 0 || !parts.length) return parts;
+  const extra = featureRiderParts(sheet, 'spell', { id: 'cantrip' }, parts[0].type);
+  const only = extra.filter((p) => featureRiderIsCantripOnly(sheet, p.label));
+  return withCantripReroll(sheet, [...parts, ...only], 0);
+}
+
+function featureRiderIsCantripOnly(sheet: CharacterSheet, label: string | undefined): boolean {
+  return activePassives(sheet).some((p) => (p.passive.riders ?? []).some((r) => r.cantripOnly && r.label === label));
+}
+
+/** Cantrip damage dice below N are rolled again once (a passive's `cantripRerollBelow`). */
+function withCantripReroll(sheet: CharacterSheet, parts: DamagePart[], level: number | undefined): DamagePart[] {
+  const below = level === 0 ? passiveMax(sheet, 'cantripRerollBelow') : 0;
+  return below ? parts.map((p) => (/d/i.test(p.dice) ? { ...p, rerollBelow: below } : p)) : parts;
 }
 
 /**
